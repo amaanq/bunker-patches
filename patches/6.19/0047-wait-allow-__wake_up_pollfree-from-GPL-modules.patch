@@ -1,0 +1,30 @@
+From 8cb7884d0c533c03736b35b006bfb130a70ad58f Mon Sep 17 00:00:00 2001
+From: Alexandre Frade <kernel@xanmod.org>
+Date: Sun, 8 Feb 2026 00:53:13 -0500
+Subject: [PATCH 52/58] wait: allow __wake_up_pollfree() from GPL modules
+
+Export __wake_up_pollfree() to GPL modules, prerequisite for
+binder-as-module support.
+---
+ kernel/sched/wait.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/kernel/sched/wait.c b/kernel/sched/wait.c
+index 20f27e2cf7ae..8b1338c28341 100644
+--- a/kernel/sched/wait.c
++++ b/kernel/sched/wait.c
+@@ -229,10 +229,11 @@ void __wake_up_pollfree(struct wait_queue_head *wq_head)
+ {
+ 	__wake_up(wq_head, TASK_NORMAL, 0, poll_to_key(EPOLLHUP | POLLFREE));
+ 	/* POLLFREE must have cleared the queue. */
+ 	WARN_ON_ONCE(waitqueue_active(wq_head));
+ }
++EXPORT_SYMBOL_GPL(__wake_up_pollfree);
+ 
+ /*
+  * Note: we use "set_current_state()" _after_ the wait-queue add,
+  * because we need a memory barrier there on SMP, so that any
+  * wake-function that tests for the wait-queue being active
+-- 
+2.52.0
+

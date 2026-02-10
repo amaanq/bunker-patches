@@ -1,0 +1,90 @@
+From b31a6e6b7fc9056a228ff14974b471a9fdd3718c Mon Sep 17 00:00:00 2001
+From: Alexandre Frade <kernel@xanmod.org>
+Date: Sun, 15 Sep 2024 23:03:38 +0000
+Subject: [PATCH 31/58] sched: add yield_type sysctl to reduce or disable
+ sched_yield
+
+---
+ kernel/sched/syscalls.c | 16 +++++++++++++++-
+ kernel/sysctl.c         | 11 +++++++++++
+ 2 files changed, 26 insertions(+), 1 deletion(-)
+
+diff --git a/kernel/sched/syscalls.c b/kernel/sched/syscalls.c
+index 77ae87f36e84..82fdb9eb605e 100644
+--- a/kernel/sched/syscalls.c
++++ b/kernel/sched/syscalls.c
+@@ -1341,19 +1341,33 @@ SYSCALL_DEFINE3(sched_getaffinity, pid_t, pid, unsigned int, len,
+ 	free_cpumask_var(mask);
+ 
+ 	return ret;
+ }
+ 
++/**
++ * sysctl_sched_yield_type - choose the yield level that will perform.
++ *
++ * 0: No yield.
++ * 1: Yield only to better priority/deadline tasks.
++ * 2: Re-queue current tasks. (default CFS)
++ */
++__read_mostly int sysctl_sched_yield_type = 2;
++
+ static void do_sched_yield(void)
+ {
+ 	struct rq_flags rf;
+ 	struct rq *rq;
+ 
++	if (!sysctl_sched_yield_type)
++		return;
++
+ 	rq = this_rq_lock_irq(&rf);
+ 
+ 	schedstat_inc(rq->yld_count);
+-	current->sched_class->yield_task(rq);
++
++	if (sysctl_sched_yield_type > 1)
++		current->sched_class->yield_task(rq);
+ 
+ 	preempt_disable();
+ 	rq_unlock_irq(rq, &rf);
+ 	sched_preempt_enable_no_resched();
+ 
+diff --git a/kernel/sysctl.c b/kernel/sysctl.c
+index cb6196e3fa99..c4a7559d61fa 100644
+--- a/kernel/sysctl.c
++++ b/kernel/sysctl.c
+@@ -30,10 +30,12 @@ EXPORT_SYMBOL(sysctl_vals);
+ const unsigned long sysctl_long_vals[] = { 0, 1, LONG_MAX };
+ EXPORT_SYMBOL_GPL(sysctl_long_vals);
+ 
+ #if defined(CONFIG_SYSCTL)
+ 
++extern int sysctl_sched_yield_type;
++
+ /* Constants used for minimum and maximum */
+ static const int ngroups_max = NGROUPS_MAX;
+ static const int cap_last_cap = CAP_LAST_CAP;
+ 
+ #ifdef CONFIG_PROC_SYSCTL
+@@ -1453,10 +1455,19 @@ int proc_do_static_key(const struct ctl_table *table, int write,
+ 	mutex_unlock(&static_key_mutex);
+ 	return ret;
+ }
+ 
+ static const struct ctl_table sysctl_subsys_table[] = {
++	{
++		.procname	= "yield_type",
++		.data		= &sysctl_sched_yield_type,
++		.maxlen		= sizeof (int),
++		.mode		= 0644,
++		.proc_handler	= proc_dointvec,
++		.extra1		= SYSCTL_ZERO,
++		.extra2		= SYSCTL_TWO,
++	},
+ #ifdef CONFIG_PROC_SYSCTL
+ 	{
+ 		.procname	= "sysctl_writes_strict",
+ 		.data		= &sysctl_writes_strict,
+ 		.maxlen		= sizeof(int),
+-- 
+2.52.0
+

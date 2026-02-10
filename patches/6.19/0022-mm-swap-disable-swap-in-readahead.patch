@@ -1,0 +1,58 @@
+From 2e1802dd52858eecf2252a1acf36e0a24145b51e Mon Sep 17 00:00:00 2001
+From: Steven Barrett <steven@liquorix.net>
+Date: Mon, 5 Sep 2022 11:35:20 -0500
+Subject: [PATCH 22/58] mm/swap: disable swap-in readahead
+
+---
+ init/Kconfig | 1 +
+ mm/swap.c    | 5 +++++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/init/Kconfig b/init/Kconfig
+index e1a31cedd9fc..f503e9d88938 100644
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -207,10 +207,11 @@ config BUNKERNEL
+ 	  --- Virtual Memory Subsystem ---------------------------
+ 
+ 	    Background-reclaim hugepages...:   no   ->   yes
+ 	    Compact unevictable............:   yes  ->   no
+ 	    Watermark boost factor.........:   1.5  ->   0
++	    Swap-in readahead..............:   3    ->   0
+ 
+ 	  --- EEVDF CPU Scheduler --------------------------------
+ 
+ 	    Minimal granularity............:   0.7  ->   0.4  ms
+ 	    Migration cost.................:   0.5  ->   0.3  ms
+diff --git a/mm/swap.c b/mm/swap.c
+index 2260dcd2775e..5726d563995d 100644
+--- a/mm/swap.c
++++ b/mm/swap.c
+@@ -1099,10 +1099,14 @@ static const struct ctl_table swap_sysctl_table[] = {
+ /*
+  * Perform any setup for the swap system
+  */
+ void __init swap_setup(void)
+ {
++#ifdef CONFIG_BUNKERNEL
++	/* Only swap-in pages requested, avoid readahead */
++	page_cluster = 0;
++#else
+ 	unsigned long megs = PAGES_TO_MB(totalram_pages());
+ 
+ 	/* Use a smaller cluster for small-memory machines */
+ 	if (megs < 16)
+ 		page_cluster = 2;
+@@ -1110,8 +1114,9 @@ void __init swap_setup(void)
+ 		page_cluster = 3;
+ 	/*
+ 	 * Right now other parts of the system means that we
+ 	 * _really_ don't want to cluster much more
+ 	 */
++#endif
+ 
+ 	register_sysctl_init("vm", swap_sysctl_table);
+ }
+-- 
+2.52.0
+

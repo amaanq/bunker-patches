@@ -1,0 +1,92 @@
+From e7a3b24f181b517a65654cf315399729face0f3f Mon Sep 17 00:00:00 2001
+From: Peter Jung <admin@ptr1337.dev>
+Date: Sat, 7 Feb 2026 21:57:54 -0500
+Subject: [PATCH 48/58] mm: add Kconfig defaults for compaction and dirty page
+ ratios
+
+Configurable defaults for COMPACTION_HPAGE_ORDER, dirty_ratio,
+and dirty_background_ratio via Kconfig. Documents new kernel
+parameters.
+
+From CachyOS kernel-patches.
+---
+ mm/compaction.c     | 4 ++++
+ mm/mm_init.c        | 1 +
+ mm/page-writeback.c | 8 ++++++++
+ 3 files changed, 13 insertions(+)
+
+diff --git a/mm/compaction.c b/mm/compaction.c
+index 1e8f8eca318c..198f55e58f42 100644
+--- a/mm/compaction.c
++++ b/mm/compaction.c
+@@ -1885,11 +1885,15 @@ static int sysctl_compact_unevictable_allowed __read_mostly = CONFIG_COMPACT_UNE
+ /*
+  * Tunable for proactive compaction. It determines how
+  * aggressively the kernel should compact memory in the
+  * background. It takes values in the range [0, 100].
+  */
++#ifdef CONFIG_BUNKERNEL
++static unsigned int __read_mostly sysctl_compaction_proactiveness;
++#else
+ static unsigned int __read_mostly sysctl_compaction_proactiveness = 20;
++#endif
+ static int sysctl_extfrag_threshold = 500;
+ static int __read_mostly sysctl_compact_memory;
+ 
+ static inline void
+ update_fast_start_pfn(struct compact_control *cc, unsigned long pfn)
+diff --git a/mm/mm_init.c b/mm/mm_init.c
+index 2a809cd8e7fa..68b3a05a0357 100644
+--- a/mm/mm_init.c
++++ b/mm/mm_init.c
+@@ -2669,10 +2669,11 @@ static void __init mem_init_print_info(void)
+ 		K(totalcma_pages)
+ #ifdef	CONFIG_HIGHMEM
+ 		, K(totalhigh_pages())
+ #endif
+ 		);
++	printk(KERN_INFO "le9 Unofficial (le9uo) working set protection 1.15a by Masahito Suzuki (forked from hakavlad's original le9 patch)");
+ }
+ 
+ void __init __weak arch_mm_preinit(void)
+ {
+ }
+diff --git a/mm/page-writeback.c b/mm/page-writeback.c
+index ccdeb0e84d39..3aa1dbeb57de 100644
+--- a/mm/page-writeback.c
++++ b/mm/page-writeback.c
+@@ -70,11 +70,15 @@ static long ratelimit_pages = 32;
+ /* The following parameters are exported via /proc/sys/vm */
+ 
+ /*
+  * Start background writeback (via writeback threads) at this percentage
+  */
++#ifdef CONFIG_BUNKERNEL
++static int dirty_background_ratio = 5;
++#else
+ static int dirty_background_ratio = 10;
++#endif
+ 
+ /*
+  * dirty_background_bytes starts at 0 (disabled) so that it is a function of
+  * dirty_background_ratio * the amount of dirtyable memory
+  */
+@@ -98,11 +102,15 @@ static int vm_dirty_ratio = 20;
+ static unsigned long vm_dirty_bytes;
+ 
+ /*
+  * The interval between `kupdate'-style writebacks
+  */
++#ifdef CONFIG_BUNKERNEL
++unsigned int dirty_writeback_interval = 10 * 100; /* centiseconds */
++#else
+ unsigned int dirty_writeback_interval = 5 * 100; /* centiseconds */
++#endif
+ 
+ EXPORT_SYMBOL_GPL(dirty_writeback_interval);
+ 
+ /*
+  * The longest time for which data is allowed to remain dirty
+-- 
+2.52.0
+

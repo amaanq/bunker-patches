@@ -1,0 +1,44 @@
+From 58f495cc729a013c12bb08aa98885ccc67e0af1c Mon Sep 17 00:00:00 2001
+From: Peter Jung <admin@ptr1337.dev>
+Date: Sat, 7 Feb 2026 22:21:44 -0500
+Subject: [PATCH 40/58] x86/cpu/amd: Zen errata workaround
+
+---
+ arch/x86/kernel/cpu/amd.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/arch/x86/kernel/cpu/amd.c b/arch/x86/kernel/cpu/amd.c
+index bc94ff1e250a..fbe929c6235f 100644
+--- a/arch/x86/kernel/cpu/amd.c
++++ b/arch/x86/kernel/cpu/amd.c
+@@ -1033,10 +1033,11 @@ static void init_amd_zen4(struct cpuinfo_x86 *c)
+ 		clear_cpu_cap(c, X86_FEATURE_V_VMSAVE_VMLOAD);
+ 		break;
+ 	}
+ }
+ 
++#ifndef CONFIG_BUNKERNEL
+ static const struct x86_cpu_id zen5_rdseed_microcode[] = {
+ 	ZEN_MODEL_STEP_UCODE(0x1a, 0x02, 0x1, 0x0b00215a),
+ 	ZEN_MODEL_STEP_UCODE(0x1a, 0x08, 0x1, 0x0b008121),
+ 	ZEN_MODEL_STEP_UCODE(0x1a, 0x11, 0x0, 0x0b101054),
+ 	ZEN_MODEL_STEP_UCODE(0x1a, 0x24, 0x0, 0x0b204037),
+@@ -1054,10 +1055,15 @@ static void init_amd_zen5(struct cpuinfo_x86 *c)
+ 		clear_cpu_cap(c, X86_FEATURE_RDSEED);
+ 		msr_clear_bit(MSR_AMD64_CPUID_FN_7, 18);
+ 		pr_emerg_once("RDSEED32 is broken. Disabling the corresponding CPUID bit.\n");
+ 	}
+ }
++#else
++static void init_amd_zen5(struct cpuinfo_x86 *c)
++{
++}
++#endif /* !CONFIG_BUNKERNEL */
+ 
+ static void init_amd(struct cpuinfo_x86 *c)
+ {
+ 	u64 vm_cr;
+ 
+-- 
+2.52.0
+

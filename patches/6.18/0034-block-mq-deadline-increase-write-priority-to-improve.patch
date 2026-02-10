@@ -1,0 +1,30 @@
+From d106d756e04b3928be278714ce4cd5ce23142d7e Mon Sep 17 00:00:00 2001
+From: Alexandre Frade <kernel@xanmod.org>
+Date: Wed, 11 May 2022 18:56:51 +0000
+Subject: [PATCH 34/58] block/mq-deadline: increase write priority to improve
+ responsiveness
+
+---
+ block/mq-deadline.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/block/mq-deadline.c b/block/mq-deadline.c
+index 9898ff611e2a..148c21f84729 100644
+--- a/block/mq-deadline.c
++++ b/block/mq-deadline.c
+@@ -26,11 +26,11 @@
+ 
+ /*
+  * See Documentation/block/deadline-iosched.rst
+  */
+ static const int read_expire = HZ / 2;  /* max time before a read is submitted. */
+-static const int write_expire = 5 * HZ; /* ditto for writes, these limits are SOFT! */
++static const int write_expire = HZ;     /* ditto for writes, these limits are SOFT! */
+ /*
+  * Time after which to dispatch lower priority requests even if higher
+  * priority requests are pending.
+  */
+ static const int prio_aging_expire = 10 * HZ;
+-- 
+2.52.0
+

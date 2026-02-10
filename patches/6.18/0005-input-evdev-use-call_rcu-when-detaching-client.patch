@@ -1,0 +1,99 @@
+From 1f2f84c1fd151efa46255f90bebb898e32b85095 Mon Sep 17 00:00:00 2001
+From: Kenny Levinsen <kl@kl.wtf>
+Date: Sun, 27 Dec 2020 14:43:13 +0000
+Subject: [PATCH 05/58] input/evdev: use call_rcu when detaching client
+
+Switch from synchronize_rcu() to call_rcu() for evdev client detach.
+Avoids serialized RCU waits when many input fds are closed at once
+(27s -> 0.018s for 1000 opens).
+---
+ drivers/input/evdev.c | 19 +++++++++++--------
+ 1 file changed, 11 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/input/evdev.c b/drivers/input/evdev.c
+index 90ff6be85cf4..15159c1cf6e1 100644
+--- a/drivers/input/evdev.c
++++ b/drivers/input/evdev.c
+@@ -44,10 +44,11 @@ struct evdev_client {
+ 	spinlock_t buffer_lock; /* protects access to buffer, head and tail */
+ 	wait_queue_head_t wait;
+ 	struct fasync_struct *fasync;
+ 	struct evdev *evdev;
+ 	struct list_head node;
++	struct rcu_head rcu;
+ 	enum input_clock_type clk_type;
+ 	bool revoked;
+ 	unsigned long *evmasks[EV_CNT];
+ 	unsigned int bufsize;
+ 	struct input_event buffer[] __counted_by(bufsize);
+@@ -366,17 +367,26 @@ static void evdev_attach_client(struct evdev *evdev,
+ 	spin_lock(&evdev->client_lock);
+ 	list_add_tail_rcu(&client->node, &evdev->client_list);
+ 	spin_unlock(&evdev->client_lock);
+ }
+ 
++static void evdev_reclaim_client(struct rcu_head *rp)
++{
++	struct evdev_client *client = container_of(rp, struct evdev_client, rcu);
++	unsigned int i;
++	for (i = 0; i < EV_CNT; ++i)
++		bitmap_free(client->evmasks[i]);
++	kvfree(client);
++}
++
+ static void evdev_detach_client(struct evdev *evdev,
+ 				struct evdev_client *client)
+ {
+ 	spin_lock(&evdev->client_lock);
+ 	list_del_rcu(&client->node);
+ 	spin_unlock(&evdev->client_lock);
+-	synchronize_rcu();
++	call_rcu(&client->rcu, evdev_reclaim_client);
+ }
+ 
+ static int evdev_open_device(struct evdev *evdev)
+ {
+ 	int retval;
+@@ -425,11 +435,10 @@ static void evdev_hangup(struct evdev *evdev)
+ 
+ static int evdev_release(struct inode *inode, struct file *file)
+ {
+ 	struct evdev_client *client = file->private_data;
+ 	struct evdev *evdev = client->evdev;
+-	unsigned int i;
+ 
+ 	mutex_lock(&evdev->mutex);
+ 
+ 	if (evdev->exist && !client->revoked)
+ 		input_flush_device(&evdev->handle, file);
+@@ -437,15 +446,10 @@ static int evdev_release(struct inode *inode, struct file *file)
+ 	evdev_ungrab(evdev, client);
+ 	mutex_unlock(&evdev->mutex);
+ 
+ 	evdev_detach_client(evdev, client);
+ 
+-	for (i = 0; i < EV_CNT; ++i)
+-		bitmap_free(client->evmasks[i]);
+-
+-	kvfree(client);
+-
+ 	evdev_close_device(evdev);
+ 
+ 	return 0;
+ }
+ 
+@@ -484,11 +488,10 @@ static int evdev_open(struct inode *inode, struct file *file)
+ 
+ 	return 0;
+ 
+  err_free_client:
+ 	evdev_detach_client(evdev, client);
+-	kvfree(client);
+ 	return error;
+ }
+ 
+ static ssize_t evdev_write(struct file *file, const char __user *buffer,
+ 			   size_t count, loff_t *ppos)
+-- 
+2.52.0
+

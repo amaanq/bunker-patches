@@ -1,0 +1,30 @@
+From a63771d0dfeddfd719b745d3168899a987f2b205 Mon Sep 17 00:00:00 2001
+From: Alexandre Frade <kernel@xanmod.org>
+Date: Sun, 8 Feb 2026 00:53:35 -0500
+Subject: [PATCH 53/58] file: export file_close_fd() for GPL modules
+
+Export file_close_fd() to GPL modules, prerequisite for
+binder-as-module support.
+---
+ fs/file.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/fs/file.c b/fs/file.c
+index 28743b742e3c..c6c1d22111ec 100644
+--- a/fs/file.c
++++ b/fs/file.c
+@@ -856,10 +856,11 @@ struct file *file_close_fd(unsigned int fd)
+ 	file = file_close_fd_locked(files, fd);
+ 	spin_unlock(&files->file_lock);
+ 
+ 	return file;
+ }
++EXPORT_SYMBOL(file_close_fd);
+ 
+ void do_close_on_exec(struct files_struct *files)
+ {
+ 	unsigned i;
+ 	struct fdtable *fdt;
+-- 
+2.52.0
+

@@ -1,0 +1,48 @@
+From b073e4c42d5241b8358d499b72ea1bf563e64f29 Mon Sep 17 00:00:00 2001
+From: "Jan Alexander Steffens (heftig)" <heftig@archlinux.org>
+Date: Sat, 2 Aug 2025 04:36:06 +0200
+Subject: [PATCH 17/58] block: Clean up elevator_set_default
+
+In case of a multi-queue device, the code pointlessly loaded the
+default elevator just to drop it again.
+---
+ block/elevator.c | 15 ++++++++-------
+ 1 file changed, 8 insertions(+), 7 deletions(-)
+
+diff --git a/block/elevator.c b/block/elevator.c
+index 3a3f32221bfe..1b67138323a0 100644
+--- a/block/elevator.c
++++ b/block/elevator.c
+@@ -760,21 +760,22 @@ void elevator_set_default(struct request_queue *q)
+ 	/*
+ 	 * For single queue devices, default to using mq-deadline. If we
+ 	 * have multiple queues or mq-deadline is not available, default
+ 	 * to "none".
+ 	 */
++	if (q->nr_hw_queues != 1 && !blk_mq_is_shared_tags(q->tag_set->flags))
++		return;
++
+ 	e = elevator_find_get(ctx.name);
+ 	if (!e)
+ 		return;
+ 
+-	if ((q->nr_hw_queues == 1 ||
+-			blk_mq_is_shared_tags(q->tag_set->flags))) {
+-		err = elevator_change(q, &ctx);
+-		if (err < 0)
+-			pr_warn("\"%s\" elevator initialization, failed %d, falling back to \"none\"\n",
+-					ctx.name, err);
+-	}
++	err = elevator_change(q, &ctx);
++	if (err < 0)
++		pr_warn("\"%s\" elevator initialization, failed %d, falling back to \"none\"\n",
++				ctx.name, err);
++
+ 	elevator_put(e);
+ }
+ 
+ void elevator_set_none(struct request_queue *q)
+ {
+-- 
+2.52.0
+

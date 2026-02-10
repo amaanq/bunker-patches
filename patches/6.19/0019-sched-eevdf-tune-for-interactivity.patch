@@ -1,0 +1,131 @@
+From bfde2fc4e226797ab7b3b77fbaeb9c7487e1d1b8 Mon Sep 17 00:00:00 2001
+From: "Jan Alexander Steffens (heftig)" <heftig@archlinux.org>
+Date: Tue, 31 Oct 2023 19:03:10 +0100
+Subject: [PATCH 19/58] sched/eevdf: tune for interactivity
+
+---
+ init/Kconfig         |  7 +++++++
+ kernel/sched/fair.c  | 24 ++++++++++++++++--------
+ kernel/sched/sched.h |  2 +-
+ 3 files changed, 24 insertions(+), 9 deletions(-)
+
+diff --git a/init/Kconfig b/init/Kconfig
+index e39e719ddc6c..c80bd2df5123 100644
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -206,10 +206,17 @@ config BUNKERNEL
+ 
+ 	  --- Virtual Memory Subsystem ---------------------------
+ 
+ 	    Background-reclaim hugepages...:   no   ->   yes
+ 
++	  --- EEVDF CPU Scheduler --------------------------------
++
++	    Minimal granularity............:   0.7  ->   0.4  ms
++	    Migration cost.................:   0.5  ->   0.3  ms
++	    Bandwidth slice size...........:   5    ->   3    ms
++	    Task rebalancing threshold.....:  32    ->   8
++
+ config BROKEN
+ 	bool
+ 	help
+ 	  This option allows you to choose whether you want to try to
+ 	  compile (and fix) old drivers that haven't been updated to
+diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
+index 3eaeceda71b0..b1a938221b2e 100644
+--- a/kernel/sched/fair.c
++++ b/kernel/sched/fair.c
+@@ -74,14 +74,23 @@ unsigned int sysctl_sched_tunable_scaling = SCHED_TUNABLESCALING_LOG;
+ /*
+  * Minimal preemption granularity for CPU-bound tasks:
+  *
+  * (default: 0.70 msec * (1 + ilog(ncpus)), units: nanoseconds)
+  */
++#ifdef CONFIG_BUNKERNEL
++unsigned int sysctl_sched_base_slice			= 400000ULL;
++static unsigned int normalized_sysctl_sched_base_slice	= 400000ULL;
++#else
+ unsigned int sysctl_sched_base_slice			= 700000ULL;
+ static unsigned int normalized_sysctl_sched_base_slice	= 700000ULL;
++#endif
+ 
++#ifdef CONFIG_BUNKERNEL
++__read_mostly unsigned int sysctl_sched_migration_cost	= 300000UL;
++#else
+ __read_mostly unsigned int sysctl_sched_migration_cost	= 500000UL;
++#endif
+ 
+ static int __init setup_sched_thermal_decay_shift(char *str)
+ {
+ 	pr_warn("Ignoring the deprecated sched_thermal_decay_shift= option\n");
+ 	return 1;
+@@ -120,12 +129,16 @@ int __weak arch_asym_cpu_priority(int cpu)
+  * to consumption or the quota being specified to be smaller than the slice)
+  * we will always only issue the remaining available time.
+  *
+  * (default: 5 msec, units: microseconds)
+  */
++#ifdef CONFIG_BUNKERNEL
++static unsigned int sysctl_sched_cfs_bandwidth_slice		= 3000UL;
++#else
+ static unsigned int sysctl_sched_cfs_bandwidth_slice		= 5000UL;
+ #endif
++#endif
+ 
+ #ifdef CONFIG_NUMA_BALANCING
+ /* Restrict the NUMA promotion throughput (MB/s) for each target node. */
+ static unsigned int sysctl_numa_balancing_promote_rate_limit = 65536;
+ #endif
+@@ -2456,15 +2469,12 @@ static void task_numa_find_cpu(struct task_numa_env *env,
+ 		dst_load = env->dst_stats.load + load;
+ 		src_load = env->src_stats.load - load;
+ 		maymove = !load_too_imbalanced(src_load, dst_load, env);
+ 	}
+ 
+-	for_each_cpu(cpu, cpumask_of_node(env->dst_nid)) {
+-		/* Skip this CPU if the source task cannot migrate */
+-		if (!cpumask_test_cpu(cpu, env->p->cpus_ptr))
+-			continue;
+-
++	/* Skip CPUs if the source task cannot migrate */
++	for_each_cpu_and(cpu, cpumask_of_node(env->dst_nid), env->p->cpus_ptr) {
+ 		env->dst_cpu = cpu;
+ 		if (task_numa_compare(env, taskimp, groupimp, maymove))
+ 			break;
+ 	}
+ }
+@@ -8363,13 +8373,11 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu)
+ 		unsigned long rq_util_min, rq_util_max;
+ 		unsigned long cur_delta, base_energy;
+ 		int max_spare_cap_cpu = -1;
+ 		int fits, max_fits = -1;
+ 
+-		cpumask_and(cpus, perf_domain_span(pd), cpu_online_mask);
+-
+-		if (cpumask_empty(cpus))
++		if (!cpumask_and(cpus, perf_domain_span(pd), cpu_online_mask))
+ 			continue;
+ 
+ 		/* Account external pressure for the energy estimation */
+ 		cpu = cpumask_first(cpus);
+ 		cpu_actual_cap = get_actual_cpu_capacity(cpu);
+diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
+index bd350e40859d..3322c4d571d3 100644
+--- a/kernel/sched/sched.h
++++ b/kernel/sched/sched.h
+@@ -2963,11 +2963,11 @@ static inline void __block_task(struct rq *rq, struct task_struct *p)
+ extern void activate_task(struct rq *rq, struct task_struct *p, int flags);
+ extern void deactivate_task(struct rq *rq, struct task_struct *p, int flags);
+ 
+ extern void wakeup_preempt(struct rq *rq, struct task_struct *p, int flags);
+ 
+-#ifdef CONFIG_PREEMPT_RT
++#if defined(CONFIG_PREEMPT_RT) || defined(CONFIG_BUNKERNEL)
+ # define SCHED_NR_MIGRATE_BREAK 8
+ #else
+ # define SCHED_NR_MIGRATE_BREAK 32
+ #endif
+ 
+-- 
+2.52.0
+

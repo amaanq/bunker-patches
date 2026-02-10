@@ -1,0 +1,185 @@
+From 5039ff11d5d76e1258cff3fefdcdc4d3c679e7c1 Mon Sep 17 00:00:00 2001
+From: Sultan Alsawaf <sultan@kerneltoast.com>
+Date: Sun, 19 Apr 2020 19:59:18 -0700
+Subject: [PATCH 12/58] mm: stop kswapd early when nothing's waiting for it to
+ free pages
+
+---
+ mm/internal.h   |  1 +
+ mm/page_alloc.c | 17 ++++++++++++++---
+ mm/vmscan.c     | 19 +++++++++++++------
+ 3 files changed, 28 insertions(+), 9 deletions(-)
+
+diff --git a/mm/internal.h b/mm/internal.h
+index 1561fc2ff5b8..4f1282289372 100644
+--- a/mm/internal.h
++++ b/mm/internal.h
+@@ -821,10 +821,11 @@ static inline void prep_compound_tail(struct page *head, int tail_idx)
+ 
+ void post_alloc_hook(struct page *page, unsigned int order, gfp_t gfp_flags);
+ extern bool free_pages_prepare(struct page *page, unsigned int order);
+ 
+ extern int user_min_free_kbytes;
++extern atomic_long_t kswapd_waiters;
+ 
+ struct page *__alloc_frozen_pages_noprof(gfp_t, unsigned int order, int nid,
+ 		nodemask_t *);
+ #define __alloc_frozen_pages(...) \
+ 	alloc_hooks(__alloc_frozen_pages_noprof(__VA_ARGS__))
+diff --git a/mm/page_alloc.c b/mm/page_alloc.c
+index ed82ee55e66a..677f9bb0428b 100644
+--- a/mm/page_alloc.c
++++ b/mm/page_alloc.c
+@@ -89,10 +89,12 @@ typedef int __bitwise fpi_t;
+ #define FPI_TO_TAIL		((__force fpi_t)BIT(1))
+ 
+ /* Free the page without taking locks. Rely on trylock only. */
+ #define FPI_TRYLOCK		((__force fpi_t)BIT(2))
+ 
++atomic_long_t kswapd_waiters = ATOMIC_LONG_INIT(0);
++
+ /* prevent >1 _updater_ of zone percpu pageset ->high and ->batch fields */
+ static DEFINE_MUTEX(pcp_batch_high_lock);
+ #define MIN_PERCPU_PAGELIST_HIGH_FRACTION (8)
+ 
+ #if defined(CONFIG_SMP) || defined(CONFIG_PREEMPT_RT)
+@@ -4638,10 +4640,11 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
+ 	int compaction_retries;
+ 	int no_progress_loops;
+ 	unsigned int cpuset_mems_cookie;
+ 	unsigned int zonelist_iter_cookie;
+ 	int reserve_flags;
++	bool woke_kswapd = false;
+ 
+ 	if (unlikely(nofail)) {
+ 		/*
+ 		 * We most definitely don't want callers attempting to
+ 		 * allocate greater than order-1 page units with __GFP_NOFAIL.
+@@ -4697,12 +4700,17 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
+ 					&cpuset_current_mems_allowed);
+ 		if (!zonelist_zone(z))
+ 			goto nopage;
+ 	}
+ 
+-	if (alloc_flags & ALLOC_KSWAPD)
++	if (alloc_flags & ALLOC_KSWAPD) {
++		if (!woke_kswapd) {
++			atomic_long_inc(&kswapd_waiters);
++			woke_kswapd = true;
++		}
+ 		wake_all_kswapds(order, gfp_mask, ac);
++	}
+ 
+ 	/*
+ 	 * The adjusted alloc_flags might result in immediate success, so try
+ 	 * that first
+ 	 */
+@@ -4913,13 +4921,16 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
+ 
+ 		cond_resched();
+ 		goto retry;
+ 	}
+ fail:
+-	warn_alloc(gfp_mask, ac->nodemask,
+-			"page allocation failure: order:%u", order);
+ got_pg:
++	if (woke_kswapd)
++		atomic_long_dec(&kswapd_waiters);
++	if (!page)
++		warn_alloc(gfp_mask, ac->nodemask,
++				"page allocation failure: order:%u", order);
+ 	return page;
+ }
+ 
+ static inline bool prepare_alloc_pages(gfp_t gfp_mask, unsigned int order,
+ 		int preferred_nid, nodemask_t *nodemask,
+diff --git a/mm/vmscan.c b/mm/vmscan.c
+index b2fc8b626d3d..3f0cfcf9cdf4 100644
+--- a/mm/vmscan.c
++++ b/mm/vmscan.c
+@@ -6482,11 +6482,11 @@ static unsigned long do_try_to_free_pages(struct zonelist *zonelist,
+ 	}
+ 
+ 	return 0;
+ }
+ 
+-static bool allow_direct_reclaim(pg_data_t *pgdat)
++static bool allow_direct_reclaim(pg_data_t *pgdat, bool using_kswapd)
+ {
+ 	struct zone *zone;
+ 	unsigned long pfmemalloc_reserve = 0;
+ 	unsigned long free_pages = 0;
+ 	int i;
+@@ -6507,10 +6507,14 @@ static bool allow_direct_reclaim(pg_data_t *pgdat)
+ 	if (!pfmemalloc_reserve)
+ 		return true;
+ 
+ 	wmark_ok = free_pages > pfmemalloc_reserve / 2;
+ 
++	/* The throttled direct reclaimer is now a kswapd waiter */
++	if (unlikely(!using_kswapd && !wmark_ok))
++		atomic_long_inc(&kswapd_waiters);
++
+ 	/* kswapd must be awake if processes are being throttled */
+ 	if (!wmark_ok && waitqueue_active(&pgdat->kswapd_wait)) {
+ 		if (READ_ONCE(pgdat->kswapd_highest_zoneidx) > ZONE_NORMAL)
+ 			WRITE_ONCE(pgdat->kswapd_highest_zoneidx, ZONE_NORMAL);
+ 
+@@ -6572,11 +6576,11 @@ static bool throttle_direct_reclaim(gfp_t gfp_mask, struct zonelist *zonelist,
+ 		if (zone_idx(zone) > ZONE_NORMAL)
+ 			continue;
+ 
+ 		/* Throttle based on the first usable node */
+ 		pgdat = zone->zone_pgdat;
+-		if (allow_direct_reclaim(pgdat))
++		if (allow_direct_reclaim(pgdat, gfp_mask & __GFP_KSWAPD_RECLAIM))
+ 			goto out;
+ 		break;
+ 	}
+ 
+ 	/* If no zone was usable by the allocation flags then do not throttle */
+@@ -6594,15 +6598,18 @@ static bool throttle_direct_reclaim(gfp_t gfp_mask, struct zonelist *zonelist,
+ 	 * blocked waiting on the same lock. Instead, throttle for up to a
+ 	 * second before continuing.
+ 	 */
+ 	if (!(gfp_mask & __GFP_FS))
+ 		wait_event_interruptible_timeout(pgdat->pfmemalloc_wait,
+-			allow_direct_reclaim(pgdat), HZ);
++			allow_direct_reclaim(pgdat, true), HZ);
+ 	else
+ 		/* Throttle until kswapd wakes the process */
+ 		wait_event_killable(zone->zone_pgdat->pfmemalloc_wait,
+-			allow_direct_reclaim(pgdat));
++			allow_direct_reclaim(pgdat, true));
++
++	if (unlikely(!(gfp_mask & __GFP_KSWAPD_RECLAIM)))
++		atomic_long_dec(&kswapd_waiters);
+ 
+ 	if (fatal_signal_pending(current))
+ 		return true;
+ 
+ out:
+@@ -7128,18 +7135,18 @@ static int balance_pgdat(pg_data_t *pgdat, int order, int highest_zoneidx)
+ 		 * If the low watermark is met there is no need for processes
+ 		 * to be throttled on pfmemalloc_wait as they should not be
+ 		 * able to safely make forward progress. Wake them
+ 		 */
+ 		if (waitqueue_active(&pgdat->pfmemalloc_wait) &&
+-				allow_direct_reclaim(pgdat))
++				allow_direct_reclaim(pgdat, true))
+ 			wake_up_all(&pgdat->pfmemalloc_wait);
+ 
+ 		/* Check if kswapd should be suspending */
+ 		__fs_reclaim_release(_THIS_IP_);
+ 		ret = kthread_freezable_should_stop(&was_frozen);
+ 		__fs_reclaim_acquire(_THIS_IP_);
+-		if (was_frozen || ret)
++		if (was_frozen || ret || !atomic_long_read(&kswapd_waiters))
+ 			break;
+ 
+ 		/*
+ 		 * Raise priority if scanning rate is too low or there was no
+ 		 * progress in reclaiming pages
+-- 
+2.52.0
+

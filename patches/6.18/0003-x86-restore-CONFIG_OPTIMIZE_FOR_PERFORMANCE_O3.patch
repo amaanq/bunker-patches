@@ -1,0 +1,52 @@
+From a5b2c7ba0cb00fb2247c572acbd5a2733cb03b1a Mon Sep 17 00:00:00 2001
+From: "Jan Alexander Steffens (heftig)" <heftig@archlinux.org>
+Date: Sun, 11 Dec 2022 23:51:16 +0100
+Subject: [PATCH 03/58] x86: restore CONFIG_OPTIMIZE_FOR_PERFORMANCE_O3
+
+---
+ Makefile     | 3 +++
+ init/Kconfig | 6 ++++++
+ 2 files changed, 9 insertions(+)
+
+diff --git a/Makefile b/Makefile
+index a082a1d7c7d9..bd636d9bc9c2 100644
+--- a/Makefile
++++ b/Makefile
+@@ -867,10 +867,13 @@ endif # need-config
+ KBUILD_CFLAGS	+= -fno-delete-null-pointer-checks
+ 
+ ifdef CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE
+ KBUILD_CFLAGS += -O2
+ KBUILD_RUSTFLAGS += -Copt-level=2
++else ifdef CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3
++KBUILD_CFLAGS += -O3
++KBUILD_RUSTFLAGS += -Copt-level=3
+ else ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
+ KBUILD_CFLAGS += -Os
+ KBUILD_RUSTFLAGS += -Copt-level=s
+ endif
+ 
+diff --git a/init/Kconfig b/init/Kconfig
+index cab3ad28ca49..209b5dae703b 100644
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -1539,10 +1539,16 @@ config CC_OPTIMIZE_FOR_PERFORMANCE
+ 	help
+ 	  This is the default optimization level for the kernel, building
+ 	  with the "-O2" compiler flag for best performance and most
+ 	  helpful compile-time warnings.
+ 
++config CC_OPTIMIZE_FOR_PERFORMANCE_O3
++	bool "Optimize more for performance (-O3)"
++	help
++	  Choosing this option will pass "-O3" to your compiler to optimize
++	  the kernel yet more for performance.
++
+ config CC_OPTIMIZE_FOR_SIZE
+ 	bool "Optimize for size (-Os)"
+ 	help
+ 	  Choosing this option will pass "-Os" to your compiler resulting
+ 	  in a smaller kernel.
+-- 
+2.52.0
+

@@ -1,0 +1,94 @@
+From e62dd04fdb928f8574d8e6f98e64daad34fe106c Mon Sep 17 00:00:00 2001
+From: Serge Hallyn <serge.hallyn@canonical.com>
+Date: Fri, 31 May 2013 19:12:12 +0100
+Subject: [PATCH 06/58] add sysctl to allow disabling unprivileged
+ CLONE_NEWUSER
+
+This is a short-term patch.  Unprivileged use of CLONE_NEWUSER
+is certainly an intended feature of user namespaces.  However
+for at least saucy we want to make sure that, if any security
+issues are found, we have a fail-safe.
+
+[bwh: Remove unneeded binary sysctl bits]
+[bwh: Keep this sysctl, but change the default to enabled]
+[heftig: correct commit subject to reduce confusion]
+[heftig: for 6.17, move all code into kernel/fork.c]
+---
+ kernel/fork.c | 24 ++++++++++++++++++++++++
+ 1 file changed, 24 insertions(+)
+
+diff --git a/kernel/fork.c b/kernel/fork.c
+index b1f3915d5f8e..72a734fc50ae 100644
+--- a/kernel/fork.c
++++ b/kernel/fork.c
+@@ -121,10 +121,16 @@
+ #define CREATE_TRACE_POINTS
+ #include <trace/events/task.h>
+ 
+ #include <kunit/visibility.h>
+ 
++#ifdef CONFIG_USER_NS
++static int unprivileged_userns_clone = 1;
++#else
++#define unprivileged_userns_clone 1
++#endif
++
+ /*
+  * Minimum number of threads to boot the kernel
+  */
+ #define MIN_THREADS 20
+ 
+@@ -2028,10 +2034,15 @@ __latent_entropy struct task_struct *copy_process(
+ 		 */
+ 		if (clone_flags & CLONE_DETACHED)
+ 			return ERR_PTR(-EINVAL);
+ 	}
+ 
++	if ((clone_flags & CLONE_NEWUSER) && !unprivileged_userns_clone) {
++		if (!capable(CAP_SYS_ADMIN))
++			return ERR_PTR(-EPERM);
++	}
++
+ 	/*
+ 	 * Force any signals received before this point to be delivered
+ 	 * before the fork happens.  Collect up signals sent to multiple
+ 	 * processes that happen during the fork and delay them so that
+ 	 * they appear to happen after the fork.
+@@ -3065,10 +3076,14 @@ static int check_unshare_flags(unsigned long unshare_flags)
+ 	}
+ 	if (unshare_flags & CLONE_VM) {
+ 		if (!current_is_single_threaded())
+ 			return -EINVAL;
+ 	}
++	if ((unshare_flags & CLONE_NEWUSER) && !unprivileged_userns_clone) {
++		if (!capable(CAP_SYS_ADMIN))
++			return -EPERM;
++	}
+ 
+ 	return 0;
+ }
+ 
+ /*
+@@ -3295,10 +3310,19 @@ static const struct ctl_table fork_sysctl_table[] = {
+ 		.data		= NULL,
+ 		.maxlen		= sizeof(int),
+ 		.mode		= 0644,
+ 		.proc_handler	= sysctl_max_threads,
+ 	},
++#ifdef CONFIG_USER_NS
++	{
++		.procname	= "unprivileged_userns_clone",
++		.data		= &unprivileged_userns_clone,
++		.maxlen		= sizeof(int),
++		.mode		= 0644,
++		.proc_handler	= proc_dointvec,
++	},
++#endif
+ };
+ 
+ static int __init init_fork_sysctl(void)
+ {
+ 	register_sysctl_init("kernel", fork_sysctl_table);
+-- 
+2.52.0
+

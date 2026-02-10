@@ -1,0 +1,46 @@
+From edc12d7b4164440283be5911713f7e109c28eaa3 Mon Sep 17 00:00:00 2001
+From: Steven Barrett <steven@liquorix.net>
+Date: Sat, 5 Mar 2022 11:37:14 -0600
+Subject: [PATCH 20/58] mm: disable unevictable compaction
+
+---
+ init/Kconfig | 1 +
+ mm/Kconfig   | 2 +-
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/init/Kconfig b/init/Kconfig
+index c80bd2df5123..ccb216965cee 100644
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -205,10 +205,11 @@ config BUNKERNEL
+ 	    Default scheduler for SQ..: mq-deadline ->   bfq
+ 
+ 	  --- Virtual Memory Subsystem ---------------------------
+ 
+ 	    Background-reclaim hugepages...:   no   ->   yes
++	    Compact unevictable............:   yes  ->   no
+ 
+ 	  --- EEVDF CPU Scheduler --------------------------------
+ 
+ 	    Minimal granularity............:   0.7  ->   0.4  ms
+ 	    Migration cost.................:   0.5  ->   0.3  ms
+diff --git a/mm/Kconfig b/mm/Kconfig
+index a992f2203eb9..d9ddb03766aa 100644
+--- a/mm/Kconfig
++++ b/mm/Kconfig
+@@ -629,11 +629,11 @@ config COMPACTION
+ 	  linux-mm@kvack.org.
+ 
+ config COMPACT_UNEVICTABLE_DEFAULT
+ 	int
+ 	depends on COMPACTION
+-	default 0 if PREEMPT_RT
++	default 0 if PREEMPT_RT || ZEN_INTERACTIVE
+ 	default 1
+ 
+ #
+ # support for free page reporting
+ config PAGE_REPORTING
+-- 
+2.52.0
+

@@ -1,0 +1,31 @@
+From 29b567e50ca21144241bd92462258c64eb9d142e Mon Sep 17 00:00:00 2001
+From: Alexandre Frade <kernel@xanmod.org>
+Date: Mon, 16 Sep 2024 15:36:01 +0000
+Subject: [PATCH 32/58] block: set rq_affinity to force complete I/O on same
+ CPU
+
+---
+ include/linux/blkdev.h | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/include/linux/blkdev.h b/include/linux/blkdev.h
+index 72e34acd439c..475e3dba80c1 100644
+--- a/include/linux/blkdev.h
++++ b/include/linux/blkdev.h
+@@ -669,11 +669,12 @@ enum {
+ 	QUEUE_FLAG_QOS_ENABLED,		/* qos is enabled */
+ 	QUEUE_FLAG_BIO_ISSUE_TIME,	/* record bio->issue_time_ns */
+ 	QUEUE_FLAG_MAX
+ };
+ 
+-#define QUEUE_FLAG_MQ_DEFAULT	(1UL << QUEUE_FLAG_SAME_COMP)
++#define QUEUE_FLAG_MQ_DEFAULT	((1UL << QUEUE_FLAG_SAME_COMP) |		\
++				 (1UL << QUEUE_FLAG_SAME_FORCE))
+ 
+ void blk_queue_flag_set(unsigned int flag, struct request_queue *q);
+ void blk_queue_flag_clear(unsigned int flag, struct request_queue *q);
+ 
+ #define blk_queue_dying(q)	test_bit(QUEUE_FLAG_DYING, &(q)->queue_flags)
+-- 
+2.52.0
+

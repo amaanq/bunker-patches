@@ -1,0 +1,49 @@
+From 941ac59aa8a60e95ef6ad66459608b0c10992d2a Mon Sep 17 00:00:00 2001
+From: Sultan Alsawaf <sultan@kerneltoast.com>
+Date: Sat, 28 Mar 2020 13:06:28 -0700
+Subject: [PATCH 21/58] mm: disable watermark boosting by default
+
+---
+ init/Kconfig    | 1 +
+ mm/page_alloc.c | 4 ++++
+ 2 files changed, 5 insertions(+)
+
+diff --git a/init/Kconfig b/init/Kconfig
+index ccb216965cee..e1a31cedd9fc 100644
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -206,10 +206,11 @@ config BUNKERNEL
+ 
+ 	  --- Virtual Memory Subsystem ---------------------------
+ 
+ 	    Background-reclaim hugepages...:   no   ->   yes
+ 	    Compact unevictable............:   yes  ->   no
++	    Watermark boost factor.........:   1.5  ->   0
+ 
+ 	  --- EEVDF CPU Scheduler --------------------------------
+ 
+ 	    Minimal granularity............:   0.7  ->   0.4  ms
+ 	    Migration cost.................:   0.5  ->   0.3  ms
+diff --git a/mm/page_alloc.c b/mm/page_alloc.c
+index 46ba92433c3b..c3b4c054ce28 100644
+--- a/mm/page_alloc.c
++++ b/mm/page_alloc.c
+@@ -302,11 +302,15 @@ const char * const migratetype_names[MIGRATE_TYPES] = {
+ #endif
+ };
+ 
+ int min_free_kbytes = 1024;
+ int user_min_free_kbytes = -1;
++#ifdef CONFIG_BUNKERNEL
++static int watermark_boost_factor __read_mostly;
++#else
+ static int watermark_boost_factor __read_mostly = 15000;
++#endif
+ static int watermark_scale_factor = 10;
+ int defrag_mode;
+ 
+ /* movable_zone is the "real" zone pages in ZONE_MOVABLE are taken from */
+ int movable_zone;
+-- 
+2.52.0
+

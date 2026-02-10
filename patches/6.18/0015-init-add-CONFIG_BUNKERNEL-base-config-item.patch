@@ -1,0 +1,33 @@
+From 9029e39800c53216e932105b77dcbbc7a34736ef Mon Sep 17 00:00:00 2001
+From: "Jan Alexander Steffens (heftig)" <jan.steffens@gmail.com>
+Date: Mon, 27 Jan 2020 18:10:06 +0100
+Subject: [PATCH 15/58] init: add CONFIG_BUNKERNEL base config item
+
+---
+ init/Kconfig | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/init/Kconfig b/init/Kconfig
+index 958fe6d79d6a..d22df7d17e91 100644
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -185,10 +185,16 @@ config THREAD_INFO_IN_TASK
+ 	  One subtle change that will be needed is to use try_get_task_stack()
+ 	  and put_task_stack() in save_thread_stack_tsk() and get_wchan().
+ 
+ menu "General setup"
+ 
++config BUNKERNEL
++	bool "Tune kernel for interactivity"
++	default y
++	help
++	  Tunes the kernel for responsiveness at the cost of throughput and power usage.
++
+ config BROKEN
+ 	bool
+ 	help
+ 	  This option allows you to choose whether you want to try to
+ 	  compile (and fix) old drivers that haven't been updated to
+-- 
+2.52.0
+

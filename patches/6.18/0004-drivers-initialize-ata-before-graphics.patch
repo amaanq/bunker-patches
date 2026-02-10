@@ -1,0 +1,53 @@
+From 99c707f667b0c9e2fad0a543967a3d6ca3464bdd Mon Sep 17 00:00:00 2001
+From: Arjan van de Ven <arjan@linux.intel.com>
+Date: Thu, 2 Jun 2016 23:36:32 -0500
+Subject: [PATCH 04/58] drivers: initialize ata before graphics
+
+---
+ drivers/Makefile | 13 +++++++------
+ 1 file changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/Makefile b/drivers/Makefile
+index 8e1ffa4358d5..2a9eec99c1f7 100644
+--- a/drivers/Makefile
++++ b/drivers/Makefile
+@@ -62,18 +62,12 @@ obj-y				+= tty/
+ obj-y				+= char/
+ 
+ # iommu/ comes before gpu as gpu are using iommu controllers
+ obj-y				+= iommu/
+ 
+-# gpu/ comes after char for AGP vs DRM startup and after iommu
+-obj-y				+= gpu/
+-
+ obj-$(CONFIG_CONNECTOR)		+= connector/
+ 
+-# i810fb depends on char/agp/
+-obj-$(CONFIG_FB_I810)           += video/fbdev/i810/
+-
+ obj-$(CONFIG_PARPORT)		+= parport/
+ obj-y				+= base/ block/ misc/ mfd/ nfc/
+ obj-$(CONFIG_LIBNVDIMM)		+= nvdimm/
+ obj-y				+= dax/
+ obj-$(CONFIG_DMA_SHARED_BUFFER) += dma-buf/
+@@ -81,10 +75,17 @@ obj-$(CONFIG_NUBUS)		+= nubus/
+ obj-y				+= cxl/
+ obj-y				+= macintosh/
+ obj-y				+= scsi/
+ obj-y				+= nvme/
+ obj-$(CONFIG_ATA)		+= ata/
++
++# gpu/ comes after char for AGP vs DRM startup and after iommu
++obj-y				+= gpu/
++
++# i810fb depends on char/agp/
++obj-$(CONFIG_FB_I810)           += video/fbdev/i810/
++
+ obj-$(CONFIG_TARGET_CORE)	+= target/
+ obj-$(CONFIG_MTD)		+= mtd/
+ obj-$(CONFIG_SPI)		+= spi/
+ obj-$(CONFIG_SPMI)		+= spmi/
+ obj-$(CONFIG_HSI)		+= hsi/
+-- 
+2.52.0
+

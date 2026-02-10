@@ -1,0 +1,72 @@
+From 1474416ce54c646ce9beb4470e6e710984b35a4e Mon Sep 17 00:00:00 2001
+From: Xie Yuanbin <qq570070308@gmail.com>
+Date: Sun, 23 Nov 2025 20:18:26 +0800
+Subject: [PATCH 24/58] sched: Make raw_spin_rq_unlock() inline
+
+raw_spin_rq_unlock() is short, and is called in some hot code paths
+such as finish_lock_switch.
+
+Make raw_spin_rq_unlock() inline to optimize performance.
+
+Signed-off-by: Xie Yuanbin <qq570070308@gmail.com>
+Cc: Thomas Gleixner <tglx@linutronix.de>
+Cc: Rik van Riel <riel@surriel.com>
+Cc: Segher Boessenkool <segher@kernel.crashing.org>
+Cc: David Hildenbrand (Red Hat) <david@kernel.org>
+Cc: Peter Zijlstra <peterz@infradead.org>
+Cc: H. Peter Anvin (Intel) <hpa@zytor.com>
+---
+ kernel/sched/core.c  | 5 -----
+ kernel/sched/sched.h | 6 +++++-
+ 2 files changed, 5 insertions(+), 6 deletions(-)
+
+diff --git a/kernel/sched/core.c b/kernel/sched/core.c
+index f754a60de848..6af6f974aaea 100644
+--- a/kernel/sched/core.c
++++ b/kernel/sched/core.c
+@@ -675,15 +675,10 @@ bool raw_spin_rq_trylock(struct rq *rq)
+ 		}
+ 		raw_spin_unlock(lock);
+ 	}
+ }
+ 
+-void raw_spin_rq_unlock(struct rq *rq)
+-{
+-	raw_spin_unlock(rq_lockp(rq));
+-}
+-
+ /*
+  * double_rq_lock - safely lock two runqueues
+  */
+ void double_rq_lock(struct rq *rq1, struct rq *rq2)
+ {
+diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
+index 80f4cc140f81..8427d3defdcf 100644
+--- a/kernel/sched/sched.h
++++ b/kernel/sched/sched.h
+@@ -1538,17 +1538,21 @@ static inline void lockdep_assert_rq_held(struct rq *rq)
+ 	lockdep_assert_held(__rq_lockp(rq));
+ }
+ 
+ extern void raw_spin_rq_lock_nested(struct rq *rq, int subclass);
+ extern bool raw_spin_rq_trylock(struct rq *rq);
+-extern void raw_spin_rq_unlock(struct rq *rq);
+ 
+ static inline void raw_spin_rq_lock(struct rq *rq)
+ {
+ 	raw_spin_rq_lock_nested(rq, 0);
+ }
+ 
++static inline void raw_spin_rq_unlock(struct rq *rq)
++{
++	raw_spin_unlock(rq_lockp(rq));
++}
++
+ static inline void raw_spin_rq_lock_irq(struct rq *rq)
+ {
+ 	local_irq_disable();
+ 	raw_spin_rq_lock(rq);
+ }
+-- 
+2.52.0
+

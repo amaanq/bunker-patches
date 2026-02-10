@@ -1,0 +1,52 @@
+From d6e2f7c8f743e8fc7721a765795ea2795dd42383 Mon Sep 17 00:00:00 2001
+From: "Jan Alexander Steffens (heftig)" <jan.steffens@gmail.com>
+Date: Mon, 27 Jan 2020 18:11:05 +0100
+Subject: [PATCH 16/58] block: use BFQ as the elevator for SQ devices
+
+---
+ block/elevator.c | 4 ++++
+ init/Kconfig     | 4 ++++
+ 2 files changed, 8 insertions(+)
+
+diff --git a/block/elevator.c b/block/elevator.c
+index a2f8b2251dc6..ef808b3ad595 100644
+--- a/block/elevator.c
++++ b/block/elevator.c
+@@ -726,11 +726,15 @@ void elv_update_nr_hw_queues(struct request_queue *q,
+  * fails, fall back to the "none" elevator (no elevator).
+  */
+ void elevator_set_default(struct request_queue *q)
+ {
+ 	struct elv_change_ctx ctx = {
++#if defined(CONFIG_BUNKERNEL) && defined(CONFIG_IOSCHED_BFQ)
++		.name = "bfq",
++#else
+ 		.name = "mq-deadline",
++#endif
+ 		.no_uevent = true,
+ 	};
+ 	int err;
+ 
+ 	/* now we allow to switch elevator */
+diff --git a/init/Kconfig b/init/Kconfig
+index eb27e399d7a3..da818a4012b0 100644
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -198,10 +198,14 @@ config BUNKERNEL
+ 	bool "Tune kernel for interactivity"
+ 	default y
+ 	help
+ 	  Tunes the kernel for responsiveness at the cost of throughput and power usage.
+ 
++	  --- Block Layer ----------------------------------------
++
++	    Default scheduler for SQ..: mq-deadline ->   bfq
++
+ config BROKEN
+ 	bool
+ 	help
+ 	  This option allows you to choose whether you want to try to
+ 	  compile (and fix) old drivers that haven't been updated to
+-- 
+2.52.0
+
