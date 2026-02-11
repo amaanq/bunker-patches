@@ -29,9 +29,7 @@ diff --git a/mm/slub.c b/mm/slub.c
 index f363333b22cf..2b58345ef695 100644
 --- a/mm/slub.c
 +++ b/mm/slub.c
-@@ -919,10 +919,22 @@ static inline void set_canary(struct kmem_cache *s, void *object, unsigned long
- static inline void check_canary(struct kmem_cache *s, void *object, unsigned long value)
- {
+@@ -915,9 +915,21 @@ static inline void check_canary(struct kmem_cache *s, void *object, unsigned long value)
  	unsigned long *canary = get_canary(s, object);
  	BUG_ON(*canary != get_canary_value(canary, value));
  }
@@ -51,7 +49,8 @@ index f363333b22cf..2b58345ef695 100644
  #define check_canary(s, object, value)
 +#define check_set_canary_bulk(s, size, objects, check_value, set_value)
  #endif
- 
+
+ #ifdef CONFIG_SLUB_DEBUG
 @@ -2714,10 +2726,11 @@ static bool sheaf_flush_main(struct kmem_cache *s)
  
  	remaining = sheaf->size;
