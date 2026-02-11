@@ -17,11 +17,11 @@ struct wrapper in task_struct unconditional, simplifying the Rust bindings.
 Reviewed-by: Kees Cook <kees@kernel.org>
 Signed-off-by: Miguel Ojeda <ojeda@kernel.org>
 ---
- include/linux/compiler_types.h | 5 -----
- include/linux/sched.h          | 4 ++--
- init/Kconfig                   | 3 +--
- rust/kernel/task.rs            | 4 ++--
- 4 files changed, 5 insertions(+), 11 deletions(-)
+ include/linux/compiler_types.h |  5 -----
+ include/linux/sched.h          |  4 ++--
+ init/Kconfig                   |  3 +--
+ rust/kernel/task.rs            | 10 +++++-----
+ 4 files changed, 8 insertions(+), 14 deletions(-)
 
 diff --git a/include/linux/compiler_types.h b/include/linux/compiler_types.h
 index d3318a3c2577..0dab30422328 100644
@@ -29,7 +29,7 @@ index d3318a3c2577..0dab30422328 100644
 +++ b/include/linux/compiler_types.h
 @@ -462,18 +462,13 @@ struct ftrace_likely_data {
  #endif
- 
+
  #if defined(RANDSTRUCT) && !defined(__CHECKER__)
  # define __randomize_layout __designated_init __attribute__((randomize_layout))
  # define __no_randomize_layout __attribute__((no_randomize_layout))
@@ -42,7 +42,7 @@ index d3318a3c2577..0dab30422328 100644
 -# define randomized_struct_fields_start
 -# define randomized_struct_fields_end
  #endif
- 
+
  #ifndef __no_kstack_erase
  # define __no_kstack_erase
  #endif
@@ -51,20 +51,20 @@ index 5f00b5ed0f3b..1d51ff77b365 100644
 --- a/include/linux/sched.h
 +++ b/include/linux/sched.h
 @@ -831,11 +831,11 @@ struct task_struct {
- 
+
  	/*
  	 * This begins the randomizable portion of task_struct. Only
  	 * scheduling-critical items should be added above here.
  	 */
 -	randomized_struct_fields_start
 +	struct {
- 
+
  	void				*stack;
  	refcount_t			usage;
  	/* Per task flags (PF_*), defined further below: */
  	unsigned int			flags;
 @@ -1640,11 +1640,11 @@ struct task_struct {
- 
+
  	/*
  	 * New fields for task_struct should be added above here, so that
  	 * they are included in the randomized portion of task_struct.
@@ -72,7 +72,7 @@ index 5f00b5ed0f3b..1d51ff77b365 100644
 -	randomized_struct_fields_end
 +	} __randomize_layout;
  } __attribute__ ((aligned (64)));
- 
+
  #ifdef CONFIG_SCHED_PROXY_EXEC
  DECLARE_STATIC_KEY_TRUE(__sched_proxy_exec);
  static inline bool sched_proxy_exec(void)
@@ -95,24 +95,24 @@ index fa79feb8fe57..237e2760d6d2 100644
  	depends on !CALL_PADDING || RUSTC_VERSION >= 108100
  	depends on !KASAN_SW_TAGS
 diff --git a/rust/kernel/task.rs b/rust/kernel/task.rs
-index 49fad6de0674..8a4abe6fbb3b 100644
+index 49fad6de0674..c7b5967767a3 100644
 --- a/rust/kernel/task.rs
 +++ b/rust/kernel/task.rs
 @@ -206,11 +206,11 @@ pub fn as_ptr(&self) -> *mut bindings::task_struct {
- 
+
      /// Returns the group leader of the given task.
      pub fn group_leader(&self) -> &Task {
          // SAFETY: The group leader of a task never changes after initialization, so reading this
          // field is not a data race.
 -        let ptr = unsafe { *ptr::addr_of!((*self.as_ptr()).group_leader) };
 +        let ptr = unsafe { *ptr::addr_of!((*self.as_ptr()).__bindgen_anon_1.group_leader) };
- 
+
          // SAFETY: The lifetime of the returned task reference is tied to the lifetime of `self`,
          // and given that a task has a reference to its group leader, we know it must be valid for
          // the lifetime of the returned task reference.
          unsafe { &*ptr.cast() }
 @@ -218,11 +218,11 @@ pub fn group_leader(&self) -> &Task {
- 
+
      /// Returns the PID of the given task.
      pub fn pid(&self) -> Pid {
          // SAFETY: The pid of a task never changes after initialization, so reading this field is
@@ -120,10 +120,22 @@ index 49fad6de0674..8a4abe6fbb3b 100644
 -        unsafe { *ptr::addr_of!((*self.as_ptr()).pid) }
 +        unsafe { *ptr::addr_of!((*self.as_ptr()).__bindgen_anon_1.pid) }
      }
- 
+
      /// Returns the UID of the given task.
      #[inline]
      pub fn uid(&self) -> Kuid {
--- 
+@@ -291,11 +291,11 @@ impl CurrentTask {
+     #[inline]
+     pub fn mm(&self) -> Option<&MmWithUser> {
+         // SAFETY: The `mm` field of `current` is not modified from other threads, so reading it is
+         // not a data race.
+-        let mm = unsafe { (*self.as_ptr()).mm };
++        let mm = unsafe { (*self.as_ptr()).__bindgen_anon_1.mm };
+
+         if mm.is_null() {
+             return None;
+         }
+
+--
 2.52.0
 
