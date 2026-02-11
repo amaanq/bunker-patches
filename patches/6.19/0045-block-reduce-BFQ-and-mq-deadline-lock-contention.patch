@@ -1,7 +1,7 @@
 From fdf9af36f1b23f35e9b2f0cb1d54b113e329697e Mon Sep 17 00:00:00 2001
 From: Peter Jung <admin@ptr1337.dev>
 Date: Sat, 7 Feb 2026 21:58:09 -0500
-Subject: [PATCH 50/58] block: reduce BFQ and mq-deadline lock contention
+Subject: [PATCH 45/162] block: reduce BFQ and mq-deadline lock contention
 
 ---
  block/bfq-iosched.c | 52 +++++++++++++++++++++++++++++++++++++++------

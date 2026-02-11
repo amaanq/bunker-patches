@@ -1,7 +1,7 @@
 From c78f3bf02559eb52d537ab9ba353f44a4b275219 Mon Sep 17 00:00:00 2001
 From: Miguel Ojeda <ojeda@kernel.org>
 Date: Tue, 19 Nov 2024 19:57:47 +0100
-Subject: [PATCH] rust: allow Clang-native RANDSTRUCT configs
+Subject: [PATCH 161/162] rust: allow Clang-native RANDSTRUCT configs
 
 The kernel supports RANDSTRUCT_FULL with Clang 16+, and bindgen
 (which uses libclang under the hood) inherits the information, so the

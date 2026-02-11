@@ -1,7 +1,7 @@
 From 7d13fcafdf05b11ec74eb46724389ec87a5d6be8 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Sun, 7 May 2017 16:16:39 -0400
-Subject: [PATCH] use maximum supported mmap rnd entropy by default
+Subject: [PATCH 87/162] use maximum supported mmap rnd entropy by default
 
 Signed-off-by: Daniel Micay <danielmicay@gmail.com>
 ---

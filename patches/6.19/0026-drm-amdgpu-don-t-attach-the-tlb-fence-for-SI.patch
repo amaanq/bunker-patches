@@ -1,7 +1,7 @@
 From f291d6a12820ff7c5efc6e213d7433196aff1780 Mon Sep 17 00:00:00 2001
 From: Alex Deucher <alexander.deucher@amd.com>
 Date: Tue, 2 Dec 2025 14:29:32 -0500
-Subject: [PATCH 28/58] drm/amdgpu: don't attach the tlb fence for SI
+Subject: [PATCH 26/162] drm/amdgpu: don't attach the tlb fence for SI
 
 SI hardware doesn't support pasids, user mode queues, or
 KIQ/MES so there is no need for this.  Doing so results in

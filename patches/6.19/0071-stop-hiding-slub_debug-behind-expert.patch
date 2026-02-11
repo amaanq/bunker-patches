@@ -1,7 +1,7 @@
 From e6700bccf3ce5326fd98554c19a470aea24451ad Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Sun, 14 May 2017 22:39:34 -0400
-Subject: [PATCH] stop hiding SLUB_DEBUG behind EXPERT
+Subject: [PATCH 71/162] stop hiding SLUB_DEBUG behind EXPERT
 
 It can make sense to disable this to reduce attack surface / complexity.
 ---

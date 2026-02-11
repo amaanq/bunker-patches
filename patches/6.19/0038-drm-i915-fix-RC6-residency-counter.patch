@@ -1,7 +1,7 @@
 From e9f4269b3f8eb938dce2e56b31ac8844c9e014f4 Mon Sep 17 00:00:00 2001
 From: Peter Jung <admin@ptr1337.dev>
 Date: Sat, 7 Feb 2026 22:23:39 -0500
-Subject: [PATCH 43/58] drm/i915: fix RC6 residency counter
+Subject: [PATCH 38/162] drm/i915: fix RC6 residency counter
 
 ---
  drivers/gpu/drm/i915/gt/intel_rc6.c | 13 ++++++++++++-

@@ -1,7 +1,7 @@
 From 46f2126297234d579e0e4e54871476573241ca65 Mon Sep 17 00:00:00 2001
 From: Thibaut Sautereau <thibaut.sautereau@ssi.gouv.fr>
 Date: Mon, 6 May 2019 17:07:11 +0200
-Subject: [PATCH] modpost: Add CONFIG_DEBUG_WRITABLE_FUNCTION_POINTERS_VERBOSE
+Subject: [PATCH 128/162] modpost: Add CONFIG_DEBUG_WRITABLE_FUNCTION_POINTERS_VERBOSE
 
 With 46c7dd56d541 ("modpost: always show verbose warning for section
 mismatch"), sec_mismatch_verbose was removed which would have printed

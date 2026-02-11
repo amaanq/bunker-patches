@@ -1,7 +1,7 @@
 From fb66f4617961e960a64a015a51dbfe5971f2fb4c Mon Sep 17 00:00:00 2001
 From: Levente Polyak <levente@leventepolyak.net>
 Date: Wed, 14 May 2025 21:00:09 +0200
-Subject: [PATCH] kconfig: enable MSEAL_SYSTEM_MAPPINGS by default
+Subject: [PATCH 103/162] kconfig: enable MSEAL_SYSTEM_MAPPINGS by default
 
 Signed-off-by: Levente Polyak <levente@leventepolyak.net>
 ---

@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: amaanq <git@amaanq.com>
 Date: Mon, 10 Feb 2026 00:00:00 +0000
-Subject: [PATCH] enable RANDSTRUCT_FULL by default and allow with LTO+RUST
+Subject: [PATCH 162/162] enable RANDSTRUCT_FULL by default and allow with LTO+RUST
 
 Enable full structure layout randomization by default. This is a major
 exploit mitigation that randomizes the layout of sensitive kernel

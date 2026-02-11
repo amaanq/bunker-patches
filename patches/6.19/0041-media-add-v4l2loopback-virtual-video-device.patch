@@ -1,7 +1,7 @@
 From 9a1d57a1f54f87718d02805a3d994f809ae3852f Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?IOhannes=20m=20zm=C3=B6lnig?= <zmoelnig@iem.at>
 Date: Sat, 7 Feb 2026 21:57:33 -0500
-Subject: [PATCH 46/58] media: add v4l2loopback virtual video device
+Subject: [PATCH 41/162] media: add v4l2loopback virtual video device
 
 Virtual video loopback device for OBS virtual camera, screen
 sharing, and video processing pipelines. Built as module.

@@ -1,7 +1,7 @@
 From 706b955ada83700837896bf0f2eb6f2876f7c031 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Tue, 16 May 2017 18:26:10 -0400
-Subject: [PATCH] restrict device timing side channels
+Subject: [PATCH 142/162] restrict device timing side channels
 
 Based on the public grsecurity patches.
 

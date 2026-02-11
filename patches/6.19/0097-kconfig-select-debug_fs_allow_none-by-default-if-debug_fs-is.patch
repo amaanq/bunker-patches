@@ -1,7 +1,7 @@
 From 51b2f0c8b04668e1c5f0a8d7e48c5c48bc48e411 Mon Sep 17 00:00:00 2001
 From: Levente Polyak <levente@leventepolyak.net>
 Date: Sun, 27 Sep 2020 00:43:48 +0200
-Subject: [PATCH] kconfig: select DEBUG_FS_ALLOW_NONE by default if DEBUG_FS is
+Subject: [PATCH 97/162] kconfig: select DEBUG_FS_ALLOW_NONE by default if DEBUG_FS is
  enabled
 
 Signed-off-by: Levente Polyak <levente@leventepolyak.net>

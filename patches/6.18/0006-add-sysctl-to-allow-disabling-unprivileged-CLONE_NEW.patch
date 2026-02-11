@@ -1,7 +1,7 @@
 From 08b6f4943cff49ab5968d3cd01f8a3b87f7a237f Mon Sep 17 00:00:00 2001
 From: Serge Hallyn <serge.hallyn@canonical.com>
 Date: Fri, 31 May 2013 19:12:12 +0100
-Subject: [PATCH 06/58] add sysctl to allow disabling unprivileged
+Subject: [PATCH 6/58] add sysctl to allow disabling unprivileged
  CLONE_NEWUSER
 
 This is a short-term patch.  Unprivileged use of CLONE_NEWUSER

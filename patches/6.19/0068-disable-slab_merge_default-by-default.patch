@@ -1,7 +1,7 @@
 From e17fff39e0e13dfd41baecca791d5068f887e222 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Sat, 8 Jul 2017 02:38:54 -0400
-Subject: [PATCH] disable SLAB_MERGE_DEFAULT by default
+Subject: [PATCH 68/162] disable SLAB_MERGE_DEFAULT by default
 
 ---
  mm/Kconfig | 1 -

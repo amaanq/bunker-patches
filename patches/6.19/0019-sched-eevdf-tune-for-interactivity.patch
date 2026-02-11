@@ -1,7 +1,7 @@
 From bfde2fc4e226797ab7b3b77fbaeb9c7487e1d1b8 Mon Sep 17 00:00:00 2001
 From: "Jan Alexander Steffens (heftig)" <heftig@archlinux.org>
 Date: Tue, 31 Oct 2023 19:03:10 +0100
-Subject: [PATCH 19/58] sched/eevdf: tune for interactivity
+Subject: [PATCH 19/162] sched/eevdf: tune for interactivity
 
 ---
  init/Kconfig         |  7 +++++++

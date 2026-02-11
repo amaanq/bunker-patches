@@ -1,7 +1,7 @@
 From a00dac6ba2e37613d9fcdfba8542d393633424a1 Mon Sep 17 00:00:00 2001
 From: Thibaut Sautereau <thibaut.sautereau@ssi.gouv.fr>
 Date: Thu, 16 Dec 2021 10:55:13 +0100
-Subject: [PATCH] slub: Bug on free of non-slab objects
+Subject: [PATCH 119/162] slub: Bug on free of non-slab objects
 
 Before commit d0fe47c64152 ("slub: add back check for free nonslab
 objects"), freeing a non-slab object used to trigger a BUG if

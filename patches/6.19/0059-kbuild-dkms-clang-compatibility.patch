@@ -1,7 +1,7 @@
 From d13b0c03b3a9e30dc4f582eb0c29dab4d126d26a Mon Sep 17 00:00:00 2001
 From: Peter Jung <admin@ptr1337.dev>
 Date: Mon, 15 Dec 2025 13:14:14 +0100
-Subject: [PATCH] dkms-clang
+Subject: [PATCH 59/162] dkms-clang
 
 Signed-off-by: Peter Jung <admin@ptr1337.dev>
 ---

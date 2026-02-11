@@ -1,7 +1,7 @@
 From cc3a76c0f11ea3f0c917ea86968e0819a32b188b Mon Sep 17 00:00:00 2001
 From: Emese Revfy <re.emese@gmail.com>
 Date: Tue, 31 May 2016 01:34:02 +0200
-Subject: [PATCH] Add the extra_latent_entropy kernel parameter
+Subject: [PATCH 125/162] Add the extra_latent_entropy kernel parameter
 
 When extra_latent_entropy is passed on the kernel command line,
 entropy will be extracted from up to the first 4GB of RAM while the

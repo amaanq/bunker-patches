@@ -1,7 +1,7 @@
 From 7a8596bdd792a7f942ab2ee8f332fa80efc2e7dd Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Tue, 16 May 2017 17:51:48 -0400
-Subject: [PATCH] usb: add toggle for disabling newly added USB devices
+Subject: [PATCH 139/162] usb: add toggle for disabling newly added USB devices
 
 Based on the public grsecurity patches.
 

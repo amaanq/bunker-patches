@@ -1,7 +1,7 @@
 From 96cdb161b9950dc1bc14ae8d9abb4cc147de4b52 Mon Sep 17 00:00:00 2001
 From: Levente Polyak <levente@leventepolyak.net>
 Date: Thu, 19 Sep 2019 19:03:01 +0200
-Subject: [PATCH] enable INIT_ON_FREE_DEFAULT_ON by default
+Subject: [PATCH 96/162] enable INIT_ON_FREE_DEFAULT_ON by default
 
 ---
  security/Kconfig.hardening | 1 +

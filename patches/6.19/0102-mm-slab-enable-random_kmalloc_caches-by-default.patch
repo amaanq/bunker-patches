@@ -1,7 +1,7 @@
 From cbe4080f3298d526021f1138589a74016ff050e6 Mon Sep 17 00:00:00 2001
 From: Levente Polyak <levente@leventepolyak.net>
 Date: Tue, 12 Dec 2023 18:35:05 +0100
-Subject: [PATCH] mm/slab: enable RANDOM_KMALLOC_CACHES by default
+Subject: [PATCH 102/162] mm/slab: enable RANDOM_KMALLOC_CACHES by default
 
 ---
  mm/Kconfig | 2 +-

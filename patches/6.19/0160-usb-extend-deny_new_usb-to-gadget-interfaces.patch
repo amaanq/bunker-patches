@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: amaanq <git@amaanq.com>
 Date: Mon, 10 Feb 2026 00:00:00 +0000
-Subject: [PATCH] usb: extend deny_new_usb to gadget interfaces
+Subject: [PATCH 160/162] usb: extend deny_new_usb to gadget interfaces
 
 The existing deny_new_usb sysctl (from linux-hardened patch 0139) only
 blocks new USB devices on the host side via hub_port_connect(). This

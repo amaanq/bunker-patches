@@ -1,7 +1,7 @@
 From 2e1802dd52858eecf2252a1acf36e0a24145b51e Mon Sep 17 00:00:00 2001
 From: Steven Barrett <steven@liquorix.net>
 Date: Mon, 5 Sep 2022 11:35:20 -0500
-Subject: [PATCH 22/58] mm/swap: disable swap-in readahead
+Subject: [PATCH 22/162] mm/swap: disable swap-in readahead
 
 ---
  init/Kconfig | 1 +

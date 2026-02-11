@@ -1,7 +1,7 @@
 From bdbc9ead77ab3d2b88ca79a0d3b59ab951a46650 Mon Sep 17 00:00:00 2001
 From: Steven Barrett <steven@liquorix.net>
 Date: Sat, 30 Jan 2021 11:34:18 -0600
-Subject: [PATCH 01/58] PCI: add ACS override support
+Subject: [PATCH 1/58] PCI: add ACS override support
 
 ---
  .../admin-guide/kernel-parameters.txt         |   9 ++
