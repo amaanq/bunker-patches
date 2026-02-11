@@ -22,14 +22,14 @@ Signed-off-by: Kees Cook <kees@kernel.org>
  include/linux/compiler_types.h |  7 -------
  include/linux/sched.h          |  4 ++--
  init/Kconfig                   |  3 +--
- rust/kernel/task.rs            |  6 +++---
- 4 files changed, 6 insertions(+), 14 deletions(-)
+ rust/kernel/task.rs            |  4 ++--
+ 4 files changed, 5 insertions(+), 13 deletions(-)
 
 diff --git a/include/linux/compiler_types.h b/include/linux/compiler_types.h
 index 0c20f40c35fe..b9c9dc9d4ebb 100644
 --- a/include/linux/compiler_types.h
 +++ b/include/linux/compiler_types.h
-@@ -437,16 +437,9 @@ struct ftrace_likely_data {
+@@ -437,14 +437,7 @@ struct ftrace_likely_data {
  #if defined(RANDSTRUCT) && !defined(__CHECKER__)
  # define __randomize_layout __designated_init __attribute__((randomize_layout))
  # define __no_randomize_layout __attribute__((no_randomize_layout))
@@ -42,8 +42,6 @@ index 0c20f40c35fe..b9c9dc9d4ebb 100644
 -# define randomized_struct_fields_start
 -# define randomized_struct_fields_end
  #endif
-
- #ifndef __BOUNDED_FLEX_ARRAY
 
 diff --git a/include/linux/sched.h b/include/linux/sched.h
 index 2c2c20d64c04..e55d7f30e3f8 100644
