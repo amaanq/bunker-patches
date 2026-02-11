@@ -124,7 +124,10 @@ index 49fad6de0674..c7b5967767a3 100644
      /// Returns the UID of the given task.
      #[inline]
      pub fn uid(&self) -> Kuid {
-@@ -291,11 +291,11 @@ impl CurrentTask {
+@@ -288,13 +288,13 @@ impl CurrentTask {
+     /// Access the address space of the current task.
+     ///
+     /// This function does not touch the refcount of the mm.
      #[inline]
      pub fn mm(&self) -> Option<&MmWithUser> {
          // SAFETY: The `mm` field of `current` is not modified from other threads, so reading it is
@@ -136,6 +139,5 @@ index 49fad6de0674..c7b5967767a3 100644
              return None;
          }
 
---
+-- 
 2.52.0
-
