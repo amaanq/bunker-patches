@@ -12,7 +12,7 @@ diff --git a/init/Kconfig b/init/Kconfig
 index a95d00951c94..535901185322 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -200,10 +200,11 @@ config BUNKERNEL
+@@ -200,10 +200,11 @@ config BUNKER
  	  --- Virtual Memory Subsystem ---------------------------
  
  	    Background-reclaim hugepages...:   no   ->   yes
@@ -34,7 +34,7 @@ index 2260dcd2775e..5726d563995d 100644
   */
  void __init swap_setup(void)
  {
-+#ifdef CONFIG_BUNKERNEL
++#ifdef CONFIG_BUNKER
 +	/* Only swap-in pages requested, avoid readahead */
 +	page_cluster = 0;
 +#else

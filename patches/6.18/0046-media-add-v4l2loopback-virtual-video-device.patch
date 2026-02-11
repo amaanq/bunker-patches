@@ -1,5 +1,5 @@
 From 92a6183af93d5926f818d6c8702537bbac3f40bf Mon Sep 17 00:00:00 2001
-From: Peter Jung <admin@ptr1337.dev>
+From: =?UTF-8?q?IOhannes=20m=20zm=C3=B6lnig?= <zmoelnig@iem.at>
 Date: Sat, 7 Feb 2026 21:57:33 -0500
 Subject: [PATCH 46/58] media: add v4l2loopback virtual video device
 

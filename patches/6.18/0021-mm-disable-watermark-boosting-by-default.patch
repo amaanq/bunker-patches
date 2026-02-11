@@ -12,7 +12,7 @@ diff --git a/init/Kconfig b/init/Kconfig
 index 66480d3bc9b1..a95d00951c94 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -199,10 +199,11 @@ config BUNKERNEL
+@@ -199,10 +199,11 @@ config BUNKER
  
  	  --- Virtual Memory Subsystem ---------------------------
  
@@ -34,7 +34,7 @@ index 677f9bb0428b..a5c0bf4cc4c3 100644
  
  int min_free_kbytes = 1024;
  int user_min_free_kbytes = -1;
-+#ifdef CONFIG_BUNKERNEL
++#ifdef CONFIG_BUNKER
 +static int watermark_boost_factor __read_mostly;
 +#else
  static int watermark_boost_factor __read_mostly = 15000;
