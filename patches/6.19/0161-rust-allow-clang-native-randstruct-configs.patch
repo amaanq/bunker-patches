@@ -1,14 +1,14 @@
-From 862544862544862544862544862544862544 Mon Sep 17 00:00:00 2001
-From: Miguel Ojeda <ojeda@kernel.org>
-Date: Tue, 19 Nov 2024 19:57:47 +0100
-Subject: [PATCH] rust: allow Clang-native `RANDSTRUCT` configs
+From c78f3bf02559eb52d537ab9ba353f44a4b275219 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Tue, 10 Feb 2026 22:43:35 -0500
+Subject: [PATCH] rust: allow Clang-native RANDSTRUCT configs
 
-The kernel supports `RANDSTRUCT_FULL` with Clang 16+, and `bindgen`
-(which uses `libclang` under the hood) inherits the information, so the
+The kernel supports RANDSTRUCT_FULL with Clang 16+, and bindgen
+(which uses libclang under the hood) inherits the information, so the
 generated bindings look correct.
 
 Thus allow those configurations by requiring a Clang compiler to use
-`RANDSTRUCT`. In addition, remove the `!GCC_PLUGIN_RANDSTRUCT` check
+RANDSTRUCT. In addition, remove the !GCC_PLUGIN_RANDSTRUCT check
 since it is not needed.
 
 This version incorporates Kees Cook's refinement to make the anonymous
@@ -16,20 +16,20 @@ struct wrapper in task_struct unconditional, simplifying the Rust bindings.
 
 Reviewed-by: Kees Cook <kees@kernel.org>
 Signed-off-by: Miguel Ojeda <ojeda@kernel.org>
-[Refinement by Kees Cook to make anonymous struct universal]
-Signed-off-by: Kees Cook <kees@kernel.org>
 ---
- include/linux/compiler_types.h |  7 -------
- include/linux/sched.h          |  4 ++--
- init/Kconfig                   |  3 +--
- rust/kernel/task.rs            |  4 ++--
- 4 files changed, 5 insertions(+), 13 deletions(-)
+ include/linux/compiler_types.h | 5 -----
+ include/linux/sched.h          | 4 ++--
+ init/Kconfig                   | 3 +--
+ rust/kernel/task.rs            | 4 ++--
+ 4 files changed, 5 insertions(+), 11 deletions(-)
 
 diff --git a/include/linux/compiler_types.h b/include/linux/compiler_types.h
-index 0c20f40c35fe..b9c9dc9d4ebb 100644
+index d3318a3c2577..0dab30422328 100644
 --- a/include/linux/compiler_types.h
 +++ b/include/linux/compiler_types.h
-@@ -437,14 +437,7 @@ struct ftrace_likely_data {
+@@ -462,18 +462,13 @@ struct ftrace_likely_data {
+ #endif
+ 
  #if defined(RANDSTRUCT) && !defined(__CHECKER__)
  # define __randomize_layout __designated_init __attribute__((randomize_layout))
  # define __no_randomize_layout __attribute__((no_randomize_layout))
@@ -42,31 +42,46 @@ index 0c20f40c35fe..b9c9dc9d4ebb 100644
 -# define randomized_struct_fields_start
 -# define randomized_struct_fields_end
  #endif
+ 
+ #ifndef __no_kstack_erase
+ # define __no_kstack_erase
+ #endif
 diff --git a/include/linux/sched.h b/include/linux/sched.h
-index 2c2c20d64c04..e55d7f30e3f8 100644
+index 5f00b5ed0f3b..1d51ff77b365 100644
 --- a/include/linux/sched.h
 +++ b/include/linux/sched.h
-@@ -833,7 +833,7 @@ struct task_struct {
+@@ -831,11 +831,11 @@ struct task_struct {
+ 
+ 	/*
  	 * This begins the randomizable portion of task_struct. Only
  	 * scheduling-critical items should be added above here.
  	 */
 -	randomized_struct_fields_start
 +	struct {
-
+ 
  	void				*stack;
  	refcount_t			usage;
-@@ -1664,7 +1664,7 @@ struct task_struct {
+ 	/* Per task flags (PF_*), defined further below: */
+ 	unsigned int			flags;
+@@ -1640,11 +1640,11 @@ struct task_struct {
+ 
+ 	/*
  	 * New fields for task_struct should be added above here, so that
  	 * they are included in the randomized portion of task_struct.
  	 */
 -	randomized_struct_fields_end
 +	} __randomize_layout;
  } __attribute__ ((aligned (64)));
+ 
+ #ifdef CONFIG_SCHED_PROXY_EXEC
+ DECLARE_STATIC_KEY_TRUE(__sched_proxy_exec);
+ static inline bool sched_proxy_exec(void)
 diff --git a/init/Kconfig b/init/Kconfig
-index 530a382ee0fe..d2a04c3c86ab 100644
+index fa79feb8fe57..237e2760d6d2 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -1901,8 +1901,7 @@ config RUST
+@@ -2139,12 +2139,11 @@ config RUST
+ 	bool "Rust support"
  	depends on HAVE_RUST
  	depends on RUST_IS_AVAILABLE
  	select EXTENDED_MODVERSIONS if MODVERSIONS
@@ -77,28 +92,38 @@ index 530a382ee0fe..d2a04c3c86ab 100644
  	depends on !DEBUG_INFO_BTF || (PAHOLE_HAS_LANG_EXCLUDE && !LTO)
  	depends on !CFI || HAVE_CFI_ICALL_NORMALIZE_INTEGERS_RUSTC
  	select CFI_ICALL_NORMALIZE_INTEGERS if CFI
+ 	depends on !CALL_PADDING || RUSTC_VERSION >= 108100
+ 	depends on !KASAN_SW_TAGS
 diff --git a/rust/kernel/task.rs b/rust/kernel/task.rs
-index 5bce090a3869..a3cb58e49fe7 100644
+index 49fad6de0674..8a4abe6fbb3b 100644
 --- a/rust/kernel/task.rs
 +++ b/rust/kernel/task.rs
-@@ -129,7 +129,7 @@ fn deref(&self) -> &Self::Target {
+@@ -206,11 +206,11 @@ pub fn as_ptr(&self) -> *mut bindings::task_struct {
+ 
+     /// Returns the group leader of the given task.
      pub fn group_leader(&self) -> &Task {
-         // SAFETY: By the type invariant, we know that `self.0` is a valid task. Valid tasks always
-         // have a valid `group_leader`.
--        let ptr = unsafe { *ptr::addr_of!((*self.0.get()).group_leader) };
-+        let ptr = unsafe { *ptr::addr_of!((*self.0.get()).__bindgen_anon_1.group_leader) };
-
+         // SAFETY: The group leader of a task never changes after initialization, so reading this
+         // field is not a data race.
+-        let ptr = unsafe { *ptr::addr_of!((*self.as_ptr()).group_leader) };
++        let ptr = unsafe { *ptr::addr_of!((*self.as_ptr()).__bindgen_anon_1.group_leader) };
+ 
          // SAFETY: The lifetime of the returned task reference is tied to the lifetime of `self`,
          // and given that a task has a reference to its group leader, we know it must be valid for
-@@ -141,7 +141,7 @@ pub fn group_leader(&self) -> &Task {
+         // the lifetime of the returned task reference.
+         unsafe { &*ptr.cast() }
+@@ -218,11 +218,11 @@ pub fn group_leader(&self) -> &Task {
+ 
+     /// Returns the PID of the given task.
      pub fn pid(&self) -> Pid {
-         // SAFETY: By the type invariant, we know that `self.0` is a valid task. Valid tasks always
-         // have a valid pid.
--        unsafe { *ptr::addr_of!((*self.0.get()).pid) }
-+        unsafe { *ptr::addr_of!((*self.0.get()).__bindgen_anon_1.pid) }
+         // SAFETY: The pid of a task never changes after initialization, so reading this field is
+         // not a data race.
+-        unsafe { *ptr::addr_of!((*self.as_ptr()).pid) }
++        unsafe { *ptr::addr_of!((*self.as_ptr()).__bindgen_anon_1.pid) }
      }
-
-     /// Determines whether the given task has pending signals.
---
+ 
+     /// Returns the UID of the given task.
+     #[inline]
+     pub fn uid(&self) -> Kuid {
+-- 
 2.52.0
 
