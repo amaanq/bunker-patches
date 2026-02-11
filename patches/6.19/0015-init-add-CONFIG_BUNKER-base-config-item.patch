@@ -1,7 +1,7 @@
 From 9f710c4c97e4d3f082a5fbd16bdeb01f211a97b3 Mon Sep 17 00:00:00 2001
-From: "Jan Alexander Steffens (heftig)" <jan.steffens@gmail.com>
+From: Amaan Qureshi <git@amaanq.com>
 Date: Mon, 27 Jan 2020 18:10:06 +0100
-Subject: [PATCH 15/58] init: add CONFIG_BUNKERNEL base config item
+Subject: [PATCH 15/58] init: add CONFIG_BUNKER base config item
 
 ---
  init/Kconfig | 6 ++++++
@@ -17,7 +17,7 @@ index 6da8dc5acd57..eb27e399d7a3 100644
  
  menu "General setup"
  
-+config BUNKERNEL
++config BUNKER
 +	bool "Tune kernel for interactivity"
 +	default y
 +	help

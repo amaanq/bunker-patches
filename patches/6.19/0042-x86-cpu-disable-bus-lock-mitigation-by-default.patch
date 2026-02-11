@@ -19,11 +19,11 @@ index dbc99a47be45..75f071d1783d 100644
  
  static struct ratelimit_state bld_ratelimit;
  
-+#ifdef CONFIG_BUNKERNEL
++#ifdef CONFIG_BUNKER
 +static unsigned int sysctl_sld_mitigate = 0;
 +#else
  static unsigned int sysctl_sld_mitigate = 1;
-+#endif /* CONFIG_BUNKERNEL */
++#endif /* CONFIG_BUNKER */
  static DEFINE_SEMAPHORE(buslock_sem, 1);
  
  #ifdef CONFIG_PROC_SYSCTL

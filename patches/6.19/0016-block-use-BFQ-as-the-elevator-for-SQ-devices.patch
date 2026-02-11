@@ -18,7 +18,7 @@ index a2f8b2251dc6..ef808b3ad595 100644
  void elevator_set_default(struct request_queue *q)
  {
  	struct elv_change_ctx ctx = {
-+#if defined(CONFIG_BUNKERNEL) && defined(CONFIG_IOSCHED_BFQ)
++#if defined(CONFIG_BUNKER) && defined(CONFIG_IOSCHED_BFQ)
 +		.name = "bfq",
 +#else
  		.name = "mq-deadline",
@@ -32,7 +32,7 @@ diff --git a/init/Kconfig b/init/Kconfig
 index eb27e399d7a3..da818a4012b0 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -198,10 +198,14 @@ config BUNKERNEL
+@@ -198,10 +198,14 @@ config BUNKER
  	bool "Tune kernel for interactivity"
  	default y
  	help

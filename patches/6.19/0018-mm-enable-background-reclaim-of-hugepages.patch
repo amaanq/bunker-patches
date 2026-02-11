@@ -12,7 +12,7 @@ diff --git a/init/Kconfig b/init/Kconfig
 index da818a4012b0..e39e719ddc6c 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -202,10 +202,14 @@ config BUNKERNEL
+@@ -202,10 +202,14 @@ config BUNKER
  
  	  --- Block Layer ----------------------------------------
  
@@ -37,7 +37,7 @@ index 40cf59301c21..c81ecce58eb0 100644
  #ifdef CONFIG_TRANSPARENT_HUGEPAGE_MADVISE
  	(1<<TRANSPARENT_HUGEPAGE_REQ_MADV_FLAG)|
  #endif
-+#ifdef CONFIG_BUNKERNEL
++#ifdef CONFIG_BUNKER
 +	(1<<TRANSPARENT_HUGEPAGE_DEFRAG_KSWAPD_OR_MADV_FLAG)|
 +#else
  	(1<<TRANSPARENT_HUGEPAGE_DEFRAG_REQ_MADV_FLAG)|

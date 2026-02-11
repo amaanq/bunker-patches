@@ -14,7 +14,7 @@ is enabled, but GENDWARFKSYMS depends on !LTO. By removing the forced
 selection, users can choose whether to enable MODVERSIONS based on their
 needs.
 
-Requires Clang >= 16 or GCC with randstruct plugin (bunkernel uses
+Requires Clang >= 16 or GCC with randstruct plugin (bunker uses
 Clang).
 
 Signed-off-by: amaanq <git@amaanq.com>

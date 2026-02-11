@@ -1,5 +1,5 @@
 From 23f861df80218118e360451780d98211bf456cb7 Mon Sep 17 00:00:00 2001
-From: Peter Jung <admin@ptr1337.dev>
+From: Masahito Suzuki <firelzrd@gmail.com>
 Date: Sat, 7 Feb 2026 21:55:00 -0500
 Subject: [PATCH 44/58] block: add ADIOS (Adaptive Deadline I/O Scheduler)
 

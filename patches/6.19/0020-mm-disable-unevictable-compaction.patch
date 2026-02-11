@@ -12,7 +12,7 @@ diff --git a/init/Kconfig b/init/Kconfig
 index c80bd2df5123..ccb216965cee 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -205,10 +205,11 @@ config BUNKERNEL
+@@ -205,10 +205,11 @@ config BUNKER
  	    Default scheduler for SQ..: mq-deadline ->   bfq
  
  	  --- Virtual Memory Subsystem ---------------------------

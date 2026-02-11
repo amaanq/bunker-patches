@@ -1,5 +1,5 @@
 From 3bf60040524150815c824668c83f16ed7e0a3a40 Mon Sep 17 00:00:00 2001
-From: Peter Jung <admin@ptr1337.dev>
+From: Alexey Avramov <hakavlad0@seznam.cz>
 Date: Sat, 7 Feb 2026 21:55:52 -0500
 Subject: [PATCH 45/58] mm: add le9 working set protection
 
@@ -210,7 +210,7 @@ index d9ddb03766aa..d73d0bf0f612 100644
  	int
  	depends on COMPACTION
 -	default 0 if PREEMPT_RT || ZEN_INTERACTIVE
-+	default 0 if PREEMPT_RT || BUNKERNEL
++	default 0 if PREEMPT_RT || BUNKER
  	default 1
  
  #
@@ -307,7 +307,7 @@ index d64f608a929d..9e650b072ee2 100644
  /*
   * From 0 .. MAX_SWAPPINESS.  Higher means more swappy.
   */
-+#ifdef CONFIG_BUNKERNEL
++#ifdef CONFIG_BUNKER
 +int vm_swappiness = 100;
 +#else
  int vm_swappiness = 60;
