@@ -347,9 +347,54 @@ in
     };
 
     cpuArch = mkOption {
-      type = types.nullOr types.str;
+      type = types.nullOr (types.enum [
+        "GENERIC_CPU"
+        "X86_NATIVE_CPU"
+        # AMD
+        "MK8"
+        "MK8SSE3"
+        "MK10"
+        "MBARCELONA"
+        "MBOBCAT"
+        "MJAGUAR"
+        "MBULLDOZER"
+        "MPILEDRIVER"
+        "MSTEAMROLLER"
+        "MEXCAVATOR"
+        "MZEN"
+        "MZEN2"
+        "MZEN3"
+        "MZEN4"
+        "MZEN5"
+        # Intel
+        "MPSC"
+        "MCORE2"
+        "MNEHALEM"
+        "MWESTMERE"
+        "MSILVERMONT"
+        "MGOLDMONT"
+        "MGOLDMONTPLUS"
+        "MSANDYBRIDGE"
+        "MIVYBRIDGE"
+        "MHASWELL"
+        "MBROADWELL"
+        "MSKYLAKE"
+        "MSKYLAKEX"
+        "MCANNONLAKE"
+        "MICELAKE_CLIENT"
+        "MICELAKE_SERVER"
+        "MCOOPERLAKE"
+        "MCASCADELAKE"
+        "MTIGERLAKE"
+        "MSAPPHIRERAPIDS"
+        "MROCKETLAKE"
+        "MALDERLAKE"
+        "MRAPTORLAKE"
+        "MMETEORLAKE"
+        "MEMERALDRAPIDS"
+      ]);
       default = null;
-      description = "CPU micro-architecture Kconfig target (e.g. \"MZEN4\", \"MZEN5\"). Requires extras group.";
+      description = "CPU micro-architecture Kconfig target. Requires extras group.";
       example = "MZEN5";
     };
 
