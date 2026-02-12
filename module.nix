@@ -25,19 +25,24 @@ let
 
   cfg = config.bunker.kernel;
 
-  # "6.18.6" → "6.18", "6.19" → "6.19"
-  majorMinor =
-    let
-      parts = lib.splitString "." cfg.version;
-    in
-    "${builtins.elemAt parts 0}.${builtins.elemAt parts 1}";
+  # Map user-facing major.minor → latest stable point release
+  stableRelease = {
+    "6.18" = "6.18.10";
+    "6.19" = "6.19";
+  };
 
-  # "6.18.6" → "6.18.6", "6.19" → "6.19.0"
+  resolvedVersion = stableRelease.${cfg.version}
+    or (throw "bunker: unsupported kernel version ${cfg.version}");
+
+  # "6.18.10" → "6.18", "6.19" → "6.19"
+  majorMinor = cfg.version;
+
+  # "6.18" → "6.18.10", "6.19" → "6.19.0"
   fullVersion =
     let
-      parts = lib.splitString "." cfg.version;
+      parts = lib.splitString "." resolvedVersion;
     in
-    if builtins.length parts >= 3 then cfg.version else "${cfg.version}.0";
+    if builtins.length parts >= 3 then resolvedVersion else "${resolvedVersion}.0";
 
   # Patch group → 4-digit prefix strings
   patchGroups = {
@@ -179,10 +184,10 @@ let
 
   sourceHash =
     {
-      "6.18.6" = "sha256-RySXGXsvaNTb8bwyzG3GacoiD/TA6w3Dmpz/moj5oxs=";
+      "6.18.10" = "sha256-1tN3FhdBraL6so7taRQyd2NKKuteOIPlDAMViO3kjt4=";
       "6.19" = "sha256-MDB5qCULjzgfgrA/kEY9EqyY1PaxSbdh6nWvEyNSE1c=";
     }
-    .${cfg.version} or (throw "bunker: no source hash for kernel ${cfg.version}");
+    .${resolvedVersion};
 
   kernelSrc = pkgs.fetchurl {
     url = "https://cdn.kernel.org/pub/linux/kernel/v${
@@ -326,11 +331,11 @@ in
 
     version = mkOption {
       type = types.enum [
-        "6.18.6"
+        "6.18"
         "6.19"
       ];
       default = "6.19";
-      description = "Linux kernel version to build. Use point releases for stable branches (e.g. 6.18.6).";
+      description = "Linux kernel major.minor version. Automatically resolves to the latest stable point release.";
     };
 
     interactive = mkOption {
