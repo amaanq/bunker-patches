@@ -1,7 +1,7 @@
 From 2574f8e8f8463a622edc5c492012b5ddf6afd3fb Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Fri, 5 Jan 2018 13:21:16 -0500
-Subject: [PATCH 83/162] disable LEGACY_PTYS by default
+Subject: [PATCH 83/166] disable LEGACY_PTYS by default
 
 ---
  drivers/tty/Kconfig | 1 -

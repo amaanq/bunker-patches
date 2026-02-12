@@ -1,7 +1,7 @@
 From 8729811d787cbf78c34f76cb78dfc7241582d2f7 Mon Sep 17 00:00:00 2001
 From: Alexandre Frade <kernel@xanmod.org>
 Date: Sun, 8 Feb 2026 00:53:42 -0500
-Subject: [PATCH 49/162] binder: give binder_alloc its own debug mask file
+Subject: [PATCH 49/166] binder: give binder_alloc its own debug mask file
 
 Separate binder_alloc debug mask for module build support.
 ---

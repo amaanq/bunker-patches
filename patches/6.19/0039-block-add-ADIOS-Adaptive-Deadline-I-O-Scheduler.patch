@@ -1,7 +1,7 @@
 From 23f861df80218118e360451780d98211bf456cb7 Mon Sep 17 00:00:00 2001
 From: Masahito Suzuki <firelzrd@gmail.com>
 Date: Sat, 7 Feb 2026 21:55:00 -0500
-Subject: [PATCH 39/162] block: add ADIOS (Adaptive Deadline I/O Scheduler)
+Subject: [PATCH 39/166] block: add ADIOS (Adaptive Deadline I/O Scheduler)
 
 Learning-based adaptive latency control I/O scheduler for
 multi-queue devices. Alternative to Kyber with better latency

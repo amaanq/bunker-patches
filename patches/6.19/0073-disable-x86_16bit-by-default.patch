@@ -1,7 +1,7 @@
 From 09a06dfc2fd2d722f99db067399c610f8d2f2bee Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Thu, 4 May 2017 18:11:52 -0400
-Subject: [PATCH 73/162] disable X86_16BIT by default
+Subject: [PATCH 73/166] disable X86_16BIT by default
 
 Signed-off-by: Daniel Micay <danielmicay@gmail.com>
 ---

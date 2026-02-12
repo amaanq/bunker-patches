@@ -1,7 +1,7 @@
 From a296f52d216383cad8a2326daaa0541f2f0ede66 Mon Sep 17 00:00:00 2001
 From: Alexandre Frade <kernel@xanmod.org>
 Date: Sun, 8 Feb 2026 00:53:35 -0500
-Subject: [PATCH 48/162] file: export file_close_fd() for GPL modules
+Subject: [PATCH 48/166] file: export file_close_fd() for GPL modules
 
 Export file_close_fd() to GPL modules, prerequisite for
 binder-as-module support.

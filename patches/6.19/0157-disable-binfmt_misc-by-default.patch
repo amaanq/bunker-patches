@@ -1,13 +1,9 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Mon, 10 Feb 2026 00:00:00 +0000
-Subject: [PATCH 157/162] disable BINFMT_MISC by default
+Subject: [PATCH 157/166] disable BINFMT_MISC by default
 
-Disable the misc binary format handler by default. BINFMT_MISC allows
-registering arbitrary binary format handlers via procfs, which is an
-unnecessary attack surface for most systems. Users who need it (QEMU
-user-mode, Wine binfmt integration) can re-enable it.
-
+Signed-off-by: Daniel Micay <danielmicay@gmail.com>
 ---
  fs/Kconfig.binfmt | 1 +
  1 file changed, 1 insertion(+)

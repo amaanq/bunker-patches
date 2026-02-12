@@ -1,7 +1,7 @@
 From 16fece38b3aaca5491bd56d430cddd8cec4f843c Mon Sep 17 00:00:00 2001
 From: Thibaut Sautereau <thibaut.sautereau@ssi.gouv.fr>
 Date: Tue, 7 May 2019 11:46:21 +0200
-Subject: [PATCH 126/162] mm: Fix extra_latent_entropy
+Subject: [PATCH 126/166] mm: Fix extra_latent_entropy
 
 Commit a9cd410a3d29 ("mm/page_alloc.c: memory hotplug: free pages as
 higher order") changed `static void __init __free_pages_boot_core()`

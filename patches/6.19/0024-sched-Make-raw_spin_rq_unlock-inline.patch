@@ -1,7 +1,7 @@
 From 39896dae52c77d09a49f0825859ee893bb83a1e6 Mon Sep 17 00:00:00 2001
 From: Xie Yuanbin <qq570070308@gmail.com>
 Date: Sun, 23 Nov 2025 20:18:26 +0800
-Subject: [PATCH 24/162] sched: Make raw_spin_rq_unlock() inline
+Subject: [PATCH 24/166] sched: Make raw_spin_rq_unlock() inline
 
 raw_spin_rq_unlock() is short, and is called in some hot code paths
 such as finish_lock_switch.

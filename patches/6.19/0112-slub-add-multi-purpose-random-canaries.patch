@@ -1,7 +1,7 @@
 From e1d1ddbdac73c548cbac1f497902b163cec6dd28 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Wed, 3 May 2017 16:16:58 -0400
-Subject: [PATCH 112/162] slub: add multi-purpose random canaries
+Subject: [PATCH 112/166] slub: add multi-purpose random canaries
 
 Place canaries at the end of kernel slab allocations, sacrificing
 some performance and memory usage for security.

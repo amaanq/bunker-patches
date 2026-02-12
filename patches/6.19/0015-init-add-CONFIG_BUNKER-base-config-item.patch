@@ -1,7 +1,7 @@
 From 9f710c4c97e4d3f082a5fbd16bdeb01f211a97b3 Mon Sep 17 00:00:00 2001
 From: Amaan Qureshi <git@amaanq.com>
 Date: Mon, 27 Jan 2020 18:10:06 +0100
-Subject: [PATCH 15/162] init: add CONFIG_BUNKER base config item
+Subject: [PATCH 15/166] init: add CONFIG_BUNKER base config item
 
 ---
  init/Kconfig | 6 ++++++

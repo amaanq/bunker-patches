@@ -1,7 +1,7 @@
 From 814506df5664a9e8010d68b0dfa1b44d76858340 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Sun, 9 Jul 2017 17:53:23 -0400
-Subject: [PATCH 127/162] add writable function pointer detection
+Subject: [PATCH 127/166] add writable function pointer detection
 
 Taken from the public PaX patches.
 

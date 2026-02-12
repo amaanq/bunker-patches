@@ -1,7 +1,7 @@
 From c0af01d5ebb4de8225cdf1722d21e69e4be0ea0b Mon Sep 17 00:00:00 2001
 From: Levente Polyak <levente@leventepolyak.net>
 Date: Mon, 1 May 2023 23:20:43 +0200
-Subject: [PATCH 101/162] kconfig: disable LEGACY_TIOCSTI by default
+Subject: [PATCH 101/166] kconfig: disable LEGACY_TIOCSTI by default
 
 ---
  drivers/tty/Kconfig | 1 -

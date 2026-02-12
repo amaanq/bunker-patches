@@ -1,13 +1,9 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Mon, 10 Feb 2026 00:00:00 +0000
-Subject: [PATCH 159/162] disable MEMORY_HOTPLUG by default
+Subject: [PATCH 159/166] disable MEMORY_HOTPLUG by default
 
-Disable runtime physical memory map modification by default. Memory
-hotplug is only needed for virtio-mem VMs and enterprise hot-add
-scenarios. Removing it reduces attack surface by preventing runtime
-modification of the physical memory map.
-
+Signed-off-by: Daniel Micay <danielmicay@gmail.com>
 ---
  mm/Kconfig | 1 +
  1 file changed, 1 insertion(+)

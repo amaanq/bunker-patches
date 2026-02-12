@@ -1,7 +1,7 @@
 From 3b9b6321e92e8ee7a37258dac6f9d0388bbadb94 Mon Sep 17 00:00:00 2001
 From: Bernhard40 <32568352+Bernhard40@users.noreply.github.com>
 Date: Fri, 6 Oct 2017 10:24:10 +0000
-Subject: [PATCH 78/162] disable AIO by default
+Subject: [PATCH 78/166] disable AIO by default
 
 ---
  init/Kconfig | 1 -

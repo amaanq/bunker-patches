@@ -1,7 +1,7 @@
 From e4ac72cc0580f090fadf60dcec09ae8226bcfbde Mon Sep 17 00:00:00 2001
 From: Alexey Avramov <hakavlad0@seznam.cz>
 Date: Sun, 8 Feb 2026 14:08:45 -0500
-Subject: [PATCH 53/162] mm: add missing extern declarations for le9 workingset
+Subject: [PATCH 53/166] mm: add missing extern declarations for le9 workingset
  protection sysctls
 
 The le9 patch added sysctl entries to mm/util.c referencing variables

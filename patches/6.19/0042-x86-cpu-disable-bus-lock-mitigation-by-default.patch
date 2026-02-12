@@ -1,7 +1,7 @@
 From 849b118f3d553daea1068965540c930870b09307 Mon Sep 17 00:00:00 2001
 From: Peter Jung <admin@ptr1337.dev>
 Date: Sat, 7 Feb 2026 21:57:43 -0500
-Subject: [PATCH 42/162] x86/cpu: disable bus lock mitigation by default
+Subject: [PATCH 42/166] x86/cpu: disable bus lock mitigation by default
 
 Set sysctl_sld_mitigate = 0 to avoid performance penalty from
 bus lock detection split-lock handling.

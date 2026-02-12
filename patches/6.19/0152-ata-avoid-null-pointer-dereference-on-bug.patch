@@ -1,7 +1,7 @@
 From eeb3d0e44dcee0d4488447848154881e6c5bf3f0 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Mon, 15 May 2017 23:45:34 -0400
-Subject: [PATCH 152/162] ata: avoid null pointer dereference on bug
+Subject: [PATCH 152/166] ata: avoid null pointer dereference on bug
 
 Extracted from PaX.
 

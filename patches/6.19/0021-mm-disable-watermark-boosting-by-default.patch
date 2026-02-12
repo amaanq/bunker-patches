@@ -1,7 +1,7 @@
 From 941ac59aa8a60e95ef6ad66459608b0c10992d2a Mon Sep 17 00:00:00 2001
 From: Sultan Alsawaf <sultan@kerneltoast.com>
 Date: Sat, 28 Mar 2020 13:06:28 -0700
-Subject: [PATCH 21/162] mm: disable watermark boosting by default
+Subject: [PATCH 21/166] mm: disable watermark boosting by default
 
 ---
  init/Kconfig    | 1 +

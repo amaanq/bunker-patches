@@ -1,7 +1,7 @@
 From feb932022615c944fc54fbb4b0b2e351aad08e35 Mon Sep 17 00:00:00 2001
 From: Daniel Drake <drake@endlessm.com>
 Date: Tue, 4 Jun 2019 14:51:21 +0800
-Subject: [PATCH 2/162] PCI: add Intel remapped NVMe device support
+Subject: [PATCH 2/166] PCI: add Intel remapped NVMe device support
 
 ---
  arch/x86/include/asm/pci.h                |   6 +

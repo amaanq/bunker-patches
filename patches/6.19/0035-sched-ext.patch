@@ -1,7 +1,7 @@
 From 2143d88e3cfdf14bbccd98f62ee96c8ecb209ad3 Mon Sep 17 00:00:00 2001
 From: Peter Jung <admin@ptr1337.dev>
 Date: Fri, 6 Feb 2026 18:47:11 +0100
-Subject: [PATCH 35/162] sched-ext
+Subject: [PATCH 35/166] sched-ext
 
 Signed-off-by: Peter Jung <admin@ptr1337.dev>
 ---

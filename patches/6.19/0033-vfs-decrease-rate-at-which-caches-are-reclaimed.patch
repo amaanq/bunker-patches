@@ -1,7 +1,7 @@
 From 93337c91f9e69128669d27e578d973bc383cfa9d Mon Sep 17 00:00:00 2001
 From: Alexandre Frade <kernel@xanmod.org>
 Date: Mon, 28 Jul 2025 17:20:16 +0000
-Subject: [PATCH 33/162] vfs: decrease rate at which caches are reclaimed
+Subject: [PATCH 33/166] vfs: decrease rate at which caches are reclaimed
 
 ---
  fs/dcache.c | 2 +-

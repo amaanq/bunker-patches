@@ -143,6 +143,14 @@ let
         "0171"
       ];
     };
+    "6.19" = {
+      hardened = [
+        "0163"
+        "0164"
+        "0165"
+        "0166"
+      ];
+    };
   };
 
   extra = versionExtra.${majorMinor} or { };

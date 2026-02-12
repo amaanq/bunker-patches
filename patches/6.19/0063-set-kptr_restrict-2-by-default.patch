@@ -1,7 +1,7 @@
 From a026c6641b4b096328e8d0c37955a2d6847f2a2f Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Wed, 3 May 2017 12:06:14 -0400
-Subject: [PATCH 63/162] set kptr_restrict=2 by default
+Subject: [PATCH 63/166] set kptr_restrict=2 by default
 
 Signed-off-by: Daniel Micay <danielmicay@gmail.com>
 ---

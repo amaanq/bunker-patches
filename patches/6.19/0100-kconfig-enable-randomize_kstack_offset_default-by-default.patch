@@ -1,7 +1,7 @@
 From 34a15d2c5d98107e2fa4623fb22f45c82479666f Mon Sep 17 00:00:00 2001
 From: Levente Polyak <levente@leventepolyak.net>
 Date: Wed, 25 Aug 2021 22:24:10 +0200
-Subject: [PATCH 100/162] kconfig: enable RANDOMIZE_KSTACK_OFFSET_DEFAULT by default
+Subject: [PATCH 100/166] kconfig: enable RANDOMIZE_KSTACK_OFFSET_DEFAULT by default
 
 ---
  arch/Kconfig | 1 +

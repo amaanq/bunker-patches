@@ -1,7 +1,7 @@
 From e7a3b24f181b517a65654cf315399729face0f3f Mon Sep 17 00:00:00 2001
 From: Peter Jung <admin@ptr1337.dev>
 Date: Sat, 7 Feb 2026 21:57:54 -0500
-Subject: [PATCH 43/162] mm: add Kconfig defaults for compaction and dirty page
+Subject: [PATCH 43/166] mm: add Kconfig defaults for compaction and dirty page
  ratios
 
 Configurable defaults for COMPACTION_HPAGE_ORDER, dirty_ratio,

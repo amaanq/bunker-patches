@@ -1,7 +1,7 @@
 From 055aa678138cf73ef5d27ee33a0ad3276dfbc42d Mon Sep 17 00:00:00 2001
 From: Levente Polyak <levente@leventepolyak.net>
 Date: Tue, 22 Dec 2020 23:40:09 +0100
-Subject: [PATCH 98/162] stop hiding UID16 behind EXPERT
+Subject: [PATCH 98/166] stop hiding UID16 behind EXPERT
 
 ---
  init/Kconfig | 2 +-

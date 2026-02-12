@@ -1,13 +1,9 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Mon, 10 Feb 2026 00:00:00 +0000
-Subject: [PATCH 158/162] disable HIBERNATION by default
+Subject: [PATCH 158/166] disable HIBERNATION by default
 
-Disable suspend-to-disk by default. Hibernation writes a full memory
-image to disk and has a complex resume parser, both of which expand
-the attack surface. Servers don't need it, and laptop users who want
-it can re-enable CONFIG_HIBERNATION=y.
-
+Signed-off-by: Daniel Micay <danielmicay@gmail.com>
 ---
  kernel/power/Kconfig | 1 +
  1 file changed, 1 insertion(+)

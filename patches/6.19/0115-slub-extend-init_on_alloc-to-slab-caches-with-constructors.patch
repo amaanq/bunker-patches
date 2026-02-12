@@ -1,7 +1,7 @@
 From e30dd0698e836df08d5d86685b841f0425f64474 Mon Sep 17 00:00:00 2001
 From: Thibaut Sautereau <thibaut.sautereau@ssi.gouv.fr>
 Date: Fri, 29 Nov 2019 16:27:14 +0100
-Subject: [PATCH 115/162] slub: Extend init_on_alloc to slab caches with constructors
+Subject: [PATCH 115/166] slub: Extend init_on_alloc to slab caches with constructors
 
 This has required some rework during the port to 5.13, due to
 da844b787245 ("kasan, mm: integrate slab init_on_alloc with HW_TAGS"),

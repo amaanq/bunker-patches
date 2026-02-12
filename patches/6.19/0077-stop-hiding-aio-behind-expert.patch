@@ -1,7 +1,7 @@
 From a5253b7c5f90d0f5a9142d60202e45c746f8c1bf Mon Sep 17 00:00:00 2001
 From: Bernhard40 <32568352+Bernhard40@users.noreply.github.com>
 Date: Fri, 6 Oct 2017 10:21:50 +0000
-Subject: [PATCH 77/162] stop hiding AIO behind EXPERT
+Subject: [PATCH 77/166] stop hiding AIO behind EXPERT
 
 ---
  init/Kconfig | 2 +-

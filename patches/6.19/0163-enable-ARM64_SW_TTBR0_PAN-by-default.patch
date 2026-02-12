@@ -1,0 +1,28 @@
+From b515a027b4c0b1e48fa18db2db60bd1dd6f8a459 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Sun, 25 Feb 2018 01:39:32 -0500
+Subject: [PATCH 163/166] enable ARM64_SW_TTBR0_PAN by default
+
+---
+ arch/arm64/Kconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
+index 6663ffd23f25..4f0769a1f134 100644
+--- a/arch/arm64/Kconfig
++++ b/arch/arm64/Kconfig
+@@ -1678,10 +1678,11 @@ config MITIGATE_SPECTRE_BRANCH_HISTORY
+
+ config ARM64_SW_TTBR0_PAN
+ 	bool "Emulate Privileged Access Never using TTBR0_EL1 switching"
+ 	depends on !KCSAN
+ 	select ARM64_PAN
++	default y
+ 	help
+ 	  Enabling this option prevents the kernel from accessing
+ 	  user-space memory directly by pointing TTBR0_EL1 to a reserved
+ 	  zeroed area and reserved ASID. The user access routines
+ 	  restore the valid TTBR0_EL1 temporarily.
+--
+2.48.1
+
