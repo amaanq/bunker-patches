@@ -165,7 +165,7 @@ let
 
   sourceHash =
     {
-      "6.18" = "sha256-F1vg95nMGiXk9zbUzg+/hUq+RjXdFmtN530b7QuqkMc=";
+      "6.18" = "sha256-kQakYF2p4x/xdlnZWHgrgV+VkaswjQOw7iGq1sfc7Us=";
       "6.19" = "sha256-MDB5qCULjzgfgrA/kEY9EqyY1PaxSbdh6nWvEyNSE1c=";
     }
     .${cfg.version} or (throw "bunker: no source hash for kernel ${cfg.version}");
