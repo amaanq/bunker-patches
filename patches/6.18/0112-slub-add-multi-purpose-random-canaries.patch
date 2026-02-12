@@ -92,12 +92,9 @@ index fd91cfd0cf8e..8802ac0df724 100644
  	 */
  	return s->size;
 diff --git a/mm/slub.c b/mm/slub.c
-index 796028530651..607c6a4514c0 100644
 --- a/mm/slub.c
 +++ b/mm/slub.c
-@@ -39,10 +39,11 @@
- #include <linux/kmemleak.h>
- #include <linux/stacktrace.h>
+@@ -41,6 +41,7 @@
  #include <linux/prefetch.h>
  #include <linux/memcontrol.h>
  #include <linux/random.h>
@@ -105,11 +102,7 @@ index 796028530651..607c6a4514c0 100644
  #include <kunit/test.h>
  #include <kunit/test-bug.h>
  #include <linux/sort.h>
- #include <linux/irq_work.h>
- #include <linux/kprobes.h>
-@@ -896,10 +897,37 @@ static inline unsigned int get_orig_size(struct kmem_cache *s, void *object)
- 	p += sizeof(struct track) * 2;
- 
+@@ -892,6 +893,33 @@
  	return *(unsigned int *)p;
  }
  
@@ -143,11 +136,7 @@ index 796028530651..607c6a4514c0 100644
  #ifdef CONFIG_SLUB_DEBUG
  
  /*
-  * For debugging context when we want to check if the struct slab pointer
-  * appears to be valid.
-@@ -1043,10 +1071,13 @@ static struct track *get_track(struct kmem_cache *s, void *object,
- {
- 	struct track *p;
+@@ -1039,6 +1067,9 @@
  
  	p = object + get_info_end(s);
  
@@ -157,11 +146,7 @@ index 796028530651..607c6a4514c0 100644
  	return kasan_reset_tag(p + alloc);
  }
  
- #ifdef CONFIG_STACKDEPOT
- static noinline depot_stack_handle_t set_track_prepare(gfp_t gfp_flags)
-@@ -1204,10 +1235,13 @@ static void print_trailer(struct kmem_cache *s, struct slab *slab, u8 *p)
- 		print_section(KERN_ERR, "Redzone  ", p + s->object_size,
- 			s->inuse - s->object_size);
+@@ -1200,6 +1231,9 @@
  
  	off = get_info_end(s);
  
@@ -171,11 +156,7 @@ index 796028530651..607c6a4514c0 100644
  	if (s->flags & SLAB_STORE_USER)
  		off += 2 * sizeof(struct track);
  
- 	if (slub_debug_orig_size(s))
- 		off += sizeof(unsigned int);
-@@ -1379,13 +1413,14 @@ check_bytes_and_report(struct kmem_cache *s, struct slab *slab,
-  *
-  * object + s->inuse
+@@ -1375,9 +1409,10 @@
   * 	Meta data starts here.
   *
   * 	A. Free pointer (if we cannot overwrite object on free)
@@ -189,11 +170,7 @@ index 796028530651..607c6a4514c0 100644
   * 		one word if debugging is on to be able to detect writes
   * 		before the word boundary.
   *
-  *	Padding is done using 0x5a (POISON_INUSE)
-  *
-@@ -1399,10 +1434,13 @@ check_bytes_and_report(struct kmem_cache *s, struct slab *slab,
- 
- static int check_pad_bytes(struct kmem_cache *s, struct slab *slab, u8 *p)
+@@ -1395,6 +1430,9 @@
  {
  	unsigned long off = get_info_end(s);	/* The end of info */
  
@@ -203,11 +180,7 @@ index 796028530651..607c6a4514c0 100644
  	if (s->flags & SLAB_STORE_USER) {
  		/* We also have user information there */
  		off += 2 * sizeof(struct track);
- 
- 		if (s->flags & SLAB_KMALLOC)
-@@ -2464,15 +2502,23 @@ struct rcu_delayed_free {
-  * was delayed by CONFIG_SLUB_RCU_DEBUG or KASAN quarantine, or it was returned
-  * to KFENCE.
+@@ -2460,11 +2498,19 @@
   */
  static __always_inline
  bool slab_free_hook(struct kmem_cache *s, void *x, bool init,
@@ -228,13 +201,9 @@ index 796028530651..607c6a4514c0 100644
  	kmemleak_free_recursive(x, s->flags);
  	kmsan_slab_free(s, x);
  
- 	debug_check_no_locks_freed(x, s->object_size);
- 
-@@ -2545,10 +2591,15 @@ bool slab_free_hook(struct kmem_cache *s, void *x, bool init,
+@@ -2539,6 +2585,11 @@
  		set_orig_size(s, x, orig_size);
  
- 		if (!IS_ENABLED(CONFIG_SLAB_SANITIZE_VERIFY) && s->ctor)
- 			s->ctor(x);
  	}
 +
 +	if (canary) {
@@ -244,11 +213,7 @@ index 796028530651..607c6a4514c0 100644
  	/* KASAN might put x into memory quarantine, delaying its reuse. */
  	return !kasan_slab_free(s, x, init, still_accessible, false);
  }
- 
- static __fastpath_inline
-@@ -2560,11 +2611,11 @@ bool slab_free_freelist_hook(struct kmem_cache *s, void **head, void **tail,
- 	void *next = *head;
- 	void *old_tail = *tail;
+@@ -2554,7 +2605,7 @@
  	bool init;
  
  	if (is_kfence_address(next)) {
@@ -257,11 +222,7 @@ index 796028530651..607c6a4514c0 100644
  		return false;
  	}
  
- 	/* Head and tail of the reconstructed freelist */
- 	*head = NULL;
-@@ -2575,11 +2626,11 @@ bool slab_free_freelist_hook(struct kmem_cache *s, void **head, void **tail,
- 	do {
- 		object = next;
+@@ -2569,7 +2620,7 @@
  		next = get_freepointer(s, object);
  
  		/* If object's reuse doesn't have to be delayed */
@@ -270,25 +231,17 @@ index 796028530651..607c6a4514c0 100644
  			/* Move object to the new freelist */
  			set_freepointer(s, object, *head);
  			*head = object;
- 			if (!*tail)
- 				*tail = object;
-@@ -2612,10 +2663,11 @@ bool slab_free_freelist_hook(struct kmem_cache *s, void **head, void **tail,
- }
- 
+@@ -2590,6 +2641,7 @@
  static void *setup_object(struct kmem_cache *s, void *object)
  {
  	setup_object_debug(s, object);
 +	set_canary(s, object, s->random_inactive);
  	object = kasan_init_slab_obj(s, object);
- 	if (unlikely(s->ctor) && !has_sanitize_verify(s)) {
+ 	if (unlikely(s->ctor)) {
  		kasan_unpoison_new_object(s, object);
- 		s->ctor(object);
- 		kasan_poison_new_object(s, object);
-@@ -5317,10 +5369,15 @@ static __fastpath_inline void *slab_alloc_node(struct kmem_cache *s, struct list
- 		kasan_poison_new_object(s, object);
- 	} else {
- 		init = slab_want_init_on_alloc(gfpflags, s);
- 	}
+@@ -5283,6 +5335,11 @@
+ 	maybe_wipe_obj_freeptr(s, object);
+ 	init = slab_want_init_on_alloc(gfpflags, s);
  
 +	if (object) {
 +		check_canary(s, object, s->random_inactive);
@@ -298,11 +251,7 @@ index 796028530651..607c6a4514c0 100644
  out:
  	/*
  	 * When init equals 'true', like for kzalloc() family, only
- 	 * @orig_size bytes might be zeroed instead of s->object_size
- 	 * In case this fails due to memcg_slab_post_alloc_hook(),
-@@ -6677,14 +6734,20 @@ static void do_slab_free(struct kmem_cache *s,
- 
- static __fastpath_inline
+@@ -6647,10 +6704,16 @@
  void slab_free(struct kmem_cache *s, struct slab *slab, void *object,
  	       unsigned long addr)
  {
@@ -320,28 +269,20 @@ index 796028530651..607c6a4514c0 100644
  		return;
  
  	if (s->cpu_sheaves && likely(!IS_ENABLED(CONFIG_NUMA) ||
- 				     slab_nid(slab) == numa_mem_id())) {
- 		if (likely(free_to_pcs(s, object)))
-@@ -6697,11 +6760,15 @@ void slab_free(struct kmem_cache *s, struct slab *slab, void *object,
- #ifdef CONFIG_MEMCG
- /* Do not inline the rare memcg charging failed path into the allocation path */
- static noinline
- void memcg_alloc_abort_single(struct kmem_cache *s, void *object)
- {
+@@ -6671,7 +6734,11 @@
+ 
+ 	alloc_tagging_slab_free_hook(s, slab, &object, 1);
+ 
 -	if (likely(slab_free_hook(s, object, slab_want_init_on_free(s), false)))
 +	bool canary = true;
 +	/* Make sure canaries are not used on kfence objects. */
 +	if (is_kfence_address(object))
 +		canary = false;
 +	if (likely(slab_free_hook(s, object, slab_want_init_on_free(s), false, canary)))
- 		do_slab_free(s, virt_to_slab(object), object, object, 1, _RET_IP_);
+ 		do_slab_free(s, slab, object, object, 1, _RET_IP_);
  }
  #endif
- 
- static __fastpath_inline
-@@ -6738,11 +6805,11 @@ static void slab_free_after_rcu_debug(struct rcu_head *rcu_head)
- 	s = slab->slab_cache;
- 	if (WARN_ON(!(s->flags & SLAB_TYPESAFE_BY_RCU)))
+@@ -6712,7 +6779,7 @@
  		return;
  
  	/* resume freeing */
@@ -350,11 +291,7 @@ index 796028530651..607c6a4514c0 100644
  		do_slab_free(s, slab, object, object, 1, _THIS_IP_);
  }
  #endif /* CONFIG_SLUB_RCU_DEBUG */
- 
- #ifdef CONFIG_KASAN_GENERIC
-@@ -7418,11 +7485,11 @@ static inline
- int __kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size,
- 			    void **p)
+@@ -7383,7 +7450,7 @@
  {
  	struct kmem_cache_cpu *c;
  	unsigned long irqflags;
@@ -363,13 +300,9 @@ index 796028530651..607c6a4514c0 100644
  
  	/*
  	 * Drain objects in the per cpu slab, while disabling local
- 	 * IRQs, which protects against PREEMPT and interrupts
- 	 * handlers invoking normal fastpath.
-@@ -7489,10 +7556,17 @@ int __kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size,
- 				s->ctor(p[j]);
- 			kasan_poison_new_object(s, p[j]);
- 		}
- 	}
+@@ -7439,6 +7506,13 @@
+ 	local_unlock_irqrestore(&s->cpu_slab->lock, irqflags);
+ 	slub_put_cpu_ptr(s->cpu_slab);
  
 +	for (k = 0; k < i; k++) {
 +		if (!is_kfence_address(p[k])) {
@@ -381,11 +314,7 @@ index 796028530651..607c6a4514c0 100644
  	return i;
  
  error:
- 	slub_put_cpu_ptr(s->cpu_slab);
- 	__kmem_cache_free_bulk(s, i, p);
-@@ -7799,10 +7873,11 @@ static void early_kmem_cache_node_alloc(int node)
- 	n = slab->freelist;
- 	BUG_ON(!n);
+@@ -7745,6 +7819,7 @@
  #ifdef CONFIG_SLUB_DEBUG
  	init_object(kmem_cache_node, n, SLUB_RED_ACTIVE);
  #endif
@@ -393,11 +322,7 @@ index 796028530651..607c6a4514c0 100644
  	n = kasan_slab_alloc(kmem_cache_node, n, GFP_KERNEL, false);
  	slab->freelist = get_freepointer(kmem_cache_node, n);
  	slab->inuse = 1;
- 	kmem_cache_node->node[node] = n;
- 	init_kmem_cache_node(n, NULL);
-@@ -7991,10 +8066,13 @@ static int calculate_sizes(struct kmem_cache_args *args, struct kmem_cache *s)
- 		 * sized over/underflows from neighboring allocations.
- 		 */
+@@ -7937,6 +8012,9 @@
  		s->offset = ALIGN_DOWN(s->object_size / 2, sizeof(void *));
  	}
  
@@ -407,11 +332,7 @@ index 796028530651..607c6a4514c0 100644
  #ifdef CONFIG_SLUB_DEBUG
  	if (flags & SLAB_STORE_USER) {
  		/*
- 		 * Need to store information about allocs and frees after
- 		 * the object.
-@@ -8303,10 +8381,13 @@ void __check_heap_object(const void *ptr, unsigned long n,
- 			usercopy_abort("SLUB object in left red zone",
- 				       s->name, to_user, offset, n);
+@@ -8249,6 +8327,9 @@
  		offset -= s->red_left_pad;
  	}
  
@@ -421,23 +342,17 @@ index 796028530651..607c6a4514c0 100644
  	/* Allow address range falling entirely within usercopy region. */
  	if (offset >= s->useroffset &&
  	    offset - s->useroffset <= s->usersize &&
- 	    n <= s->useroffset - offset + s->usersize)
- 		return;
-@@ -8628,10 +8709,14 @@ int do_kmem_cache_create(struct kmem_cache *s, const char *name,
- 	s->size = s->object_size = size;
- 
- 	s->flags = kmem_cache_flags(flags, s->name);
+@@ -8575,6 +8656,10 @@
  #ifdef CONFIG_SLAB_FREELIST_HARDENED
  	s->random = get_random_long();
-+#endif
+ #endif
 +#ifdef CONFIG_SLAB_CANARY
 +	s->random_active = get_random_long();
 +	s->random_inactive = get_random_long();
- #endif
++#endif
  	s->align = args->align;
  	s->ctor = args->ctor;
  #ifdef CONFIG_HARDENED_USERCOPY
- 	s->useroffset = args->useroffset;
 -- 
 2.52.0
 

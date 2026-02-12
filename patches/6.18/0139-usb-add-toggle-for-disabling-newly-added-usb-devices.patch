@@ -11,31 +11,14 @@ Signed-off-by: Levente Polyak <levente@leventepolyak.net>
 [thibaut.sautereau@ssi.gouv.fr: Adapt to sysctl code refactoring]
 Signed-off-by: Nicolas Bouchinet <nicolas.bouchinet@oss.cyber.gouv.fr>
 ---
- drivers/usb/core/hub.c |  9 +++++++++
- include/linux/usb.h    |  3 +++
- kernel/sysctl.c        | 14 ++++++++++++++
- 3 files changed, 26 insertions(+)
+ drivers/usb/core/hub.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
 
 diff --git a/drivers/usb/core/hub.c b/drivers/usb/core/hub.c
 index 256fe8c86828..0cf87a58ae65 100644
 --- a/drivers/usb/core/hub.c
 +++ b/drivers/usb/core/hub.c
-@@ -5384,10 +5384,13 @@ static int descriptors_changed(struct usb_device *udev,
- 
- 	kfree(buf);
- 	return changed;
- }
- 
-+/* sysctl */
-+int deny_new_usb __read_mostly = 0;
-+
- static void hub_port_connect(struct usb_hub *hub, int port1, u16 portstatus,
- 		u16 portchange)
- {
- 	int status = -ENODEV;
- 	int i;
-@@ -5445,10 +5448,16 @@ static void hub_port_connect(struct usb_hub *hub, int port1, u16 portstatus,
- 
+@@ -5446,8 +5446,14 @@ static void hub_port_connect(struct usb_hub *hub, int port1, u16 portstatus,
  		if (portstatus & USB_PORT_STAT_ENABLE)
  			goto done;
  		return;
@@ -50,63 +33,6 @@ index 256fe8c86828..0cf87a58ae65 100644
  		unit_load = 150;
  	else
  		unit_load = 100;
- 
-diff --git a/include/linux/usb.h b/include/linux/usb.h
-index e85105939af8..395b091c1d4a 100644
---- a/include/linux/usb.h
-+++ b/include/linux/usb.h
-@@ -2098,8 +2098,11 @@ enum usb_led_event {
- extern void usb_led_activity(enum usb_led_event ev);
- #else
- static inline void usb_led_activity(enum usb_led_event ev) {}
- #endif
- 
-+/* sysctl */
-+extern int deny_new_usb;
-+
- #endif  /* __KERNEL__ */
- 
- #endif
-diff --git a/kernel/sysctl.c b/kernel/sysctl.c
-index 1b1ab180ba4d..4ec7e26d9073 100644
---- a/kernel/sysctl.c
-+++ b/kernel/sysctl.c
-@@ -24,10 +24,13 @@
- #include <asm/processor.h>
- 
- #ifdef CONFIG_USER_NS
- #include <linux/user_namespace.h>
- #endif
-+#if IS_ENABLED(CONFIG_USB)
-+#include <linux/usb.h>
-+#endif
- 
- /* shared constants to be used in various sysctls */
- const int sysctl_vals[] = { 0, 1, 2, 3, 4, 100, 200, 1000, 3000, INT_MAX, 65535, -1 };
- EXPORT_SYMBOL(sysctl_vals);
- 
-@@ -1513,10 +1516,21 @@ static const struct ctl_table sysctl_subsys_table[] = {
- 		.mode		= 0644,
- 		.proc_handler	= proc_dointvec_minmax,
- 		.extra1		= SYSCTL_NEG_ONE,
- 		.extra2		= SYSCTL_ONE,
- 	},
-+#endif
-+#if IS_ENABLED(CONFIG_USB)
-+	{
-+		.procname	= "deny_new_usb",
-+		.data		= &deny_new_usb,
-+		.maxlen		= sizeof(int),
-+		.mode		= 0644,
-+		.proc_handler	= proc_dointvec_minmax_sysadmin,
-+		.extra1		= SYSCTL_ZERO,
-+		.extra2		= SYSCTL_ONE,
-+	},
- #endif
- 	{
- 		.procname	= "ngroups_max",
- 		.data		= (void *)&ngroups_max,
- 		.maxlen		= sizeof (int),
+
 -- 
 2.52.0
-

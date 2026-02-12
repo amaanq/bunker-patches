@@ -13,7 +13,7 @@ diff --git a/block/elevator.c b/block/elevator.c
 index 3a3f32221bfe..1b67138323a0 100644
 --- a/block/elevator.c
 +++ b/block/elevator.c
-@@ -760,21 +760,22 @@ void elevator_set_default(struct request_queue *q)
+@@ -746,21 +746,22 @@ void elevator_set_default(struct request_queue *q)
  	/*
  	 * For single queue devices, default to using mq-deadline. If we
  	 * have multiple queues or mq-deadline is not available, default
@@ -22,10 +22,10 @@ index 3a3f32221bfe..1b67138323a0 100644
 +	if (q->nr_hw_queues != 1 && !blk_mq_is_shared_tags(q->tag_set->flags))
 +		return;
 +
- 	e = elevator_find_get(ctx.name);
- 	if (!e)
+ 	ctx.type = elevator_find_get(ctx.name);
+ 	if (!ctx.type)
  		return;
- 
+
 -	if ((q->nr_hw_queues == 1 ||
 -			blk_mq_is_shared_tags(q->tag_set->flags))) {
 -		err = elevator_change(q, &ctx);
@@ -38,11 +38,11 @@ index 3a3f32221bfe..1b67138323a0 100644
 +		pr_warn("\"%s\" elevator initialization, failed %d, falling back to \"none\"\n",
 +				ctx.name, err);
 +
- 	elevator_put(e);
+ 	elevator_put(ctx.type);
  }
- 
+
  void elevator_set_none(struct request_queue *q)
  {
--- 
+--
 2.52.0
 

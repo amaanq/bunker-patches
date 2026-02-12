@@ -20,12 +20,9 @@ Signed-off-by: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
  2 files changed, 49 insertions(+), 4 deletions(-)
 
 diff --git a/mm/slub.c b/mm/slub.c
-index bdb56196a228..796028530651 100644
 --- a/mm/slub.c
 +++ b/mm/slub.c
-@@ -251,10 +251,16 @@ struct partial_context {
- static inline bool kmem_cache_debug(struct kmem_cache *s)
- {
+@@ -254,6 +254,12 @@
  	return kmem_cache_debug_flags(s, SLAB_DEBUG_FLAGS);
  }
  
@@ -38,37 +35,25 @@ index bdb56196a228..796028530651 100644
  void *fixup_red_left(struct kmem_cache *s, void *p)
  {
  	if (kmem_cache_debug_flags(s, SLAB_RED_ZONE))
- 		p += s->red_left_pad;
- 
-@@ -2536,11 +2542,11 @@ bool slab_free_hook(struct kmem_cache *s, void *x, bool init,
- 		 * Restore orig_size, otherwize kmalloc redzone overwritten
- 		 * would be reported
+@@ -2584,6 +2590,8 @@
  		 */
  		set_orig_size(s, x, orig_size);
  
--		if (s->ctor)
 +		if (!IS_ENABLED(CONFIG_SLAB_SANITIZE_VERIFY) && s->ctor)
- 			s->ctor(x);
++			s->ctor(x);
  	}
- 	/* KASAN might put x into memory quarantine, delaying its reuse. */
- 	return !kasan_slab_free(s, x, init, still_accessible, false);
- }
-@@ -2607,11 +2613,11 @@ bool slab_free_freelist_hook(struct kmem_cache *s, void **head, void **tail,
  
- static void *setup_object(struct kmem_cache *s, void *object)
- {
+ 	if (canary) {
+@@ -2643,7 +2651,7 @@
  	setup_object_debug(s, object);
+ 	set_canary(s, object, s->random_inactive);
  	object = kasan_init_slab_obj(s, object);
 -	if (unlikely(s->ctor)) {
 +	if (unlikely(s->ctor) && !has_sanitize_verify(s)) {
  		kasan_unpoison_new_object(s, object);
  		s->ctor(object);
  		kasan_poison_new_object(s, object);
- 	}
- 	return object;
-@@ -5297,11 +5303,23 @@ static __fastpath_inline void *slab_alloc_node(struct kmem_cache *s, struct list
- 
- 	if (!object)
+@@ -5333,7 +5341,19 @@
  		object = __slab_alloc_node(s, gfpflags, node, addr, orig_size);
  
  	maybe_wipe_obj_freeptr(s, object);
@@ -87,13 +72,9 @@ index bdb56196a228..796028530651 100644
 +		init = slab_want_init_on_alloc(gfpflags, s);
 +	}
  
- out:
- 	/*
- 	 * When init equals 'true', like for kzalloc() family, only
- 	 * @orig_size bytes might be zeroed instead of s->object_size
-@@ -7456,10 +7474,25 @@ int __kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size,
- 	}
- 	c->tid = next_tid(c->tid);
+ 	if (object) {
+ 		check_canary(s, object, s->random_inactive);
+@@ -7506,6 +7526,21 @@
  	local_unlock_irqrestore(&s->cpu_slab->lock, irqflags);
  	slub_put_cpu_ptr(s->cpu_slab);
  
@@ -112,14 +93,10 @@ index bdb56196a228..796028530651 100644
 +		}
 +	}
 +
- 	return i;
- 
- error:
- 	slub_put_cpu_ptr(s->cpu_slab);
- 	__kmem_cache_free_bulk(s, i, p);
-@@ -7499,10 +7532,11 @@ static int __kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags,
- /* Note that interrupts must be enabled when calling this function. */
- int kmem_cache_alloc_bulk_noprof(struct kmem_cache *s, gfp_t flags, size_t size,
+ 	for (k = 0; k < i; k++) {
+ 		if (!is_kfence_address(p[k])) {
+ 			check_canary(s, p[k], s->random_inactive);
+@@ -7556,6 +7591,7 @@
  				 void **p)
  {
  	unsigned int i = 0;
@@ -127,11 +104,7 @@ index bdb56196a228..796028530651 100644
  
  	if (!size)
  		return 0;
- 
- 	s = slab_pre_alloc_hook(s, flags);
-@@ -7526,12 +7560,15 @@ int kmem_cache_alloc_bulk_noprof(struct kmem_cache *s, gfp_t flags, size_t size,
- 
- 	/*
+@@ -7583,8 +7619,11 @@
  	 * memcg and kmem_cache debug support and memory initialization.
  	 * Done outside of the IRQ disabled fastpath loop.
  	 */
@@ -144,17 +117,13 @@ index bdb56196a228..796028530651 100644
  		return 0;
  	}
  
- 	return size;
- }
+
 diff --git a/security/Kconfig.hardening b/security/Kconfig.hardening
-index b728851fec14..0068460db967 100644
 --- a/security/Kconfig.hardening
 +++ b/security/Kconfig.hardening
-@@ -216,10 +216,18 @@ config PAGE_SANITIZE_VERIFY
- 	default y
- 	help
- 	  When init_on_free is enabled, verify that newly allocated pages
- 	  are zeroed to detect write-after-free bugs.
+@@ -211,6 +211,14 @@
+ 	  be evaluated for suitability. For example, x86_64 grows by less
+ 	  than 1%, and arm64 grows by about 5%.
  
 +config SLAB_SANITIZE_VERIFY
 +	bool "Verify sanitized SLAB allocations"
@@ -167,8 +136,6 @@ index b728851fec14..0068460db967 100644
  endmenu
  
  menu "Bounds checking"
- 
- config FORTIFY_SOURCE
 -- 
 2.52.0
 

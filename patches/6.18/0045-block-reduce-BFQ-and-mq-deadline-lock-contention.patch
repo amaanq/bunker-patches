@@ -206,8 +206,7 @@ diff --git a/block/mq-deadline.c b/block/mq-deadline.c
 index 148c21f84729..56bf89d5e407 100644
 --- a/block/mq-deadline.c
 +++ b/block/mq-deadline.c
-@@ -77,14 +77,24 @@ struct dd_per_prio {
- 	/* Position of the most recently dispatched request. */
+@@ -77,13 +77,23 @@ struct dd_per_prio {
  	sector_t latest_pos[DD_DIR_COUNT];
  	struct io_stats_per_prio stats;
  };
@@ -220,17 +219,18 @@ index 148c21f84729..56bf89d5e407 100644
  	/*
  	 * run time data
  	 */
+-
 +	struct {
 +		spinlock_t lock;
 +		spinlock_t zone_lock;
 +	} ____cacheline_aligned_in_smp;
 +
 +	unsigned long run_state;
- 
++
+ 	struct list_head dispatch;
  	struct dd_per_prio per_prio[DD_PRIO_COUNT];
  
  	/* Data direction of latest dispatched request. */
- 	enum dd_data_dir last_dir;
 @@ -98,12 +108,10 @@ struct deadline_data {
  	int fifo_batch;
  	int writes_starved;
@@ -244,7 +244,7 @@ index 148c21f84729..56bf89d5e407 100644
  /* Maps an I/O priority class to a deadline scheduler priority. */
  static const enum dd_prio ioprio_class_to_prio[] = {
  	[IOPRIO_CLASS_NONE]	= DD_BE_PRIO,
-@@ -460,10 +468,22 @@ static struct request *dd_dispatch_request(struct blk_mq_hw_ctx *hctx)
+@@ -453,9 +461,21 @@ static struct request *dd_dispatch_request(struct blk_mq_hw_ctx *hctx)
  	struct deadline_data *dd = hctx->queue->elevator->elevator_data;
  	const unsigned long now = jiffies;
  	struct request *rq;
@@ -263,11 +263,10 @@ index 148c21f84729..56bf89d5e407 100644
 +		return NULL;
 +
  	spin_lock(&dd->lock);
- 	rq = dd_dispatch_prio_aged_requests(dd, now);
- 	if (rq)
- 		goto unlock;
  
-@@ -476,10 +496,11 @@ static struct request *dd_dispatch_request(struct blk_mq_hw_ctx *hctx)
+ 	if (!list_empty(&dd->dispatch)) {
+ 		rq = list_first_entry(&dd->dispatch, struct request, queuelist);
+@@ -479,10 +499,11 @@ static struct request *dd_dispatch_request(struct blk_mq_hw_ctx *hctx)
  		if (rq || dd_queued(dd, prio))
  			break;
  	}
@@ -279,21 +278,20 @@ index 148c21f84729..56bf89d5e407 100644
  	return rq;
  }
  
-@@ -549,10 +570,13 @@ static int dd_init_sched(struct request_queue *q, struct elevator_queue *eq)
- 	if (!dd)
- 		return -ENOMEM;
+@@ -555,8 +576,11 @@ static int dd_init_sched(struct request_queue *q, struct elevator_queue *eq)
  
  	eq->elevator_data = dd;
  
 +	spin_lock_init(&dd->lock);
 +	spin_lock_init(&dd->zone_lock);
 +
+ 	INIT_LIST_HEAD(&dd->dispatch);
  	for (prio = 0; prio <= DD_PRIO_MAX; prio++) {
  		struct dd_per_prio *per_prio = &dd->per_prio[prio];
  
- 		INIT_LIST_HEAD(&per_prio->dispatch);
  		INIT_LIST_HEAD(&per_prio->fifo_list[DD_READ]);
-@@ -565,11 +589,10 @@ static int dd_init_sched(struct request_queue *q, struct elevator_queue *eq)
+@@ -569,12 +593,11 @@ static int dd_init_sched(struct request_queue *q, struct elevator_queue *eq)
+ 	dd->fifo_expire[DD_WRITE] = write_expire;
  	dd->writes_starved = writes_starved;
  	dd->front_merges = 0;
  	dd->last_dir = DD_WRITE;
@@ -305,7 +303,7 @@ index 148c21f84729..56bf89d5e407 100644
  	blk_queue_flag_set(QUEUE_FLAG_SQ_SCHED, q);
  
  	q->elevator = eq;
-@@ -618,11 +641,23 @@ static bool dd_bio_merge(struct request_queue *q, struct bio *bio,
+@@ -619,11 +642,23 @@ static bool dd_bio_merge(struct request_queue *q, struct bio *bio,
  {
  	struct deadline_data *dd = q->elevator->elevator_data;
  	struct request *free = NULL;
@@ -330,9 +328,7 @@ index 148c21f84729..56bf89d5e407 100644
  
  	if (free)
  		blk_mq_free_request(free);
-@@ -631,14 +666,13 @@ static bool dd_bio_merge(struct request_queue *q, struct bio *bio,
- }
- 
+@@ -636,12 +671,11 @@ static bool dd_bio_merge(struct request_queue *q, struct bio *bio,
  /*
   * add rq to rbtree and fifo
   */
@@ -346,7 +342,7 @@ index 148c21f84729..56bf89d5e407 100644
  	u16 ioprio = req_get_ioprio(rq);
  	u8 ioprio_class = IOPRIO_PRIO_CLASS(ioprio);
  	struct dd_per_prio *per_prio;
-@@ -692,11 +726,11 @@ static void dd_insert_requests(struct blk_mq_hw_ctx *hctx,
+@@ -695,11 +729,11 @@ static void dd_insert_requests(struct blk_mq_hw_ctx *hctx,
  	while (!list_empty(list)) {
  		struct request *rq;
  
@@ -359,6 +355,6 @@ index 148c21f84729..56bf89d5e407 100644
  
  	blk_mq_free_requests(&free);
  }
--- 
+--
 2.52.0
-
+ 

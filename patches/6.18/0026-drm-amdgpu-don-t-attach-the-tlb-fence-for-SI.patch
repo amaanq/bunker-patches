@@ -11,29 +11,29 @@ Closes: https://gitlab.freedesktop.org/drm/amd/-/issues/4744
 Fixes: f3854e04b708 ("drm/amdgpu: attach tlb fence to the PTs update")
 Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
 Cherry-picked-for: https://gitlab.archlinux.org/archlinux/packaging/packages/linux/-/issues/166
+
+NOTE: Already upstream in 6.18.10
 ---
- drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c | 4 +++-
- 1 file changed, 3 insertions(+), 1 deletion(-)
+ drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
 
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c
 index 220345caec5f..c8f2a7a0d1cb 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_vm.c
-@@ -1064,11 +1064,13 @@ amdgpu_vm_tlb_flush(struct amdgpu_vm_update_params *params,
- 	} else {
- 		amdgpu_vm_tlb_seq_cb(NULL, &tlb_cb->cb);
- 	}
- 
+@@ -1067,9 +1067,9 @@ amdgpu_vm_tlb_flush(struct amdgpu_vm_update_params *params,
+
  	/* Prepare a TLB flush fence to be attached to PTs */
--	if (!params->unlocked) {
-+	if (!params->unlocked &&
+ 	if (!params->unlocked &&
+-	    /* SI doesn't support pasid or KIQ/MES */
+-	    params->adev->family > AMDGPU_FAMILY_SI) {
+-		amdgpu_vm_tlb_fence_create(params->adev, vm, fence);
 +	    /* SI doesn't support pasid or KIQ/MES */
 +	    params->adev->family > AMDGPU_FAMILY_SI) {
- 		amdgpu_vm_tlb_fence_create(params->adev, vm, fence);
- 
++		amdgpu_vm_tlb_fence_create(params->adev, vm, fence);
+
  		/* Makes sure no PD/PT is freed before the flush */
  		dma_resv_add_fence(vm->root.bo->tbo.base.resv, *fence,
- 				   DMA_RESV_USAGE_BOOKKEEP);
--- 
+--
 2.52.0
 

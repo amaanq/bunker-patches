@@ -130,13 +130,11 @@ let
   versionExtra = {
     "6.18" = {
       drivers = [
-        "0163"
         "0164"
         "0166"
       ];
       extras = [
         "0165"
-        "0167"
       ];
       hardened = [
         "0168"

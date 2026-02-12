@@ -15,10 +15,10 @@ index 77ae87f36e84..82fdb9eb605e 100644
 +++ b/kernel/sched/syscalls.c
 @@ -1341,19 +1341,33 @@ SYSCALL_DEFINE3(sched_getaffinity, pid_t, pid, unsigned int, len,
  	free_cpumask_var(mask);
- 
+
  	return ret;
  }
- 
+
 +/**
 + * sysctl_sched_yield_type - choose the yield level that will perform.
 + *
@@ -32,22 +32,22 @@ index 77ae87f36e84..82fdb9eb605e 100644
  {
  	struct rq_flags rf;
  	struct rq *rq;
- 
+
 +	if (!sysctl_sched_yield_type)
 +		return;
 +
  	rq = this_rq_lock_irq(&rf);
- 
+
  	schedstat_inc(rq->yld_count);
--	current->sched_class->yield_task(rq);
+-	rq->donor->sched_class->yield_task(rq);
 +
 +	if (sysctl_sched_yield_type > 1)
-+		current->sched_class->yield_task(rq);
- 
++		rq->donor->sched_class->yield_task(rq);
+
  	preempt_disable();
  	rq_unlock_irq(rq, &rf);
  	sched_preempt_enable_no_resched();
- 
+
 diff --git a/kernel/sysctl.c b/kernel/sysctl.c
 index cb6196e3fa99..c4a7559d61fa 100644
 --- a/kernel/sysctl.c
@@ -55,21 +55,21 @@ index cb6196e3fa99..c4a7559d61fa 100644
 @@ -30,10 +30,12 @@ EXPORT_SYMBOL(sysctl_vals);
  const unsigned long sysctl_long_vals[] = { 0, 1, LONG_MAX };
  EXPORT_SYMBOL_GPL(sysctl_long_vals);
- 
+
  #if defined(CONFIG_SYSCTL)
- 
+
 +extern int sysctl_sched_yield_type;
 +
  /* Constants used for minimum and maximum */
  static const int ngroups_max = NGROUPS_MAX;
  static const int cap_last_cap = CAP_LAST_CAP;
- 
+
  #ifdef CONFIG_PROC_SYSCTL
 @@ -1453,10 +1455,19 @@ int proc_do_static_key(const struct ctl_table *table, int write,
  	mutex_unlock(&static_key_mutex);
  	return ret;
  }
- 
+
  static const struct ctl_table sysctl_subsys_table[] = {
 +	{
 +		.procname	= "yield_type",
@@ -85,6 +85,6 @@ index cb6196e3fa99..c4a7559d61fa 100644
  		.procname	= "sysctl_writes_strict",
  		.data		= &sysctl_writes_strict,
  		.maxlen		= sizeof(int),
--- 
+--
 2.52.0
 

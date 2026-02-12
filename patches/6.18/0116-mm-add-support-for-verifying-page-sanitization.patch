@@ -72,11 +72,11 @@ index 07f9286f1443..b728851fec14 100644
 +	  When init_on_free is enabled, verify that newly allocated pages
 +	  are zeroed to detect write-after-free bugs.
 +
- endmenu
- 
- menu "Bounds checking"
- 
- config FORTIFY_SOURCE
+ config SLAB_SANITIZE_VERIFY
+ 	bool "Verify sanitized SLAB allocations"
+ 	default y
+ 	depends on !KASAN
+ 	help
 -- 
 2.52.0
 

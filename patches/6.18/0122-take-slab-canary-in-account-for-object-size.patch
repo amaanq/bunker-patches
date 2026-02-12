@@ -39,7 +39,7 @@ index 2b58345ef695..434a6289472e 100644
  	return *(unsigned int *)p;
  }
  
-@@ -2591,12 +2595,18 @@ bool slab_free_hook(struct kmem_cache *s, void *x, bool init,
+@@ -2595,12 +2599,18 @@ bool slab_free_hook(struct kmem_cache *s, void *x, bool init,
  		inuse = get_info_end(s);
  		orig_size = get_orig_size(s, x);
  		if (!kasan_has_integrated_init())
@@ -54,7 +54,7 @@ index 2b58345ef695..434a6289472e 100644
  		       s->size - inuse - rsize);
 +#endif
  		/*
- 		 * Restore orig_size, otherwize kmalloc redzone overwritten
+ 		 * Restore orig_size, otherwise kmalloc redzone overwritten
  		 * would be reported
  		 */
  		set_orig_size(s, x, orig_size);
