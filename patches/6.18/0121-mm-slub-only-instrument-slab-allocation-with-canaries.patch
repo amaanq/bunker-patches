@@ -1,7 +1,7 @@
 From b99022cdb217528675045c15b204dbcf72b97b45 Mon Sep 17 00:00:00 2001
 From: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
 Date: Tue, 14 Oct 2025 15:19:31 +0200
-Subject: [PATCH 121/162] mm/slub: Only instrument slab allocation with canaries
+Subject: [PATCH 121/184] mm/slub: Only instrument slab allocation with canaries
 
 With barn and sheaves introduction, slab objects are used to prefill or
 refill sheaves, which are cache of small objects taking the form of an

@@ -1,7 +1,7 @@
 From 73471f125566e559ddcf19fb6220f579b38e520e Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Sun, 25 Feb 2018 02:08:49 -0500
-Subject: [PATCH 170/171] remove SYSVIPC from arm64/x86_64 defconfigs
+Subject: [PATCH 183/184] remove SYSVIPC from arm64/x86_64 defconfigs
 
 ---
  arch/arm64/configs/defconfig      | 1 -

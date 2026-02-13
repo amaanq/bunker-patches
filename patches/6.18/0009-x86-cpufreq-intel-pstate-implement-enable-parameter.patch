@@ -1,7 +1,7 @@
 From 159abe1f9bc15a1253062686dd70553bd9f3b16a Mon Sep 17 00:00:00 2001
 From: Steven Barrett <steven@liquorix.net>
 Date: Wed, 15 Jan 2020 20:43:56 -0600
-Subject: [PATCH 9/162] x86/cpufreq/intel-pstate: implement enable parameter
+Subject: [PATCH 9/184] x86/cpufreq/intel-pstate: implement enable parameter
 
 ---
  Documentation/admin-guide/kernel-parameters.txt | 3 +++

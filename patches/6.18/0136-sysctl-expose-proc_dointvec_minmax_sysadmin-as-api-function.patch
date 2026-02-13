@@ -1,7 +1,7 @@
 From 83342e1a8454e4381c301aaa8b153578b69cd450 Mon Sep 17 00:00:00 2001
 From: Levente Polyak <levente@leventepolyak.net>
 Date: Sun, 6 Sep 2020 20:28:32 +0200
-Subject: [PATCH 136/162] sysctl: expose proc_dointvec_minmax_sysadmin as API function
+Subject: [PATCH 136/184] sysctl: expose proc_dointvec_minmax_sysadmin as API function
 
 Orthogonal to the other sysctl proc functions expose the variant that is
 checking CAP_SYS_ADMIN on write for consumption in external subsystem's

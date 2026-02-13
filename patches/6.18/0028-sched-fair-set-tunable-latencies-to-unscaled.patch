@@ -1,7 +1,7 @@
 From 3e8e842bf8603031ed6a1bba5d26f2d28288700f Mon Sep 17 00:00:00 2001
 From: Alexandre Frade <kernel@xanmod.org>
 Date: Thu, 11 May 2023 19:41:41 +0000
-Subject: [PATCH 28/162] sched/fair: set tunable latencies to unscaled
+Subject: [PATCH 28/184] sched/fair: set tunable latencies to unscaled
 
 ---
  kernel/sched/fair.c | 2 +-

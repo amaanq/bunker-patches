@@ -1,7 +1,7 @@
 From 9b228685e24e2100ca7bf0887d50df03e13bddd4 Mon Sep 17 00:00:00 2001
 From: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
 Date: Thu, 17 Oct 2024 17:02:29 +0200
-Subject: [PATCH 137/162] sysctl: Add proc_dointvec_minmax_sysadmin sanity check
+Subject: [PATCH 137/184] sysctl: Add proc_dointvec_minmax_sysadmin sanity check
 
 Since we expose proc_dointvec_minmax_sysadmin, add it to sanity checking
 functions.

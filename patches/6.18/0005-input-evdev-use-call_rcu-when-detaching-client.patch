@@ -1,7 +1,7 @@
 From 1f2f84c1fd151efa46255f90bebb898e32b85095 Mon Sep 17 00:00:00 2001
 From: Kenny Levinsen <kl@kl.wtf>
 Date: Sun, 27 Dec 2020 14:43:13 +0000
-Subject: [PATCH 5/162] input/evdev: use call_rcu when detaching client
+Subject: [PATCH 5/184] input/evdev: use call_rcu when detaching client
 
 Switch from synchronize_rcu() to call_rcu() for evdev client detach.
 Avoids serialized RCU waits when many input fds are closed at once

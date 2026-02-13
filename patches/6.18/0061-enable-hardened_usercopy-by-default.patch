@@ -1,7 +1,7 @@
 From 323e82dee316d94f3c3de9e617555161d9f003c7 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Mon, 29 May 2017 06:17:41 -0400
-Subject: [PATCH 61/162] enable HARDENED_USERCOPY by default
+Subject: [PATCH 61/184] enable HARDENED_USERCOPY by default
 
 Signed-off-by: Daniel Micay <danielmicay@gmail.com>
 ---

@@ -1,7 +1,7 @@
 From 36035532cc8227f9e6f2c4eea7816607dd202721 Mon Sep 17 00:00:00 2001
 From: Alexandre Frade <kernel@xanmod.org>
 Date: Sun, 8 Feb 2026 00:53:13 -0500
-Subject: [PATCH 47/162] wait: allow __wake_up_pollfree() from GPL modules
+Subject: [PATCH 47/184] wait: allow __wake_up_pollfree() from GPL modules
 
 Export __wake_up_pollfree() to GPL modules, prerequisite for
 binder-as-module support.

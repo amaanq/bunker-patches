@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arjan van de Ven <arjan.van.de.ven@intel.com>
+Date: Tue, 16 Nov 2021 22:20:49 +0000
+Subject: [PATCH 175/184] mm: compaction: increase proactive compaction check
+ interval to 5s
+
+Increase the proactive compaction fragmentation check interval from
+500ms to 5s. This reduces the CPU overhead of the compaction kthread
+while still maintaining transparent hugepage availability. The
+compaction will still trigger when needed, just with less frequent
+polling.
+
+Signed-off-by: Arjan van de Ven <arjan.van.de.ven@intel.com>
+---
+ mm/compaction.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/mm/compaction.c b/mm/compaction.c
+index b4e94cda3019..e9a36942c1fa 100644
+--- a/mm/compaction.c
++++ b/mm/compaction.c
+@@ -31,7 +31,7 @@ static inline void count_compact_events(enum vm_event_item item, long delta)
+ /*
+  * Fragmentation score check interval for proactive compaction purposes.
+  */
+-#define HPAGE_FRAG_CHECK_INTERVAL_MSEC	(500)
++#define HPAGE_FRAG_CHECK_INTERVAL_MSEC	(5000)
+
+ static inline void count_compact_event(enum vm_event_item item)
+ {
+-- 
+2.47.1
+

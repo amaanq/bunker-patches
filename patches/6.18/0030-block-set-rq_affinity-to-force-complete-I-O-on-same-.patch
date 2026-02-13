@@ -1,7 +1,7 @@
 From 74f1d0a00cf5e511f26d989ebe3cdeba49ebc6c1 Mon Sep 17 00:00:00 2001
 From: Alexandre Frade <kernel@xanmod.org>
 Date: Mon, 16 Sep 2024 15:36:01 +0000
-Subject: [PATCH 30/162] block: set rq_affinity to force complete I/O on same
+Subject: [PATCH 30/184] block: set rq_affinity to force complete I/O on same
  CPU
 
 ---

@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peter Jung <admin@ptr1337.dev>
+Date: Tue, 11 Feb 2026 01:39:49 +0800
+Subject: [PATCH 176/184] mm: increase VM_READAHEAD_PAGES to 2MB
+
+Increase the default readahead window from 128KB to 2MB. This improves
+sequential read performance for large files by allowing the kernel to
+prefetch more data per readahead event, reducing the number of I/O
+requests.
+
+Signed-off-by: Peter Jung <admin@ptr1337.dev>
+---
+ include/linux/pagemap.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/linux/pagemap.h b/include/linux/pagemap.h
+index ec442af3f886..9a0364eb5ee1 100644
+--- a/include/linux/pagemap.h
++++ b/include/linux/pagemap.h
+@@ -1379,7 +1379,7 @@ struct readahead_control {
+ 		._index = i,						\
+ 	}
+
+-#define VM_READAHEAD_PAGES	(SZ_128K / PAGE_SIZE)
++#define VM_READAHEAD_PAGES	(SZ_2M / PAGE_SIZE)
+
+ void page_cache_ra_unbounded(struct readahead_control *,
+ 		unsigned long nr_to_read, unsigned long lookahead_count);
+-- 
+2.47.1
+

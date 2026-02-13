@@ -1,7 +1,7 @@
 From deae8ab6b1d2cef3d587b46aa9cc95c30ba495c3 Mon Sep 17 00:00:00 2001
 From: Arjan van de Ven <arjan@linux.intel.com>
 Date: Sat, 7 Feb 2026 21:58:01 -0500
-Subject: [PATCH 44/162] locking/rwsem: spin more aggressively before cpu_relax
+Subject: [PATCH 44/184] locking/rwsem: spin more aggressively before cpu_relax
 
 ---
  kernel/locking/rwsem.c | 4 +++-

@@ -1,7 +1,7 @@
 From 152659779ad8795de53dbfcbe132c4e76281ea67 Mon Sep 17 00:00:00 2001
 From: "Jan Alexander Steffens (heftig)" <jan.steffens@gmail.com>
 Date: Mon, 27 Jan 2020 18:11:05 +0100
-Subject: [PATCH 16/162] block: use BFQ as the elevator for SQ devices
+Subject: [PATCH 16/184] block: use BFQ as the elevator for SQ devices
 
 ---
  block/elevator.c | 4 ++++

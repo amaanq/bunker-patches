@@ -1,7 +1,7 @@
 From 29fa4f423b90f1d9cc15c34a0cab832c57f48f49 Mon Sep 17 00:00:00 2001
 From: Steven Barrett <steven@liquorix.net>
 Date: Mon, 11 Jul 2022 19:10:30 -0500
-Subject: [PATCH 8/162] cpufreq: remove schedutil dependency on Intel/AMD
+Subject: [PATCH 8/184] cpufreq: remove schedutil dependency on Intel/AMD
  P-State drivers
 
 ---

@@ -1,7 +1,7 @@
 From 70d59fd1d9863ad4c808a6fe713dedf48096b9c3 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Sat, 27 May 2017 07:29:45 -0400
-Subject: [PATCH 80/162] disable PROC_VMCORE by default
+Subject: [PATCH 80/184] disable PROC_VMCORE by default
 
 ---
  fs/proc/Kconfig | 1 -

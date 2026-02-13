@@ -1,7 +1,7 @@
 From 8297458cb1b6eb4ff44152e07780aa918a1c0440 Mon Sep 17 00:00:00 2001
 From: Steven Barrett <steven@liquorix.net>
 Date: Sat, 14 Dec 2024 11:23:18 -0600
-Subject: [PATCH 14/162] kernel/Kconfig.preempt: remove EXPERT conditional on
+Subject: [PATCH 14/184] kernel/Kconfig.preempt: remove EXPERT conditional on
  PREEMPT_RT
 
 ---

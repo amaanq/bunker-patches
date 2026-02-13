@@ -1,7 +1,7 @@
 From 7d5178e53652af5865d510bc1d1dd5c3cb73ee38 Mon Sep 17 00:00:00 2001
 From: Levente Polyak <levente@leventepolyak.net>
 Date: Tue, 19 Sep 2023 00:57:29 +0200
-Subject: [PATCH 64/162] enable LIST_HARDENED by default
+Subject: [PATCH 64/184] enable LIST_HARDENED by default
 
 Signed-off-by: Levente Polyak <levente@leventepolyak.net>
 ---

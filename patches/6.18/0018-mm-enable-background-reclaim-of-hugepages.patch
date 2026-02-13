@@ -1,7 +1,7 @@
 From 3e45a5216cf79a4ce6a7e9ea87fe331789399cb7 Mon Sep 17 00:00:00 2001
 From: "Jan Alexander Steffens (heftig)" <jan.steffens@gmail.com>
 Date: Mon, 27 Jan 2020 18:21:09 +0100
-Subject: [PATCH 18/162] mm: enable background reclaim of hugepages
+Subject: [PATCH 18/184] mm: enable background reclaim of hugepages
 
 ---
  init/Kconfig     | 4 ++++

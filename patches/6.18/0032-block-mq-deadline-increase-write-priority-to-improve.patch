@@ -1,7 +1,7 @@
 From d106d756e04b3928be278714ce4cd5ce23142d7e Mon Sep 17 00:00:00 2001
 From: Alexandre Frade <kernel@xanmod.org>
 Date: Wed, 11 May 2022 18:56:51 +0000
-Subject: [PATCH 32/162] block/mq-deadline: increase write priority to improve
+Subject: [PATCH 32/184] block/mq-deadline: increase write priority to improve
  responsiveness
 
 ---

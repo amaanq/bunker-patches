@@ -1,7 +1,7 @@
 From 7a3ac869178fc11568bf5d538b8d3b52ef8ee44e Mon Sep 17 00:00:00 2001
 From: Levente Polyak <levente@leventepolyak.net>
 Date: Thu, 11 Mar 2021 23:09:50 +0100
-Subject: [PATCH 141/162] ovl: add config to disable unprivileged user namespace mounts
+Subject: [PATCH 141/184] ovl: add config to disable unprivileged user namespace mounts
 
 When disabled, unprivileged users will not be able to create
 new overlayfs mounts. This cuts the attack surface if no

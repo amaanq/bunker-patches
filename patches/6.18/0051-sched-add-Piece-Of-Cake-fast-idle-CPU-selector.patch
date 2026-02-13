@@ -1,7 +1,7 @@
 From 5b2365326aff80101491b1944de11c50ece471f4 Mon Sep 17 00:00:00 2001
 From: Masahito Suzuki <firelzrd@gmail.com>
 Date: Sat, 7 Feb 2026 23:48:22 -0500
-Subject: [PATCH 51/162] sched: add Piece-Of-Cake fast idle CPU selector
+Subject: [PATCH 51/184] sched: add Piece-Of-Cake fast idle CPU selector
 
 Bitmap-based idle CPU selector inspired by scx_cake BPF scheduler.
 Uses per-LLC atomic64 bitmasks instead of linear CPU scanning to

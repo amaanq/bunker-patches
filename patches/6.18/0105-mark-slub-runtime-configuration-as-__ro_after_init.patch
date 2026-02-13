@@ -1,7 +1,7 @@
 From 3b46a84802fac36297d3fef6e373c931b8e9b3e2 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Sun, 14 May 2017 19:01:58 -0400
-Subject: [PATCH 105/162] mark slub runtime configuration as __ro_after_init
+Subject: [PATCH 105/184] mark slub runtime configuration as __ro_after_init
 
 Signed-off-by: Daniel Micay <danielmicay@gmail.com>
 ---

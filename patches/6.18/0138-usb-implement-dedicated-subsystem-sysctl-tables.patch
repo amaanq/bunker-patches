@@ -1,7 +1,7 @@
 From b528e2699a38bc0b4ca98f7de57daa3189185684 Mon Sep 17 00:00:00 2001
 From: Levente Polyak <levente@leventepolyak.net>
 Date: Sun, 6 Sep 2020 21:08:16 +0200
-Subject: [PATCH 138/162] usb: implement dedicated subsystem sysctl tables
+Subject: [PATCH 138/184] usb: implement dedicated subsystem sysctl tables
 
 This moves the usb related sysctl knobs to an own usb local sysctl table
 in order to clean up the global sysctl as well as allow the knob to be

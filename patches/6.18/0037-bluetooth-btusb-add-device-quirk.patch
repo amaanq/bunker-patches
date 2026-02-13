@@ -1,7 +1,7 @@
 From 06f24027344752b211ba244f5c00d402b0449f41 Mon Sep 17 00:00:00 2001
 From: Peter Jung <admin@ptr1337.dev>
 Date: Sat, 7 Feb 2026 22:23:30 -0500
-Subject: [PATCH 37/162] bluetooth/btusb: add device quirk
+Subject: [PATCH 37/184] bluetooth/btusb: add device quirk
 
 ---
  drivers/bluetooth/btusb.c | 2 ++

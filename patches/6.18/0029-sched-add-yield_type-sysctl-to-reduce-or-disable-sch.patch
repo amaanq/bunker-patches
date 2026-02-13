@@ -1,7 +1,7 @@
 From b31a6e6b7fc9056a228ff14974b471a9fdd3718c Mon Sep 17 00:00:00 2001
 From: Alexandre Frade <kernel@xanmod.org>
 Date: Sun, 15 Sep 2024 23:03:38 +0000
-Subject: [PATCH 29/162] sched: add yield_type sysctl to reduce or disable
+Subject: [PATCH 29/184] sched: add yield_type sysctl to reduce or disable
  sched_yield
 
 ---

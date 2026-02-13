@@ -1,7 +1,7 @@
 From d38ef335f1cf6990a0223ee653a76678fe00c810 Mon Sep 17 00:00:00 2001
 From: EXtremeExploit <pedro.montes.alcalde@gmail.com>
 Date: Fri, 29 Nov 2024 13:05:27 -0300
-Subject: [PATCH 13/162] ahci: disable staggered spinup by default
+Subject: [PATCH 13/184] ahci: disable staggered spinup by default
 
 ---
  drivers/ata/libahci.c | 2 +-

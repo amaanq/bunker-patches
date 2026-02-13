@@ -1,7 +1,7 @@
 From a5b2c7ba0cb00fb2247c572acbd5a2733cb03b1a Mon Sep 17 00:00:00 2001
 From: "Jan Alexander Steffens (heftig)" <heftig@archlinux.org>
 Date: Sun, 11 Dec 2022 23:51:16 +0100
-Subject: [PATCH 3/162] x86: restore CONFIG_OPTIMIZE_FOR_PERFORMANCE_O3
+Subject: [PATCH 3/184] x86: restore CONFIG_OPTIMIZE_FOR_PERFORMANCE_O3
 
 ---
  Makefile     | 3 +++

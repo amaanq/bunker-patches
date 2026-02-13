@@ -1,7 +1,7 @@
 From 5039ff11d5d76e1258cff3fefdcdc4d3c679e7c1 Mon Sep 17 00:00:00 2001
 From: Sultan Alsawaf <sultan@kerneltoast.com>
 Date: Sun, 19 Apr 2020 19:59:18 -0700
-Subject: [PATCH 12/162] mm: stop kswapd early when nothing's waiting for it to
+Subject: [PATCH 12/184] mm: stop kswapd early when nothing's waiting for it to
  free pages
 
 ---

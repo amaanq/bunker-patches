@@ -1,7 +1,7 @@
 From 13462069e374bec6d6b1a6962ec64e7e380626df Mon Sep 17 00:00:00 2001
 From: graysky <therealgraysky@proton.me>
 Date: Sun, 8 Feb 2026 00:52:58 -0500
-Subject: [PATCH 46/162] x86/kconfig: add x86-64 ISA levels and
+Subject: [PATCH 46/184] x86/kconfig: add x86-64 ISA levels and
  micro-architecture targets
 
 Add x86-64-v2/v3 ISA levels and per-microarchitecture Kconfig options

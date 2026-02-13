@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arjan van de Ven <arjan@linux.intel.com>
+Date: Fri, 18 Nov 2022 17:25:22 +0000
+Subject: [PATCH 173/184] exit: use mmput_async to reduce exit latency
+
+Use mmput_async() instead of mmput() in exit_mm() to defer mm teardown
+to a worker thread. This reduces exit latency for processes with large
+address spaces.
+
+Also pin the async mmput work to CPU 0 to avoid unnecessary cross-CPU
+scheduling of the teardown work.
+
+Signed-off-by: Arjan van de Ven <arjan@linux.intel.com>
+---
+ kernel/exit.c | 2 +-
+ kernel/fork.c | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/kernel/exit.c b/kernel/exit.c
+--- a/kernel/exit.c
++++ b/kernel/exit.c
+@@ -578,7 +578,7 @@
+ 	task_unlock(current);
+ 	mmap_read_unlock(mm);
+ 	mm_update_next_owner(mm);
+-	mmput(mm);
++	mmput_async(mm);
+ 	if (test_thread_flag(TIF_MEMDIE))
+ 		exit_oom_victim();
+ }
+diff --git a/kernel/fork.c b/kernel/fork.c
+--- a/kernel/fork.c
++++ b/kernel/fork.c
+@@ -1210,7 +1210,7 @@
+ {
+ 	if (atomic_dec_and_test(&mm->mm_users)) {
+ 		INIT_WORK(&mm->async_put_work, mmput_async_fn);
+-		schedule_work(&mm->async_put_work);
++		schedule_work_on(0, &mm->async_put_work);
+ 	}
+ }
+ EXPORT_SYMBOL_GPL(mmput_async);
+-- 
+2.47.1
+

@@ -1,7 +1,7 @@
 From 6a412b7494f4069957b312896885800a45292f82 Mon Sep 17 00:00:00 2001
 From: Alexandre Frade <kernel@xanmod.org>
 Date: Sat, 7 Feb 2026 23:43:47 -0500
-Subject: [PATCH 52/162] tcp: add sysctl to skip collapse when receive buffer is
+Subject: [PATCH 52/184] tcp: add sysctl to skip collapse when receive buffer is
  full
 
 Add net.ipv4.tcp_collapse_max_bytes sysctl to cap how much data

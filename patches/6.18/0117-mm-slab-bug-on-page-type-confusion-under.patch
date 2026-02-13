@@ -1,7 +1,7 @@
 From 7f17e78d7a575445087e72ebca66eb3e35e7d8bb Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Tue, 17 Sep 2019 18:00:54 +0200
-Subject: [PATCH 117/162] mm: slab: BUG on page type confusion under
+Subject: [PATCH 117/184] mm: slab: BUG on page type confusion under
  BUG_ON_DATA_CORRUPTION
 
 This change was extracted from PaX.

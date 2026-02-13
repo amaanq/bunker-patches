@@ -1,7 +1,7 @@
 From d1fc827523b0d7cfa69f66f8783ff41a68e3826f Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Tue, 30 May 2017 10:47:23 -0400
-Subject: [PATCH 88/162] enable protected_{symlinks,hardlinks} by default
+Subject: [PATCH 88/184] enable protected_{symlinks,hardlinks} by default
 
 ---
  fs/namei.c | 4 ++--

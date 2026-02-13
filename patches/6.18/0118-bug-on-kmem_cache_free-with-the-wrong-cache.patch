@@ -1,7 +1,7 @@
 From 4116d34ce5cf1e74b1720b4bdc25b14e26450c1e Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Wed, 3 May 2017 11:50:53 -0400
-Subject: [PATCH 118/162] bug on kmem_cache_free with the wrong cache
+Subject: [PATCH 118/184] bug on kmem_cache_free with the wrong cache
 
 At least when CONFIG_BUG_ON_DATA_CORRUPTION is enabled.
 

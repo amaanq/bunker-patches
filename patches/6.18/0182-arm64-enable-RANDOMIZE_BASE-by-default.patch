@@ -1,7 +1,7 @@
 From 63eae0f044f6dab79223c3f8148e91ebaa81f08d Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Sun, 25 Feb 2018 01:33:48 -0500
-Subject: [PATCH 169/171] arm64: enable RANDOMIZE_BASE by default
+Subject: [PATCH 182/184] arm64: enable RANDOMIZE_BASE by default
 
 ---
  arch/arm64/Kconfig | 1 +

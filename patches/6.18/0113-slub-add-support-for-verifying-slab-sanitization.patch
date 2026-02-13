@@ -1,7 +1,7 @@
 From 61e1b9a0ad169aaa5a5849bf5a104309bfda3824 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Thu, 4 May 2017 15:58:57 -0400
-Subject: [PATCH 113/162] slub: Add support for verifying slab sanitization
+Subject: [PATCH 113/184] slub: Add support for verifying slab sanitization
 
 This is an extension to the sanitization feature in PaX for when
 sacricifing more performance for security is acceptable.

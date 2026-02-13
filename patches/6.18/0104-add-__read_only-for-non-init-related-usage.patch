@@ -1,7 +1,7 @@
 From 02e7111f950a4de44725a1a20bd6dce2183b2d43 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Sun, 7 May 2017 00:28:23 -0400
-Subject: [PATCH 104/162] add __read_only for non-init related usage
+Subject: [PATCH 104/184] add __read_only for non-init related usage
 
 ---
  include/linux/cache.h | 2 ++

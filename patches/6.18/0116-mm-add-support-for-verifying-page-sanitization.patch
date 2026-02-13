@@ -1,7 +1,7 @@
 From 0c4e52e1f68c575a19cd1392e04a9828fc35c227 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Wed, 3 May 2017 21:54:56 -0400
-Subject: [PATCH 116/162] mm: add support for verifying page sanitization
+Subject: [PATCH 116/184] mm: add support for verifying page sanitization
 
 Signed-off-by: Daniel Micay <danielmicay@gmail.com>
 Signed-off-by: Thibaut Sautereau <thibaut.sautereau@ssi.gouv.fr>
