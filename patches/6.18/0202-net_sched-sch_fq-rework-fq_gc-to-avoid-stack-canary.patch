@@ -1,0 +1,112 @@
+From 2214aab26811c77a15fc1d28bf3112a07b8c8d85 Mon Sep 17 00:00:00 2001
+From: Eric Dumazet <edumazet@google.com>
+Date: Wed, 4 Feb 2026 19:00:34 +0000
+Subject: [PATCH] net_sched: sch_fq: rework fq_gc() to avoid stack canary
+
+Using kmem_cache_free_bulk() in fq_gc() was not optimal.
+
+1) It needs an array.
+2) It is only saving cpu cycles for large batches.
+
+The automatic array forces a stack canary, which is expensive.
+
+In practice fq_gc was finding zero, one or two flows at most
+per round.
+
+Remove the array, use kmem_cache_free().
+
+This makes fq_enqueue() smaller and faster.
+
+$ scripts/bloat-o-meter -t vmlinux.old vmlinux.new
+add/remove: 0/0 grow/shrink: 0/1 up/down: 0/-79 (-79)
+Function                                     old     new   delta
+fq_enqueue                                  1629    1550     -79
+Total: Before=24886583, After=24886504, chg -0.00%
+
+Signed-off-by: Eric Dumazet <edumazet@google.com>
+Link: https://patch.msgid.link/20260204190034.76277-1-edumazet@google.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ net/sched/sch_fq.c | 24 +++++++++++-------------
+ 1 file changed, 11 insertions(+), 13 deletions(-)
+
+diff --git a/net/sched/sch_fq.c b/net/sched/sch_fq.c
+index d0200ec8ada6..80235e85f844 100644
+--- a/net/sched/sch_fq.c
++++ b/net/sched/sch_fq.c
+@@ -243,12 +243,10 @@ static void fq_flow_set_throttled(struct fq_sched_data *q, struct fq_flow *f)
+ 
+ 
+ static struct kmem_cache *fq_flow_cachep __read_mostly;
+ 
+ 
+-/* limit number of collected flows per round */
+-#define FQ_GC_MAX 8
+ #define FQ_GC_AGE (3*HZ)
+ 
+ static bool fq_gc_candidate(const struct fq_flow *f)
+ {
+ 	return fq_flow_is_detached(f) &&
+@@ -257,14 +255,13 @@ static bool fq_gc_candidate(const struct fq_flow *f)
+ 
+ static void fq_gc(struct fq_sched_data *q,
+ 		  struct rb_root *root,
+ 		  struct sock *sk)
+ {
++	struct fq_flow *f, *tofree = NULL;
+ 	struct rb_node **p, *parent;
+-	void *tofree[FQ_GC_MAX];
+-	struct fq_flow *f;
+-	int i, fcnt = 0;
++	int fcnt;
+ 
+ 	p = &root->rb_node;
+ 	parent = NULL;
+ 	while (*p) {
+ 		parent = *p;
+@@ -272,33 +269,34 @@ static void fq_gc(struct fq_sched_data *q,
+ 		f = rb_entry(parent, struct fq_flow, fq_node);
+ 		if (f->sk == sk)
+ 			break;
+ 
+ 		if (fq_gc_candidate(f)) {
+-			tofree[fcnt++] = f;
+-			if (fcnt == FQ_GC_MAX)
+-				break;
++			f->next = tofree;
++			tofree = f;
+ 		}
+ 
+ 		if (f->sk > sk)
+ 			p = &parent->rb_right;
+ 		else
+ 			p = &parent->rb_left;
+ 	}
+ 
+-	if (!fcnt)
++	if (!tofree)
+ 		return;
+ 
+-	for (i = fcnt; i > 0; ) {
+-		f = tofree[--i];
++	fcnt = 0;
++	while (tofree) {
++		f = tofree;
++		tofree = f->next;
+ 		rb_erase(&f->fq_node, root);
++		kmem_cache_free(fq_flow_cachep, f);
++		fcnt++;
+ 	}
+ 	q->flows -= fcnt;
+ 	q->inactive_flows -= fcnt;
+ 	q->stat_gc_flows += fcnt;
+-
+-	kmem_cache_free_bulk(fq_flow_cachep, fcnt, tofree);
+ }
+ 
+ /* Fast path can be used if :
+  * 1) Packet tstamp is in the past, or within the pacing offload horizon.
+  * 2) FQ qlen == 0   OR
+-- 
+2.52.0
+

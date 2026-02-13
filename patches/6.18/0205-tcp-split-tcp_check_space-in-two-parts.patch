@@ -1,0 +1,89 @@
+From 309dd9942155c090b774cec29c5982922fece446 Mon Sep 17 00:00:00 2001
+From: Eric Dumazet <edumazet@google.com>
+Date: Tue, 3 Feb 2026 05:09:32 +0000
+Subject: [PATCH] tcp: split tcp_check_space() in two parts
+
+tcp_check_space() is fat and not inlined.
+
+Move its slow path in (out of line) __tcp_check_space()
+and make tcp_check_space() an inline function for better TCP performance.
+
+$ scripts/bloat-o-meter -t vmlinux.old vmlinux.new
+add/remove: 2/2 grow/shrink: 4/0 up/down: 708/-582 (126)
+Function                                     old     new   delta
+__tcp_check_space                              -     521    +521
+tcp_rcv_established                         1860    1916     +56
+tcp_rcv_state_process                       3342    3384     +42
+tcp_event_new_data_sent                      248     286     +38
+tcp_data_snd_check                            71     106     +35
+__pfx___tcp_check_space                        -      16     +16
+__pfx_tcp_check_space                         16       -     -16
+tcp_check_space                              566       -    -566
+Total: Before=24896373, After=24896499, chg +0.00%
+
+Signed-off-by: Eric Dumazet <edumazet@google.com>
+Reviewed-by: Kuniyuki Iwashima <kuniyu@google.com>
+Link: https://patch.msgid.link/20260203050932.3522221-1-edumazet@google.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ include/net/tcp.h    | 10 +++++++++-
+ net/ipv4/tcp_input.c | 13 ++++---------
+ 2 files changed, 13 insertions(+), 10 deletions(-)
+
+diff --git a/include/net/tcp.h b/include/net/tcp.h
+index 6c12be2cdd4d..8f9f52f3408c 100644
+--- a/include/net/tcp.h
++++ b/include/net/tcp.h
+@@ -761,11 +761,19 @@ void tcp_skb_collapse_tstamp(struct sk_buff *skb,
+ void tcp_rearm_rto(struct sock *sk);
+ void tcp_synack_rtt_meas(struct sock *sk, struct request_sock *req);
+ void tcp_done_with_error(struct sock *sk, int err);
+ void tcp_reset(struct sock *sk, struct sk_buff *skb);
+ void tcp_fin(struct sock *sk);
+-void tcp_check_space(struct sock *sk);
++void __tcp_check_space(struct sock *sk);
++static inline void tcp_check_space(struct sock *sk)
++{
++	/* pairs with tcp_poll() */
++	smp_mb();
++
++	if (sk->sk_socket && test_bit(SOCK_NOSPACE, &sk->sk_socket->flags))
++		__tcp_check_space(sk);
++}
+ void tcp_sack_compress_send_ack(struct sock *sk);
+ 
+ static inline void tcp_cleanup_skb(struct sk_buff *skb)
+ {
+ 	skb_dst_drop(skb);
+diff --git a/net/ipv4/tcp_input.c b/net/ipv4/tcp_input.c
+index 366c786d51be..e7b41abb82aa 100644
+--- a/net/ipv4/tcp_input.c
++++ b/net/ipv4/tcp_input.c
+@@ -6116,20 +6116,15 @@ static void tcp_new_space(struct sock *sk)
+  * 1) Space consumed in output/rtx queues is below sk->sk_sndbuf/2
+  * 2) notsent amount (tp->write_seq - tp->snd_nxt) became
+  *    small enough that tcp_stream_memory_free() decides it
+  *    is time to generate EPOLLOUT.
+  */
+-void tcp_check_space(struct sock *sk)
++void __tcp_check_space(struct sock *sk)
+ {
+-	/* pairs with tcp_poll() */
+-	smp_mb();
+-	if (sk->sk_socket &&
+-	    test_bit(SOCK_NOSPACE, &sk->sk_socket->flags)) {
+-		tcp_new_space(sk);
+-		if (!test_bit(SOCK_NOSPACE, &sk->sk_socket->flags))
+-			tcp_chrono_stop(sk, TCP_CHRONO_SNDBUF_LIMITED);
+-	}
++	tcp_new_space(sk);
++	if (!test_bit(SOCK_NOSPACE, &sk->sk_socket->flags))
++		tcp_chrono_stop(sk, TCP_CHRONO_SNDBUF_LIMITED);
+ }
+ 
+ static inline void tcp_data_snd_check(struct sock *sk)
+ {
+ 	tcp_push_pending_frames(sk);
+-- 
+2.52.0
+

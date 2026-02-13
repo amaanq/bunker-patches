@@ -1,0 +1,119 @@
+From b1cd687e3e387aafde03ae3d862ef44410131ae4 Mon Sep 17 00:00:00 2001
+From: Eric Dumazet <edumazet@google.com>
+Date: Wed, 28 Jan 2026 18:55:47 +0000
+Subject: [PATCH] ipv6: optimize fl6_update_dst()
+
+fl6_update_dst() is called for every TCP (and others) transmit,
+and is a nop for common cases.
+
+Split it in two parts :
+
+1) fl6_update_dst() inline helper, small and fast.
+
+2) __fl6_update_dst() for the exception, out of line.
+
+Small size increase to get better TX performance.
+
+$ scripts/bloat-o-meter -t vmlinux.old vmlinux.new
+add/remove: 2/2 grow/shrink: 8/0 up/down: 296/-125 (171)
+Function                                     old     new   delta
+__fl6_update_dst                               -     104    +104
+rawv6_sendmsg                               2244    2284     +40
+udpv6_sendmsg                               3013    3043     +30
+tcp_v6_connect                              1514    1534     +20
+cookie_v6_check                             1501    1519     +18
+ip6_datagram_dst_update                      673     690     +17
+inet6_sk_rebuild_header                      499     516     +17
+inet6_csk_route_socket                       507     524     +17
+inet6_csk_route_req                          343     360     +17
+__pfx___fl6_update_dst                         -      16     +16
+__pfx_fl6_update_dst                          16       -     -16
+fl6_update_dst                               109       -    -109
+Total: Before=22570304, After=22570475, chg +0.00%
+
+Signed-off-by: Eric Dumazet <edumazet@google.com>
+Link: https://patch.msgid.link/20260128185548.3738781-1-edumazet@google.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ include/net/ipv6.h | 16 +++++++++++++---
+ net/ipv6/exthdrs.c | 14 +++++++-------
+ 2 files changed, 20 insertions(+), 10 deletions(-)
+
+diff --git a/include/net/ipv6.h b/include/net/ipv6.h
+index c7f597da01cd..cf2203ff2bfd 100644
+--- a/include/net/ipv6.h
++++ b/include/net/ipv6.h
+@@ -1172,13 +1172,23 @@ enum {
+ int ipv6_find_hdr(const struct sk_buff *skb, unsigned int *offset, int target,
+ 		  unsigned short *fragoff, int *fragflg);
+ 
+ int ipv6_find_tlv(const struct sk_buff *skb, int offset, int type);
+ 
+-struct in6_addr *fl6_update_dst(struct flowi6 *fl6,
+-				const struct ipv6_txoptions *opt,
+-				struct in6_addr *orig);
++struct in6_addr *__fl6_update_dst(struct flowi6 *fl6,
++				  const struct ipv6_txoptions *opt,
++				  struct in6_addr *orig);
++
++static inline struct in6_addr *
++fl6_update_dst(struct flowi6 *fl6, const struct ipv6_txoptions *opt,
++	       struct in6_addr *orig)
++{
++	if (likely(!opt))
++		return NULL;
++
++	return __fl6_update_dst(fl6, opt, orig);
++}
+ 
+ /*
+  *	socket options (ipv6_sockglue.c)
+  */
+ DECLARE_STATIC_KEY_FALSE(ip6_min_hopcount);
+diff --git a/net/ipv6/exthdrs.c b/net/ipv6/exthdrs.c
+index 54088fa0c09d..cd318ff0dcd8 100644
+--- a/net/ipv6/exthdrs.c
++++ b/net/ipv6/exthdrs.c
+@@ -1334,25 +1334,25 @@ struct ipv6_txoptions *__ipv6_fixup_options(struct ipv6_txoptions *opt_space,
+ 	return opt;
+ }
+ EXPORT_SYMBOL_GPL(__ipv6_fixup_options);
+ 
+ /**
+- * fl6_update_dst - update flowi destination address with info given
++ * __fl6_update_dst - update flowi destination address with info given
+  *                  by srcrt option, if any.
+  *
+  * @fl6: flowi6 for which daddr is to be updated
+  * @opt: struct ipv6_txoptions in which to look for srcrt opt
+  * @orig: copy of original daddr address if modified
+  *
+- * Returns NULL if no txoptions or no srcrt, otherwise returns orig
++ * Return: NULL if no srcrt or invalid srcrt type, otherwise returns orig
+  * and initial value of fl6->daddr set in orig
+  */
+-struct in6_addr *fl6_update_dst(struct flowi6 *fl6,
+-				const struct ipv6_txoptions *opt,
+-				struct in6_addr *orig)
++struct in6_addr *__fl6_update_dst(struct flowi6 *fl6,
++				  const struct ipv6_txoptions *opt,
++				  struct in6_addr *orig)
+ {
+-	if (!opt || !opt->srcrt)
++	if (!opt->srcrt)
+ 		return NULL;
+ 
+ 	*orig = fl6->daddr;
+ 
+ 	switch (opt->srcrt->type) {
+@@ -1372,6 +1372,6 @@ struct in6_addr *fl6_update_dst(struct flowi6 *fl6,
+ 		return NULL;
+ 	}
+ 
+ 	return orig;
+ }
+-EXPORT_SYMBOL_GPL(fl6_update_dst);
++EXPORT_SYMBOL_GPL(__fl6_update_dst);
+-- 
+2.52.0
+

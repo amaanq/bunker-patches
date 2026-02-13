@@ -1,0 +1,114 @@
+From a14d9317904559a6948946de05bf9fb6f2a34fba Mon Sep 17 00:00:00 2001
+From: Eric Dumazet <edumazet@google.com>
+Date: Thu, 5 Feb 2026 21:19:09 +0000
+Subject: [PATCH] ipv6: do not use skb_header_pointer() in icmpv6_filter()
+
+Prefer pskb_may_pull() to avoid a stack canary in raw6_local_deliver().
+
+Note: skb->head can change, hence we reload ip6h pointer in
+ipv6_raw_deliver()
+
+$ scripts/bloat-o-meter -t vmlinux.old vmlinux.new
+add/remove: 0/0 grow/shrink: 0/1 up/down: 0/-86 (-86)
+Function                                     old     new   delta
+raw6_local_deliver                           780     694     -86
+Total: Before=24889784, After=24889698, chg -0.00%
+
+Signed-off-by: Eric Dumazet <edumazet@google.com>
+Reviewed-by: Kuniyuki Iwashima <kuniyu@google.com>
+Link: https://patch.msgid.link/20260205211909.4115285-1-edumazet@google.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ net/ipv6/raw.c | 32 ++++++++++++++++----------------
+ 1 file changed, 16 insertions(+), 16 deletions(-)
+
+diff --git a/net/ipv6/raw.c b/net/ipv6/raw.c
+index ee6beba03e9b..27a268059168 100644
+--- a/net/ipv6/raw.c
++++ b/net/ipv6/raw.c
+@@ -88,27 +88,28 @@ EXPORT_SYMBOL_GPL(raw_v6_match);
+ 
+ /*
+  *	0 - deliver
+  *	1 - block
+  */
+-static int icmpv6_filter(const struct sock *sk, const struct sk_buff *skb)
++static int icmpv6_filter(const struct sock *sk, struct sk_buff *skb)
+ {
+-	struct icmp6hdr _hdr;
+ 	const struct icmp6hdr *hdr;
++	const __u32 *data;
++	unsigned int type;
+ 
+ 	/* We require only the four bytes of the ICMPv6 header, not any
+ 	 * additional bytes of message body in "struct icmp6hdr".
+ 	 */
+-	hdr = skb_header_pointer(skb, skb_transport_offset(skb),
+-				 ICMPV6_HDRLEN, &_hdr);
+-	if (hdr) {
+-		const __u32 *data = &raw6_sk(sk)->filter.data[0];
+-		unsigned int type = hdr->icmp6_type;
++	if (!pskb_may_pull(skb, ICMPV6_HDRLEN))
++		return 1;
+ 
+-		return (data[type >> 5] & (1U << (type & 31))) != 0;
+-	}
+-	return 1;
++	hdr = (struct icmp6hdr *)skb->data;
++	type = hdr->icmp6_type;
++
++	data = &raw6_sk(sk)->filter.data[0];
++
++	return (data[type >> 5] & (1U << (type & 31))) != 0;
+ }
+ 
+ #if IS_ENABLED(CONFIG_IPV6_MIP6)
+ typedef int mh_filter_t(struct sock *sock, struct sk_buff *skb);
+ 
+@@ -139,27 +140,25 @@ EXPORT_SYMBOL(rawv6_mh_filter_unregister);
+  *	Caller owns SKB so we must make clones.
+  */
+ static bool ipv6_raw_deliver(struct sk_buff *skb, int nexthdr)
+ {
+ 	struct net *net = dev_net(skb->dev);
+-	const struct in6_addr *saddr;
+-	const struct in6_addr *daddr;
++	const struct ipv6hdr *ip6h;
+ 	struct hlist_head *hlist;
+-	struct sock *sk;
+ 	bool delivered = false;
++	struct sock *sk;
+ 	__u8 hash;
+ 
+-	saddr = &ipv6_hdr(skb)->saddr;
+-	daddr = saddr + 1;
++	ip6h = ipv6_hdr(skb);
+ 
+ 	hash = raw_hashfunc(net, nexthdr);
+ 	hlist = &raw_v6_hashinfo.ht[hash];
+ 	rcu_read_lock();
+ 	sk_for_each_rcu(sk, hlist) {
+ 		int filtered;
+ 
+-		if (!raw_v6_match(net, sk, nexthdr, daddr, saddr,
++		if (!raw_v6_match(net, sk, nexthdr, &ip6h->daddr, &ip6h->saddr,
+ 				  inet6_iif(skb), inet6_sdif(skb)))
+ 			continue;
+ 
+ 		if (atomic_read(&sk->sk_rmem_alloc) >=
+ 		    READ_ONCE(sk->sk_rcvbuf)) {
+@@ -169,10 +168,11 @@ static bool ipv6_raw_deliver(struct sk_buff *skb, int nexthdr)
+ 
+ 		delivered = true;
+ 		switch (nexthdr) {
+ 		case IPPROTO_ICMPV6:
+ 			filtered = icmpv6_filter(sk, skb);
++			ip6h = ipv6_hdr(skb);
+ 			break;
+ 
+ #if IS_ENABLED(CONFIG_IPV6_MIP6)
+ 		case IPPROTO_MH:
+ 		{
+-- 
+2.52.0
+

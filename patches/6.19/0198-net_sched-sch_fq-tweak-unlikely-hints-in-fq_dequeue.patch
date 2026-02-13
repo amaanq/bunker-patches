@@ -1,0 +1,69 @@
+From acd21dd2da198875e0cf73f08b18c9bbf8b87d8c Mon Sep 17 00:00:00 2001
+From: Eric Dumazet <edumazet@google.com>
+Date: Tue, 3 Feb 2026 21:47:16 +0000
+Subject: [PATCH] net_sched: sch_fq: tweak unlikely() hints in fq_dequeue()
+
+After 076433bd78d7 ("net_sched: sch_fq: add fast path
+for mostly idle qdisc") we need to remove one unlikely()
+because q->internal holds all the fast path packets.
+
+       skb = fq_peek(&q->internal);
+       if (unlikely(skb)) {
+                q->internal.qlen--;
+
+Calling INET_ECN_set_ce() is very unlikely.
+
+These changes allow fq_dequeue_skb() to be (auto)inlined,
+thus making fq_dequeue() faster.
+
+$ scripts/bloat-o-meter -t vmlinux.0 vmlinux
+add/remove: 2/2 grow/shrink: 0/1 up/down: 283/-269 (14)
+Function                                     old     new   delta
+INET_ECN_set_ce                                -     267    +267
+__pfx_INET_ECN_set_ce                          -      16     +16
+__pfx_fq_dequeue_skb                          16       -     -16
+fq_dequeue_skb                               103       -    -103
+fq_dequeue                                  1685    1535    -150
+Total: Before=24886569, After=24886583, chg +0.00%
+
+Signed-off-by: Eric Dumazet <edumazet@google.com>
+Reviewed-by: Jamal Hadi Salim <jhs@mojatatu.com>
+Link: https://patch.msgid.link/20260203214716.880853-1-edumazet@google.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ net/sched/sch_fq.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/net/sched/sch_fq.c b/net/sched/sch_fq.c
+index 6e5f2f4f2415..d0200ec8ada6 100644
+--- a/net/sched/sch_fq.c
++++ b/net/sched/sch_fq.c
+@@ -663,11 +663,11 @@ static struct sk_buff *fq_dequeue(struct Qdisc *sch)
+ 
+ 	if (!sch->q.qlen)
+ 		return NULL;
+ 
+ 	skb = fq_peek(&q->internal);
+-	if (unlikely(skb)) {
++	if (skb) {
+ 		q->internal.qlen--;
+ 		fq_dequeue_skb(sch, &q->internal, skb);
+ 		goto out;
+ 	}
+ 
+@@ -714,11 +714,11 @@ static struct sk_buff *fq_dequeue(struct Qdisc *sch)
+ 			fq_flow_set_throttled(q, f);
+ 			goto begin;
+ 		}
+ 		prefetch(&skb->end);
+ 		fq_dequeue_skb(sch, f, skb);
+-		if ((s64)(now - time_next_packet - q->ce_threshold) > 0) {
++		if (unlikely((s64)(now - time_next_packet - q->ce_threshold) > 0)) {
+ 			INET_ECN_set_ce(skb);
+ 			q->stat_ce_mark++;
+ 		}
+ 		if (--f->qlen == 0)
+ 			q->inactive_flows++;
+-- 
+2.52.0
+
