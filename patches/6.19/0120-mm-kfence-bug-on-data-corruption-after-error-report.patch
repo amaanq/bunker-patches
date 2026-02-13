@@ -1,7 +1,7 @@
 From 1c4c568a91fcf5a593fb9c3923b6c5c26cd5f016 Mon Sep 17 00:00:00 2001
 From: Levente Polyak <levente@leventepolyak.net>
 Date: Tue, 25 May 2021 21:04:47 +0200
-Subject: [PATCH 120/166] mm, kfence: bug on data corruption after error report
+Subject: [PATCH 120/180] mm, kfence: bug on data corruption after error report
 
 Trigger BUG when kfence encounters data corruption of kfence managed
 objects. This allows a finer-grained control instead of globally

@@ -1,7 +1,7 @@
 From 9d504b3bf47dd10fb41f9c03864d16a8702a7f30 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Sun, 25 Feb 2018 02:15:24 -0500
-Subject: [PATCH 92/166] enable AUDIT by default
+Subject: [PATCH 92/180] enable AUDIT by default
 
 ---
  init/Kconfig | 1 +

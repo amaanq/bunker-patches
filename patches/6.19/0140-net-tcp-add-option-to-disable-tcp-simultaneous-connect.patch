@@ -1,7 +1,7 @@
 From 6d5ffee721993669af61680720576b4c31422fba Mon Sep 17 00:00:00 2001
 From: madaidan <50278627+madaidan@users.noreply.github.com>
 Date: Sun, 9 Feb 2020 00:03:41 +0000
-Subject: [PATCH 140/166] net: tcp: add option to disable TCP simultaneous connect
+Subject: [PATCH 140/180] net: tcp: add option to disable TCP simultaneous connect
 
 This is modified from Brad Spengler/PaX Team's code in the last public
 patch of grsecurity/PaX based on my understanding of the code. Changes

@@ -1,7 +1,7 @@
 From efdfbf10f2cba4660e54566b0116c72f2682a829 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Sun, 25 Feb 2018 03:26:45 -0500
-Subject: [PATCH 130/166] hard-wire legacy checkreqprot option to 0
+Subject: [PATCH 130/180] hard-wire legacy checkreqprot option to 0
 
 The userspace API is left intact for compatibility.
 

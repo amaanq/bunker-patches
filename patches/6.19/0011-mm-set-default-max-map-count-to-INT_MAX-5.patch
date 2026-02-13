@@ -1,7 +1,7 @@
 From 6ea593dbd653e3d02d1000dc3d81a292d7b60693 Mon Sep 17 00:00:00 2001
 From: Steven Barrett <steven@liquorix.net>
 Date: Thu, 27 Apr 2023 14:43:57 -0500
-Subject: [PATCH 11/166] mm: set default max map count to (INT_MAX - 5)
+Subject: [PATCH 11/180] mm: set default max map count to (INT_MAX - 5)
 
 ---
  include/linux/mm.h | 2 +-

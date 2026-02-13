@@ -1,7 +1,7 @@
 From f6a25876d1035a34bfafb4bde590c260d5b49980 Mon Sep 17 00:00:00 2001
 From: "Jan Alexander Steffens (heftig)" <heftig@archlinux.org>
 Date: Sat, 2 Aug 2025 04:36:06 +0200
-Subject: [PATCH 17/166] block: Clean up elevator_set_default
+Subject: [PATCH 17/180] block: Clean up elevator_set_default
 
 In case of a multi-queue device, the code pointlessly loaded the
 default elevator just to drop it again.

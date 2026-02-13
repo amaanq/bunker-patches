@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Mon, 10 Feb 2026 00:00:00 +0000
-Subject: [PATCH 155/166] enable EFI_DISABLE_PCI_DMA by default
+Subject: [PATCH 155/180] enable EFI_DISABLE_PCI_DMA by default
 
 Signed-off-by: Daniel Micay <danielmicay@gmail.com>
 ---

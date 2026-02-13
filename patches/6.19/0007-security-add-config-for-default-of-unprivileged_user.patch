@@ -1,7 +1,7 @@
 From 4fe47edee2fb45b505ab2f82846de5e9578c162a Mon Sep 17 00:00:00 2001
 From: "Jan Alexander Steffens (heftig)" <heftig@archlinux.org>
 Date: Thu, 22 May 2025 07:32:13 +0200
-Subject: [PATCH 7/166] security: add config for default of
+Subject: [PATCH 7/180] security: add config for default of
  unprivileged_userns_clone
 
 ---

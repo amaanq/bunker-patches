@@ -1,7 +1,7 @@
 From 0a8d6fcbb734440eb3d565f8fba2903328c81c09 Mon Sep 17 00:00:00 2001
 From: Arjan van de Ven <arjan@linux.intel.com>
 Date: Thu, 2 Jun 2016 23:36:32 -0500
-Subject: [PATCH 4/166] drivers: initialize ata before graphics
+Subject: [PATCH 4/180] drivers: initialize ata before graphics
 
 ---
  drivers/Makefile | 13 +++++++------

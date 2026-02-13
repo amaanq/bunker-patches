@@ -1,7 +1,7 @@
 From cf5afe70ae7f66e9bacd2a0878f4eb0f16441c5a Mon Sep 17 00:00:00 2001
 From: Matt Brown <matt@nmatt.com>
 Date: Mon, 29 May 2017 17:38:00 -0400
-Subject: [PATCH 132/166] security: tty: make TIOCSTI ioctl require CAP_SYS_ADMIN
+Subject: [PATCH 132/180] security: tty: make TIOCSTI ioctl require CAP_SYS_ADMIN
 
 This introduces the tiocsti_restrict sysctl, whose default is controlled
 via CONFIG_SECURITY_TIOCSTI_RESTRICT. When activated, this control

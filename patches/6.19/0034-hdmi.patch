@@ -1,7 +1,7 @@
 From 0b62bee34113b3ca0f2c1d4cd8c19764a95e035d Mon Sep 17 00:00:00 2001
 From: Eric Naim <dnaim@cachyos.org>
 Date: Mon, 9 Feb 2026 21:43:22 +0800
-Subject: [PATCH 34/166] hdmi
+Subject: [PATCH 34/180] hdmi
 
 Signed-off-by: Eric Naim <dnaim@cachyos.org>
 ---

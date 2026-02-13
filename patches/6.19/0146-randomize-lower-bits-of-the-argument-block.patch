@@ -1,7 +1,7 @@
 From be15dc7c2a1f5bc3126c8d281727b9d0203273b7 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Thu, 11 May 2017 16:02:49 -0400
-Subject: [PATCH 146/166] randomize lower bits of the argument block
+Subject: [PATCH 146/180] randomize lower bits of the argument block
 
 This was based on the PaX RANDUSTACK feature in grsecurity, where all of
 the lower bits are randomized. PaX keeps 16-byte alignment.

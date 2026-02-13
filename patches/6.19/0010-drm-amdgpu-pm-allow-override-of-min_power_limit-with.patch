@@ -1,7 +1,7 @@
 From 3404cdb3926e101b1a84af9bbd92db0a0492c96c Mon Sep 17 00:00:00 2001
 From: Steven Barrett <steven@liquorix.net>
 Date: Fri, 15 Mar 2024 12:36:51 -0500
-Subject: [PATCH 10/166] drm/amdgpu/pm: allow override of min_power_limit with
+Subject: [PATCH 10/180] drm/amdgpu/pm: allow override of min_power_limit with
  ignore_min_pcap
 
 ---

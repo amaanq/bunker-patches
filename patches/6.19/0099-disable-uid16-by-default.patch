@@ -1,7 +1,7 @@
 From 7c195c7cf655606a66fa74c4cf965b20c0789255 Mon Sep 17 00:00:00 2001
 From: Levente Polyak <levente@leventepolyak.net>
 Date: Tue, 22 Dec 2020 23:41:32 +0100
-Subject: [PATCH 99/166] disable UID16 by default
+Subject: [PATCH 99/180] disable UID16 by default
 
 ---
  init/Kconfig | 1 -

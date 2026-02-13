@@ -1,7 +1,7 @@
 From b35b1664c433df8af5f8f6c242350516fb4cc1e4 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Tue, 30 May 2017 18:03:30 -0400
-Subject: [PATCH 147/166] support randomizing the lower bits of brk
+Subject: [PATCH 147/180] support randomizing the lower bits of brk
 
 This adds support for arch_randomize_brk implementations not performing
 page alignment in order to randomize the lower bits of the brk heap.

@@ -1,7 +1,7 @@
 From 7f9a4d912ef176966ad3eacfa59209acd39d0b29 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Thu, 1 Jun 2017 03:23:39 -0400
-Subject: [PATCH 150/166] mm: guarantee brk gap is at least one page
+Subject: [PATCH 150/180] mm: guarantee brk gap is at least one page
 
 Per PaX, but for this alternate brk randomization approach.
 

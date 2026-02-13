@@ -1,7 +1,7 @@
 From edc12d7b4164440283be5911713f7e109c28eaa3 Mon Sep 17 00:00:00 2001
 From: Steven Barrett <steven@liquorix.net>
 Date: Sat, 5 Mar 2022 11:37:14 -0600
-Subject: [PATCH 20/166] mm: disable unevictable compaction
+Subject: [PATCH 20/180] mm: disable unevictable compaction
 
 ---
  init/Kconfig | 1 +

@@ -1,7 +1,7 @@
 From f951befc8ae9eebcd0db047a6088143a95a96be5 Mon Sep 17 00:00:00 2001
 From: Xie Yuanbin <qq570070308@gmail.com>
 Date: Sun, 23 Nov 2025 20:18:25 +0800
-Subject: [PATCH 23/166] x86/mm/tlb: Make enter_lazy_tlb() always inline on x86
+Subject: [PATCH 23/180] x86/mm/tlb: Make enter_lazy_tlb() always inline on x86
 
 enter_lazy_tlb() on x86 is short enough, and is called in context
 switching, which is the hot code path.

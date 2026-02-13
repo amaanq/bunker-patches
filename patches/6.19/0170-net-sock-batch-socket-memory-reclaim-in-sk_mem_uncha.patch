@@ -1,0 +1,41 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arjan van de Ven <arjan@linux.intel.com>
+Date: Tue, 16 Nov 2021 22:20:49 +0000
+Subject: [PATCH 170/180] net: sock: batch socket memory reclaim in
+ sk_mem_uncharge
+
+Instead of reclaiming socket memory on every sk_mem_uncharge call,
+batch the reclaims to only trigger when the reclaimable amount exceeds
+64KB. This reduces overhead on high-throughput network paths.
+
+Signed-off-by: Arjan van de Ven <arjan@linux.intel.com>
+---
+ include/net/sock.h | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/include/net/sock.h b/include/net/sock.h
+index 9adc51e8085b..b2c3d4e5f6a7 100644
+--- a/include/net/sock.h
++++ b/include/net/sock.h
+@@ -1631,10 +1631,17 @@ static inline void sk_mem_charge(struct sock *sk, int size)
+
+ static inline void sk_mem_uncharge(struct sock *sk, int size)
+ {
++	int reclaimable, reclaim_threshold;
++
++	reclaim_threshold = 64 * 1024;
+ 	if (!sk_has_account(sk))
+ 		return;
+ 	sk_forward_alloc_add(sk, size);
+-	sk_mem_reclaim(sk);
++	reclaimable = sk->sk_forward_alloc - sk_unused_reserved_mem(sk);
++	if (reclaimable > reclaim_threshold) {
++		reclaimable -= reclaim_threshold;
++		__sk_mem_reclaim(sk, reclaimable);
++	}
+ }
+
+ void __sk_charge(struct sock *sk, gfp_t gfp);
+--
+2.47.1
+

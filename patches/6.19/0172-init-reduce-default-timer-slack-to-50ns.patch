@@ -1,0 +1,30 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Arjan van de Ven <arjan@linux.intel.com>
+Date: Mon, 30 Oct 2023 15:12:13 +0000
+Subject: [PATCH 172/180] init: reduce default timer slack to 50ns
+
+Reduce the default timer slack from 50 microseconds to 50 nanoseconds.
+This provides tighter wake-up latency for interactive workloads at a
+negligible cost on modern hardware.
+
+Signed-off-by: Arjan van de Ven <arjan@linux.intel.com>
+---
+ init/init_task.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/init/init_task.c b/init/init_task.c
+index a1b2c3d4e5f6..b2c3d4e5f6a7 100644
+--- a/init/init_task.c
++++ b/init/init_task.c
+@@ -170,7 +170,7 @@ struct task_struct init_task __aligned(L1_CACHE_BYTES) = {
+ 	.journal_info	= NULL,
+ 	INIT_CPU_TIMERS(init_task)
+ 	.pi_lock	= __RAW_SPIN_LOCK_UNLOCKED(init_task.pi_lock),
+-	.timer_slack_ns = 50000, /* 50 usec default slack */
++	.timer_slack_ns = 50, /* 50 nsec default slack */
+ 	.thread_pid	= &init_struct_pid,
+ 	.thread_node	= LIST_HEAD_INIT(init_signals.thread_head),
+ #ifdef CONFIG_AUDIT
+-- 
+2.47.1
+

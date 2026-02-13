@@ -1,7 +1,7 @@
 From 6cf257e408619bdada9918d80f8eabca4b60163e Mon Sep 17 00:00:00 2001
 From: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
 Date: Thu, 15 Jan 2026 12:36:05 +0100
-Subject: [PATCH 122/166] Take slab canary in account for object size
+Subject: [PATCH 122/180] Take slab canary in account for object size
 
 Signed-off-by: Levente Polyak <levente@leventepolyak.net>
 Signed-off-by: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>

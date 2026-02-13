@@ -1,7 +1,7 @@
 From a31a730898c312875d59353f985d3138d4a13045 Mon Sep 17 00:00:00 2001
 From: Alexandre Frade <kernel@xanmod.org>
 Date: Sun, 8 Feb 2026 00:53:56 -0500
-Subject: [PATCH 50/166] binder: turn into loadable module
+Subject: [PATCH 50/180] binder: turn into loadable module
 
 Make the Android binder driver buildable as a loadable kernel module
 instead of only built-in. Exports necessary symbols from core kernel
