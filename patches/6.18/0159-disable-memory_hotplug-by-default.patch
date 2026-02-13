@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Mon, 10 Feb 2026 00:00:00 +0000
+Subject: [PATCH 159/166] disable MEMORY_HOTPLUG by default
+
+Signed-off-by: Daniel Micay <danielmicay@gmail.com>
+---
+ mm/Kconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/mm/Kconfig b/mm/Kconfig
+index a992f2203eb9..8c25d96e5369 100644
+--- a/mm/Kconfig
++++ b/mm/Kconfig
+@@ -483,6 +483,7 @@
+ menuconfig MEMORY_HOTPLUG
+ 	bool "Memory hotplug"
+ 	select MEMORY_ISOLATION
++	default n
+ 	depends on SPARSEMEM
+ 	depends on ARCH_ENABLE_MEMORY_HOTPLUG
+ 	depends on 64BIT
+-- 
+2.48.1
+

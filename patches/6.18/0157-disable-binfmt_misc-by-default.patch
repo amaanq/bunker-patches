@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Mon, 10 Feb 2026 00:00:00 +0000
+Subject: [PATCH 157/166] disable BINFMT_MISC by default
+
+Signed-off-by: Daniel Micay <danielmicay@gmail.com>
+---
+ fs/Kconfig.binfmt | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/fs/Kconfig.binfmt b/fs/Kconfig.binfmt
+index 1949e25c7741..3109088269 100644
+--- a/fs/Kconfig.binfmt
++++ b/fs/Kconfig.binfmt
+@@ -144,6 +144,7 @@
+
+ config BINFMT_MISC
+ 	tristate "Kernel support for MISC binaries"
++	default n
+ 	help
+ 	  If you say Y here, it will be possible to plug wrapper-driven binary
+ 	  formats into the kernel. You will like this especially when you use
+-- 
+2.48.1
+

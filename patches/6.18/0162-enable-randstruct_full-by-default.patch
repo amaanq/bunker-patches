@@ -1,0 +1,48 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: amaanq <git@amaanq.com>
+Date: Mon, 10 Feb 2026 00:00:00 +0000
+Subject: [PATCH 162/166] enable RANDSTRUCT_FULL by default and allow with LTO+RUST
+
+Enable full structure layout randomization by default. This is a major
+exploit mitigation that randomizes the layout of sensitive kernel
+structures at compile time, requiring an additional information exposure
+vulnerability for exploits targeting these structure types.
+
+Also remove the forced MODVERSIONS selection, which conflicts with
+RUST + LTO configurations. MODVERSIONS requires GENDWARFKSYMS when RUST
+is enabled, but GENDWARFKSYMS depends on !LTO. By removing the forced
+selection, users can choose whether to enable MODVERSIONS based on their
+needs.
+
+Requires Clang >= 16 or GCC with randstruct plugin (bunker uses
+Clang).
+
+Signed-off-by: amaanq <git@amaanq.com>
+---
+ security/Kconfig.hardening | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/security/Kconfig.hardening b/security/Kconfig.hardening
+index 2cfc7dd457d6..8f5e72139a21 100644
+--- a/security/Kconfig.hardening
++++ b/security/Kconfig.hardening
+@@ -286,7 +286,7 @@ config CC_HAS_RANDSTRUCT
+ choice
+ 	prompt "Randomize layout of sensitive kernel structures"
+ 	default RANDSTRUCT_FULL if COMPILE_TEST && (GCC_PLUGINS || CC_HAS_RANDSTRUCT)
+-	default RANDSTRUCT_NONE
++	default RANDSTRUCT_FULL
+ 	help
+ 	  If you enable this, the layouts of structures that are entirely
+ 	  function pointers (and have not been manually annotated with
+@@ -310,7 +310,6 @@ choice
+ 	config RANDSTRUCT_FULL
+ 		bool "Fully randomize structure layout"
+ 		depends on CC_HAS_RANDSTRUCT || GCC_PLUGINS
+-		select MODVERSIONS if MODULES && !COMPILE_TEST
+ 		help
+ 		  Fully randomize the member layout of sensitive
+ 		  structures as much as possible, which may have both a
+-- 
+2.48.1
+

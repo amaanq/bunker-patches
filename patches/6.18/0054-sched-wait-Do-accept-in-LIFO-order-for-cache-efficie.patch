@@ -1,0 +1,110 @@
+From 396ca4f568dda9fc49763dc7347fb21d173e2747 Mon Sep 17 00:00:00 2001
+From: Arjan van de Ven <arjan@linux.intel.com>
+Date: Thu, 13 Dec 2018 01:00:49 +0000
+Subject: [PATCH 54/166] sched/wait: Do accept() in LIFO order for cache efficiency
+
+Signed-off-by: Alexandre Frade <kernel@xanmod.org>
+---
+ include/linux/wait.h            |  2 ++
+ kernel/sched/wait.c             | 24 ++++++++++++++++++++++++
+ net/ipv4/inet_connection_sock.c |  2 +-
+ 3 files changed, 27 insertions(+), 1 deletion(-)
+
+diff --git a/include/linux/wait.h b/include/linux/wait.h
+index f648044466d5..61c333708cba 100644
+--- a/include/linux/wait.h
++++ b/include/linux/wait.h
+@@ -161,10 +161,11 @@ static inline bool wq_has_sleeper(struct wait_queue_head *wq_head)
+ 	return waitqueue_active(wq_head);
+ }
+ 
+ extern void add_wait_queue(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry);
+ extern void add_wait_queue_exclusive(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry);
++extern void add_wait_queue_exclusive_lifo(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry);
+ extern void add_wait_queue_priority(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry);
+ extern int add_wait_queue_priority_exclusive(struct wait_queue_head *wq_head,
+ 					     struct wait_queue_entry *wq_entry);
+ extern void remove_wait_queue(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry);
+ 
+@@ -1207,10 +1208,11 @@ do {										\
+ /*
+  * Waitqueues which are removed from the waitqueue_head at wakeup time
+  */
+ void prepare_to_wait(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry, int state);
+ bool prepare_to_wait_exclusive(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry, int state);
++void prepare_to_wait_exclusive_lifo(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry, int state);
+ long prepare_to_wait_event(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry, int state);
+ void finish_wait(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry);
+ long wait_woken(struct wait_queue_entry *wq_entry, unsigned mode, long timeout);
+ int woken_wake_function(struct wait_queue_entry *wq_entry, unsigned mode, int sync, void *key);
+ int autoremove_wake_function(struct wait_queue_entry *wq_entry, unsigned mode, int sync, void *key);
+diff --git a/kernel/sched/wait.c b/kernel/sched/wait.c
+index 20f27e2cf7ae..9ddd02e7551c 100644
+--- a/kernel/sched/wait.c
++++ b/kernel/sched/wait.c
+@@ -64,10 +64,21 @@ int add_wait_queue_priority_exclusive(struct wait_queue_head *wq_head,
+ 	list_add(&wq_entry->entry, head);
+ 	return 0;
+ }
+ EXPORT_SYMBOL_GPL(add_wait_queue_priority_exclusive);
+ 
++void add_wait_queue_exclusive_lifo(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry)
++{
++	unsigned long flags;
++
++	wq_entry->flags |= WQ_FLAG_EXCLUSIVE;
++	spin_lock_irqsave(&wq_head->lock, flags);
++	__add_wait_queue(wq_head, wq_entry);
++	spin_unlock_irqrestore(&wq_head->lock, flags);
++}
++EXPORT_SYMBOL(add_wait_queue_exclusive_lifo);
++
+ void remove_wait_queue(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry)
+ {
+ 	unsigned long flags;
+ 
+ 	spin_lock_irqsave(&wq_head->lock, flags);
+@@ -275,10 +286,23 @@ prepare_to_wait_exclusive(struct wait_queue_head *wq_head, struct wait_queue_ent
+ 	spin_unlock_irqrestore(&wq_head->lock, flags);
+ 	return was_empty;
+ }
+ EXPORT_SYMBOL(prepare_to_wait_exclusive);
+ 
++void prepare_to_wait_exclusive_lifo(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry, int state)
++{
++	unsigned long flags;
++
++	wq_entry->flags |= WQ_FLAG_EXCLUSIVE;
++	spin_lock_irqsave(&wq_head->lock, flags);
++	if (list_empty(&wq_entry->entry))
++		__add_wait_queue(wq_head, wq_entry);
++	set_current_state(state);
++	spin_unlock_irqrestore(&wq_head->lock, flags);
++}
++EXPORT_SYMBOL(prepare_to_wait_exclusive_lifo);
++
+ void init_wait_entry(struct wait_queue_entry *wq_entry, int flags)
+ {
+ 	wq_entry->flags = flags;
+ 	wq_entry->private = current;
+ 	wq_entry->func = autoremove_wake_function;
+diff --git a/net/ipv4/inet_connection_sock.c b/net/ipv4/inet_connection_sock.c
+index cdd1e12aac8c..b72336d32445 100644
+--- a/net/ipv4/inet_connection_sock.c
++++ b/net/ipv4/inet_connection_sock.c
+@@ -631,11 +631,11 @@ static int inet_csk_wait_for_connect(struct sock *sk, long timeo)
+ 	 * beginning of the wait-queue. As such, it's ok to "drop"
+ 	 * our exclusiveness temporarily when we get woken up without
+ 	 * having to remove and re-insert us on the wait queue.
+ 	 */
+ 	for (;;) {
+-		prepare_to_wait_exclusive(sk_sleep(sk), &wait,
++		prepare_to_wait_exclusive_lifo(sk_sleep(sk), &wait,
+ 					  TASK_INTERRUPTIBLE);
+ 		release_sock(sk);
+ 		if (reqsk_queue_empty(&icsk->icsk_accept_queue))
+ 			timeo = schedule_timeout(timeo);
+ 		sched_annotate_sleep();
+-- 
+2.52.0
+

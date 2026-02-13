@@ -1,0 +1,40 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Levente Polyak <levente@leventepolyak.net>
+Date: Mon, 10 Feb 2026 00:00:00 +0000
+Subject: [PATCH 160/166] usb: extend deny_new_usb to gadget interfaces
+
+The existing deny_new_usb sysctl (from linux-hardened patch 0139) only
+blocks new USB devices on the host side via hub_port_connect(). This
+leaves the gadget side (machine acting as USB peripheral) unprotected.
+
+Add a deny_new_usb check in usb_gadget_connect_locked() to prevent
+the D+ pullup from being asserted when deny_new_usb is set. This
+blocks ALL gadget connect paths: driver binding, VBUS events,
+soft_connect sysfs, and usb_gadget_activate().
+
+udc/core.c already includes <linux/usb.h>, so deny_new_usb is
+directly accessible with no new includes needed.
+
+---
+ drivers/usb/gadget/udc/core.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/drivers/usb/gadget/udc/core.c b/drivers/usb/gadget/udc/core.c
+index a8091f5544f0..b7c3e8d1a2f4 100644
+--- a/drivers/usb/gadget/udc/core.c
++++ b/drivers/usb/gadget/udc/core.c
+@@ -724,6 +724,11 @@ static int usb_gadget_connect_locked(struct usb_gadget *gadget)
+ 		goto out;
+ 	}
+
++	if (deny_new_usb) {
++		ret = -EACCES;
++		goto out;
++	}
++
+ 	ret = gadget->ops->pullup(gadget, 1);
+ 	if (!ret)
+ 		gadget->connected = 1;
+--
+2.48.1
+

@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Mon, 10 Feb 2026 00:00:00 +0000
+Subject: [PATCH 158/166] disable HIBERNATION by default
+
+Signed-off-by: Daniel Micay <danielmicay@gmail.com>
+---
+ kernel/power/Kconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/kernel/power/Kconfig b/kernel/power/Kconfig
+index 05337f437cca..499478f86291 100644
+--- a/kernel/power/Kconfig
++++ b/kernel/power/Kconfig
+@@ -38,6 +38,7 @@
+ config HIBERNATION
+ 	bool "Hibernation (aka 'suspend to disk')"
+ 	depends on SWAP && ARCH_HIBERNATION_POSSIBLE
++	default n
+ 	select HIBERNATE_CALLBACKS
+ 	select CRC32
+ 	select CRYPTO
+-- 
+2.48.1
+

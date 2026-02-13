@@ -1,0 +1,26 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Mon, 10 Feb 2026 00:00:00 +0000
+Subject: [PATCH 156/166] disable LDISC_AUTOLOAD by default
+
+Signed-off-by: Daniel Micay <danielmicay@gmail.com>
+---
+ drivers/tty/Kconfig | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/tty/Kconfig b/drivers/tty/Kconfig
+index 149f3d53b760..e4e0327157d2 100644
+--- a/drivers/tty/Kconfig
++++ b/drivers/tty/Kconfig
+@@ -168,7 +168,7 @@
+
+ config LDISC_AUTOLOAD
+ 	bool "Automatically load TTY Line Disciplines"
+-	default y
++	default n
+ 	help
+ 	  Historically the kernel has always automatically loaded any
+ 	  line discipline that is in a kernel module when a user asks
+-- 
+2.48.1
+

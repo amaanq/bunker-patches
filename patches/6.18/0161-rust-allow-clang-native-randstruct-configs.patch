@@ -1,0 +1,143 @@
+From c78f3bf02559eb52d537ab9ba353f44a4b275219 Mon Sep 17 00:00:00 2001
+From: Miguel Ojeda <ojeda@kernel.org>
+Date: Tue, 19 Nov 2024 19:57:47 +0100
+Subject: [PATCH 161/166] rust: allow Clang-native RANDSTRUCT configs
+
+The kernel supports RANDSTRUCT_FULL with Clang 16+, and bindgen
+(which uses libclang under the hood) inherits the information, so the
+generated bindings look correct.
+
+Thus allow those configurations by requiring a Clang compiler to use
+RANDSTRUCT. In addition, remove the !GCC_PLUGIN_RANDSTRUCT check
+since it is not needed.
+
+This version incorporates Kees Cook's refinement to make the anonymous
+struct wrapper in task_struct unconditional, simplifying the Rust bindings.
+
+Reviewed-by: Kees Cook <kees@kernel.org>
+Signed-off-by: Miguel Ojeda <ojeda@kernel.org>
+---
+ include/linux/compiler_types.h |  5 -----
+ include/linux/sched.h          |  4 ++--
+ init/Kconfig                   |  3 +--
+ rust/kernel/task.rs            | 10 +++++-----
+ 4 files changed, 8 insertions(+), 14 deletions(-)
+
+diff --git a/include/linux/compiler_types.h b/include/linux/compiler_types.h
+index d3318a3c2577..0dab30422328 100644
+--- a/include/linux/compiler_types.h
++++ b/include/linux/compiler_types.h
+@@ -462,18 +462,13 @@ struct ftrace_likely_data {
+ #endif
+
+ #if defined(RANDSTRUCT) && !defined(__CHECKER__)
+ # define __randomize_layout __designated_init __attribute__((randomize_layout))
+ # define __no_randomize_layout __attribute__((no_randomize_layout))
+-/* This anon struct can add padding, so only enable it under randstruct. */
+-# define randomized_struct_fields_start	struct {
+-# define randomized_struct_fields_end	} __randomize_layout;
+ #else
+ # define __randomize_layout __designated_init
+ # define __no_randomize_layout
+-# define randomized_struct_fields_start
+-# define randomized_struct_fields_end
+ #endif
+
+ #ifndef __no_kstack_erase
+ # define __no_kstack_erase
+ #endif
+diff --git a/include/linux/sched.h b/include/linux/sched.h
+index 5f00b5ed0f3b..1d51ff77b365 100644
+--- a/include/linux/sched.h
++++ b/include/linux/sched.h
+@@ -831,11 +831,11 @@ struct task_struct {
+
+ 	/*
+ 	 * This begins the randomizable portion of task_struct. Only
+ 	 * scheduling-critical items should be added above here.
+ 	 */
+-	randomized_struct_fields_start
++	struct {
+
+ 	void				*stack;
+ 	refcount_t			usage;
+ 	/* Per task flags (PF_*), defined further below: */
+ 	unsigned int			flags;
+@@ -1640,11 +1640,11 @@ struct task_struct {
+
+ 	/*
+ 	 * New fields for task_struct should be added above here, so that
+ 	 * they are included in the randomized portion of task_struct.
+ 	 */
+-	randomized_struct_fields_end
++	} __randomize_layout;
+ } __attribute__ ((aligned (64)));
+
+ #ifdef CONFIG_SCHED_PROXY_EXEC
+ DECLARE_STATIC_KEY_TRUE(__sched_proxy_exec);
+ static inline bool sched_proxy_exec(void)
+diff --git a/init/Kconfig b/init/Kconfig
+index fa79feb8fe57..237e2760d6d2 100644
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -2139,12 +2139,11 @@ config RUST
+ 	bool "Rust support"
+ 	depends on HAVE_RUST
+ 	depends on RUST_IS_AVAILABLE
+ 	select EXTENDED_MODVERSIONS if MODVERSIONS
+ 	depends on !MODVERSIONS || GENDWARFKSYMS
+-	depends on !GCC_PLUGIN_RANDSTRUCT
+-	depends on !RANDSTRUCT
++	depends on !RANDSTRUCT || CC_IS_CLANG
+ 	depends on !DEBUG_INFO_BTF || (PAHOLE_HAS_LANG_EXCLUDE && !LTO)
+ 	depends on !CFI || HAVE_CFI_ICALL_NORMALIZE_INTEGERS_RUSTC
+ 	select CFI_ICALL_NORMALIZE_INTEGERS if CFI
+ 	depends on !CALL_PADDING || RUSTC_VERSION >= 108100
+ 	depends on !KASAN_SW_TAGS
+diff --git a/rust/kernel/task.rs b/rust/kernel/task.rs
+index 49fad6de0674..c7b5967767a3 100644
+--- a/rust/kernel/task.rs
++++ b/rust/kernel/task.rs
+@@ -206,11 +206,11 @@ pub fn as_ptr(&self) -> *mut bindings::task_struct {
+
+     /// Returns the group leader of the given task.
+     pub fn group_leader(&self) -> &Task {
+         // SAFETY: The group leader of a task never changes after initialization, so reading this
+         // field is not a data race.
+-        let ptr = unsafe { *ptr::addr_of!((*self.as_ptr()).group_leader) };
++        let ptr = unsafe { *ptr::addr_of!((*self.as_ptr()).__bindgen_anon_1.group_leader) };
+
+         // SAFETY: The lifetime of the returned task reference is tied to the lifetime of `self`,
+         // and given that a task has a reference to its group leader, we know it must be valid for
+         // the lifetime of the returned task reference.
+         unsafe { &*ptr.cast() }
+@@ -218,11 +218,11 @@ pub fn group_leader(&self) -> &Task {
+
+     /// Returns the PID of the given task.
+     pub fn pid(&self) -> Pid {
+         // SAFETY: The pid of a task never changes after initialization, so reading this field is
+         // not a data race.
+-        unsafe { *ptr::addr_of!((*self.as_ptr()).pid) }
++        unsafe { *ptr::addr_of!((*self.as_ptr()).__bindgen_anon_1.pid) }
+     }
+
+     /// Returns the UID of the given task.
+     #[inline]
+     pub fn uid(&self) -> Kuid {
+@@ -288,13 +288,13 @@ impl CurrentTask {
+     /// Access the address space of the current task.
+     ///
+     /// This function does not touch the refcount of the mm.
+     #[inline]
+     pub fn mm(&self) -> Option<&MmWithUser> {
+         // SAFETY: The `mm` field of `current` is not modified from other threads, so reading it is
+         // not a data race.
+-        let mm = unsafe { (*self.as_ptr()).mm };
++        let mm = unsafe { (*self.as_ptr()).__bindgen_anon_1.mm };
+
+         if mm.is_null() {
+             return None;
+         }
+
+-- 
+2.52.0

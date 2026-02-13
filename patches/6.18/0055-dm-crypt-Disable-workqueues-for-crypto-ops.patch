@@ -1,0 +1,39 @@
+From a361e6d3e2d44098cfa7130ca319810d6c2c6bb5 Mon Sep 17 00:00:00 2001
+From: Steven Barrett <steven@liquorix.net>
+Date: Sat, 21 May 2022 15:15:09 -0500
+Subject: [PATCH 55/166] ZEN: dm-crypt: Disable workqueues for crypto ops
+
+Queueing in dm-crypt for crypto operations reduces performance on modern
+systems.  As discussed in an article from Cloudflare, they discovered
+that queuing was introduced because the crypto subsystem used to be
+synchronous.  Since it's now asynchronous, we get double queueing when
+using the subsystem through dm-crypt.  This is obviously undesirable and
+reduces throughput and increases latency.
+
+Fixes: https://github.com/zen-kernel/zen-kernel/issues/282
+Signed-off-by: Alexandre Frade <kernel@xanmod.org>
+---
+ drivers/md/dm-crypt.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/md/dm-crypt.c b/drivers/md/dm-crypt.c
+index 5ef43231fe77..c6f9815830e1 100644
+--- a/drivers/md/dm-crypt.c
++++ b/drivers/md/dm-crypt.c
+@@ -3303,10 +3303,13 @@ static int crypt_ctr(struct dm_target *ti, unsigned int argc, char **argv)
+ 		ret = crypt_ctr_optional(ti, argc - 5, &argv[5]);
+ 		if (ret)
+ 			goto bad;
+ 	}
+ 
++	set_bit(DM_CRYPT_NO_READ_WORKQUEUE, &cc->flags);
++	set_bit(DM_CRYPT_NO_WRITE_WORKQUEUE, &cc->flags);
++
+ 	ret = crypt_ctr_cipher(ti, argv[0], argv[1]);
+ 	if (ret < 0)
+ 		goto bad;
+ 
+ 	if (crypt_integrity_aead(cc)) {
+-- 
+2.52.0
+
