@@ -277,6 +277,13 @@ let
     ZERO_CALL_USED_REGS = yes;
     SECURITY_SAFESETID = yes;
 
+    # --- Dead network hardware ---
+    ARCNET = option no; # 1970s token-passing network
+    FDDI = option no; # 1980s fiber ring
+    HIPPI = option no; # 1990s supercomputer interconnect
+    PLIP = option no; # Parallel Line IP
+    EQUALIZER = option no; # Serial/PLIP link load balancer
+
     # --- Dead network protocols ---
     ATALK = option no; # Appletalk
     ATM = option no; # Async Transfer Mode
@@ -347,6 +354,11 @@ let
     VXFS_FS = option no; # freevxfs
     ZONEFS_FS = option no;
     "9P_FS" = option no; # Plan 9
+    CODA_FS = option no; # Coda distributed filesystem
+    ROMFS_FS = option no; # ROM filesystem (embedded)
+    UBIFS_FS = option no; # UBI flash filesystem (embedded)
+    NTFS_FS = option no; # Old NTFS driver (NTFS3 supersedes)
+    MSDOS_FS = option no; # 8.3 FAT (VFAT supersedes)
 
     # --- Dead subsystems ---
     FIREWIRE = option no; # IEEE 1394
@@ -375,6 +387,91 @@ let
     GNSS = option no; # GPS/GNSS receivers over serial
     MELLANOX_PLATFORM = option no; # Mellanox switch ASICs (not ConnectX NICs)
     PCCARD = option no; # 16-bit PC Card (dead since ~2005)
+    AGP = option no; # Accelerated Graphics Port (all GPUs use PCIe)
+    EISA = option no; # Extended ISA bus (dead since ~2000)
+    I3C = option no; # MIPI I3C bus (embedded/phone only)
+    MTD = option no; # Memory Technology Devices (raw flash, embedded)
+
+    # --- Dead memory technologies ---
+    LIBNVDIMM = option no; # NVDIMM/persistent memory (Optane discontinued)
+    DEV_DAX = option no; # DAX devices for persistent memory
+    CXL_BUS = option no; # Compute Express Link (bleeding-edge server)
+
+    # --- Dead GPU drivers ---
+    DRM_SIS = option no; # SiS GPUs (dead vendor ~2008)
+    DRM_VIA = option no; # VIA GPUs (dead GPU division)
+    DRM_SAVAGE = option no; # S3 Savage GPUs (dead ~2003)
+
+    # --- Dead misc hardware ---
+    MEMSTICK = option no; # Sony Memory Stick (dead format)
+    PHONE = option no; # ISA/PCI telephony cards
+    AUXDISPLAY = option no; # Character LCD displays (parallel port)
+    ACRN_GUEST = option no; # ACRN hypervisor guest (dead hypervisor)
+    RAW_DRIVER = option no; # /dev/raw (deprecated, use O_DIRECT)
+    DCA = option no; # Direct Cache Access (Intel server I/O)
+    HANGCHECK_TIMER = option no; # Server cluster heartbeat
+    DEVPORT = option no; # /dev/port I/O port access
+    HOTPLUG_PCI_CPCI = option no; # CompactPCI hotplug (industrial)
+    BLK_DEV_DRBD = option no; # DRBD distributed block replication
+    MOUSE_SERIAL = option no; # Serial mice (RS-232)
+    SERIO_SERPORT = option no; # Serial port input devices
+    SND_ISA = option no; # ISA sound cards
+    SND_OPL3_LIB = option no; # OPL3 FM synth (ISA-era)
+    SND_OPL4_LIB = option no; # OPL4 synth (ISA-era)
+    SND_MPU401_UART = option no; # MPU-401 MIDI (ISA-era)
+    SND_SB_COMMON = option no; # SoundBlaster common (ISA-era)
+    SND_OSSEMUL = option no; # OSS API emulation (deprecated ~20yr)
+    SND_PCM_OSS = option no; # OSS /dev/dsp emulation
+    SND_MIXER_OSS = option no; # OSS /dev/mixer emulation
+    SND_SEQUENCER_OSS = option no; # OSS sequencer emulation
+    SND_SERIAL_U16550 = option no; # UART16550 serial MIDI
+
+    # --- Dead input devices ---
+    JOYSTICK_ANALOG = option no; # Analog gameport joystick
+    MOUSE_ATIXL = option no; # ATI XL bus mouse
+    MOUSE_INPORT = option no; # Microsoft InPort bus mouse
+    MOUSE_LOGIBM = option no; # Logitech bus mouse
+    KEYBOARD_LKKBD = option no; # DEC LK201/LK401 (serial)
+    KEYBOARD_NEWTON = option no; # Apple Newton keyboard
+    KEYBOARD_SUNKBD = option no; # Sun keyboard (serial)
+    KEYBOARD_STOWAWAY = option no; # Stowaway portable keyboard
+
+    # --- Dead platform drivers ---
+    SONYPI = option no; # Old Sony VAIO programmable I/O
+    ACPI_CMPC = option no; # Classmate PC (dead OLPC-like)
+    COMPAL_LAPTOP = option no; # Compal IFL90/JFL92 laptops
+    AMILO_RFKILL = option no; # Fujitsu Amilo RF kill
+    TOSHIBA_HAPS = option no; # Toshiba HDD Active Protection (SSD era)
+
+    # --- Dead block/storage hardware ---
+    BLK_DEV_FD = option no; # Floppy disk
+    PATA_LEGACY = option no; # ISA-era parallel ATA
+    PATA_ISAPNP = option no; # ISA PnP parallel ATA
+    BLK_DEV_DAC960 = option no; # Mylex DAC960 RAID (dead vendor)
+    BLK_DEV_UMEM = option no; # Micro Memory MM5415 RAM card
+
+    # --- Dead cpufreq drivers ---
+    X86_SPEEDSTEP_CENTRINO = option no; # Pentium M/Centrino
+    X86_SPEEDSTEP_ICH = option no; # Old ICH chipsets
+    X86_SPEEDSTEP_SMI = option no; # SMI-based (ancient laptops)
+    X86_SPEEDSTEP_LIB = option no; # SpeedStep common code
+    X86_P4_CLOCKMOD = option no; # Pentium 4 clock modulation
+    X86_POWERNOW_K6 = option no; # AMD K6
+    X86_POWERNOW_K7 = option no; # AMD K7 (Athlon)
+    X86_POWERNOW_K8 = option no; # AMD K8 (Athlon 64)
+    X86_GX_SUSPMOD = option no; # Cyrix/NatSemi Geode GX
+    X86_LONGHAUL = option no; # VIA C3
+    X86_E_POWERSAVER = option no; # VIA C7
+    X86_LONGRUN = option no; # Transmeta (bankrupt)
+
+    # --- Dead misc drivers ---
+    APPLICOM = option no; # Industrial fieldbus cards
+    PHANTOM = option no; # SensAble PHANToM haptic device
+    TIFM_CORE = option no; # TI FlashMedia card reader (dead chipset)
+    TELCLOCK = option no; # Telecom clock (MCPL0010)
+    ECHO = option no; # Telephony echo cancellation
+    RPMSG = option no; # Remote Processor Messaging (ARM)
+    REMOTEPROC = option no; # Remote Processor framework (ARM)
 
     # --- Dead media ---
     MEDIA_ANALOG_TV_SUPPORT = option no; # Analog TV (shut off globally)
@@ -386,6 +483,8 @@ let
     LAPB = option no; # X.25 link layer
     NET_9P = option no; # Plan 9 network transport
     PKTGEN = option no; # Kernel packet generator (testing)
+    N_GSM = option no; # GSM 0710 mux for old serial modems
+    BT_CMTP = option no; # Bluetooth CAPI (ISDN over BT)
 
     # --- Server block/storage ---
     BLK_DEV_NBD = option no; # Network block device
@@ -400,11 +499,36 @@ let
     PCSPKR_PLATFORM = option no; # PC speaker
     KEXEC = option no; # kexec (disabled at runtime anyway)
     CDROM_PKTCDVD = option no; # Packet writing to CD/DVDs
+    EFI_VARS = option no; # Old sysfs EFI vars (EFIVAR_FS supersedes)
+    RAID_AUTODETECT = option no; # Legacy MD RAID autodetect
+    FB_DEVICE = option no; # Legacy /dev/fb* (DRM/KMS supersedes)
+    FRAMEBUFFER_CONSOLE_LEGACY_ACCELERATION = option no; # Legacy fbcon hw accel
+    X86_IOPL_IOPERM = option no; # IOPL/IOPERM syscalls (KSPP)
+    X86_VSYSCALL_EMULATION = option no; # Legacy vsyscall page (KSPP)
+    X86_X32_ABI = option no; # x32 ABI (exotic, deprecated)
+    X86_MPPARSE = option no; # MPS tables (pre-ACPI SMP)
+    X86_EXTENDED_PLATFORM = option no; # Non-standard x86 platforms (SGI UV, etc.)
+    GART_IOMMU = option no; # AMD K8-era GART IOMMU (modern uses AMD-Vi)
+    REROUTE_FOR_BROKEN_BOOT_IRQS = option no; # Workaround for ancient BIOS IRQ routing
+    MSDOS_PARTITION = option no; # MBR partition table (GPT era)
+
+    # --- Obsolete crypto ---
+    CRYPTO_USER_API_ENABLE_OBSOLETE = option no; # Gates ANUBIS/KHAZAD/SEED/TEA
+    CRYPTO_FCRYPT = option no; # fcrypt (only for dead AFS/RxRPC)
 
     # --- Debug/testing infrastructure ---
     KCOV = option no; # Syzkaller fuzzing infra
     GCOV_KERNEL = option no; # Kernel code coverage
     FAULT_INJECTION = option no; # Debug fault injection framework
+    KASAN = option no; # Kernel Address Sanitizer
+    KMEMLEAK = option no; # Kernel memory leak detector
+    PROVE_LOCKING = option no; # Lock dependency validator (lockdep)
+    LOCK_STAT = option no; # Lock contention statistics
+    NOTIFIER_ERROR_INJECTION = option no; # Error injection for notifier chains
+    DEBUG_PAGEALLOC = option no; # Debug page allocation
+    KUNIT = option no; # Kernel unit testing framework
+    EXT4_DEBUG = option no; # ext4 debug
+    JBD2_DEBUG = option no; # ext4 journaling debug
 
     # --- VM guest (not applicable to bare-metal desktop) ---
     DRM_VIRTIO_GPU = option no; # Virtio GPU
