@@ -105,8 +105,8 @@ let
         n = i + 60;
       in
       lib.fixedWidthString 4 "0" (toString n)
-    ) 103)
-    # 0060..0162
+    ) 107)
+    # 0060..0166
     ++ [
       "0182"
       "0183"
@@ -163,47 +163,13 @@ let
     ];
   };
 
-  # Per-version extra patches (upstreamed or skipped in other versions).
-  # Missing files are naturally ignored by the prefix filter.
+  # Per-version extra patches (upstreamed or version-specific).
+  # 6.19-only patches (0186-0190 TEO, 0198 fq-tweak) are in shared groups
+  # and naturally skipped in 6.18 where the files don't exist.
   versionExtra = {
     "6.18" = {
-      drivers = [
-        "0164"
-        "0166"
-      ];
-      extras = [
-        "0165"
-      ];
-      hardened = [
-        "0191"
-        "0192"
-        "0193"
-        "0194"
-      ];
-      networking = [
-        "0195"
-        "0196"
-        "0197"
-        "0200"
-        "0201"
-        "0202"
-        "0203"
-        "0204"
-        "0205"
-        "0206"
-      ];
-      interactive = [
-        "0198"
-        "0199"
-      ];
-    };
-    "6.19" = {
-      hardened = [
-        "0163"
-        "0164"
-        "0165"
-        "0166"
-      ];
+      drivers = [ "0204" "0206" ];
+      extras = [ "0205" ];
     };
   };
 
