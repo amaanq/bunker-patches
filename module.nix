@@ -497,6 +497,12 @@ let
     ISCSI_TCP = option no; # iSCSI initiator
     NVME_TARGET = option no; # NVMe-oF target
 
+    # --- Unused large subsystems ---
+    AUDIT = option no; # Audit framework (~15k LOC, main consumer was SELinux)
+    IP_VS = option no; # IPVS load balancer (~30k LOC, only k8s IPVS mode)
+    NFSD = option no; # NFS server (~25k LOC, client kept via NFS_FS)
+    QUOTA = option no; # Disk quotas (~10k LOC, multi-user server feature)
+
     # --- Legacy/deprecated ---
     USELIB = option no; # a.out uselib() syscall
     SYSFS_SYSCALL = option no; # old sysfs() syscall
