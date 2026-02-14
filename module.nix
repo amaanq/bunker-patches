@@ -511,6 +511,9 @@ let
     GART_IOMMU = option no; # AMD K8-era GART IOMMU (modern uses AMD-Vi)
     REROUTE_FOR_BROKEN_BOOT_IRQS = option no; # Workaround for ancient BIOS IRQ routing
     MSDOS_PARTITION = option no; # MBR partition table (GPT era)
+    ACCESSIBILITY = option no; # Speakup screen reader
+    SCSI_LOWLEVEL = option no; # Legacy SCSI HBA drivers (Adaptec, BusLogic, etc.)
+    X86_SGX = option no; # Intel SGX enclaves
 
     # --- Obsolete crypto ---
     CRYPTO_USER_API_ENABLE_OBSOLETE = option no; # Gates ANUBIS/KHAZAD/SEED/TEA
@@ -529,6 +532,8 @@ let
     KUNIT = option no; # Kernel unit testing framework
     EXT4_DEBUG = option no; # ext4 debug
     JBD2_DEBUG = option no; # ext4 journaling debug
+    SLUB_DEBUG = option no; # SLUB allocator debug
+    DYNAMIC_DEBUG = option no; # Runtime pr_debug control
 
     # --- VM guest (not applicable to bare-metal desktop) ---
     DRM_VIRTIO_GPU = option no; # Virtio GPU
