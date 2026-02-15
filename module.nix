@@ -537,6 +537,12 @@ let
     BLK_DEV_DRBD = option no; # DRBD distributed block replication
     MOUSE_SERIAL = option no; # Serial mice (RS-232)
     SERIO_SERPORT = option no; # Serial port input devices
+    # Modules that `select SERIO_SERPORT` — must also be disabled to avoid
+    # a kconfig select conflict (repeated-question failure on aarch64).
+    I2C_TAOS_EVM = option no;
+    USB_EXTRON_DA_HD_4K_PLUS_CEC = option no;
+    USB_PULSE8_CEC = option no;
+    USB_RAINSHADOW_CEC = option no;
     SND_ISA = option no; # ISA sound cards
     # Legacy PCI sound cards (select SND_OPL3_LIB / SND_MPU401_UART)
     SND_ALS300 = option no;
