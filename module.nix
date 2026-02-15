@@ -685,6 +685,11 @@ let
     AIC79XX_DEBUG_ENABLE = option no;
     AIC7XXX_DEBUG_ENABLE = option no;
     AIC94XX_DEBUG = option no;
+    CHROMEOS_TBMC = option no;
+    CROS_EC = option no;
+    CROS_EC_I2C = option no;
+    CROS_EC_SPI = option no;
+    CROS_KBD_LED_BACKLIGHT = option no;
     CEPH_FSCACHE = option no;
     CEPH_FS_POSIX_ACL = option no;
     CIFS_DFS_UPCALL = option no;
@@ -722,6 +727,9 @@ let
     SQUASHFS_ZLIB = option no;
     SQUASHFS_ZSTD = option no;
     STAGING_MEDIA = option no;
+    FUNCTION_GRAPH_RETVAL = option no;
+    HID_BPF = option no;
+    MEDIA_ATTACH = option no;
   });
 
   networkingConfig = optionalAttrs cfg.networking {
