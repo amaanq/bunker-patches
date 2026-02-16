@@ -795,32 +795,52 @@ let
     };
   };
 
-  kernelPackage = pkgs.linuxKernel.packagesFor (
-    bunkernel.overrideAttrs (old: {
-      # The Clang+LTO+Rust kernel binary embeds build tool store paths
-      # (CC, LD, RUSTC, etc.) that Nix's reference scanner picks up as
-      # runtime dependencies.  The kernel image is loaded by the bootloader
-      # and has zero legitimate runtime store-path dependencies, so we can
-      # safely discard all detected references from $out.
-      # Requires __structuredAttrs = true (already set by nixpkgs' buildLinux).
+  # Discard spurious store-path references from kernel module .ko files.
+  # Out-of-tree modules embed KBUILD_OUTPUT (pointing at kernel.dev) in
+  # their modinfo section.  Nix's reference scanner picks these up as
+  # runtime dependencies, dragging the entire build toolchain (clang, rustc,
+  # lld, gcc, etc.) into the system closure.  Kernel modules are loaded by
+  # the kernel and never dlopen() their build directory at runtime.
+  discardModuleDevRefs =
+    drv:
+    drv.overrideAttrs (old: {
       unsafeDiscardReferences = (old.unsafeDiscardReferences or { }) // {
         out = true;
       };
+    });
 
-      postInstall =
-        builtins.replaceStrings
-          [ "# Keep whole scripts dir" ]
-          [
-            ''
-              # Keep rust Makefile and source files for rust-analyzer support
-                        [ -f rust/Makefile ] && chmod u-w rust/Makefile
-                        find rust -type f -name '*.rs' -print0 | xargs -0 -r chmod u-w
+  kernelPackage =
+    (pkgs.linuxKernel.packagesFor (
+      bunkernel.overrideAttrs (old: {
+        # The Clang+LTO+Rust kernel binary embeds build tool store paths
+        # (CC, LD, RUSTC, etc.) that Nix's reference scanner picks up as
+        # runtime dependencies.  The kernel image is loaded by the bootloader
+        # and has zero legitimate runtime store-path dependencies, so we can
+        # safely discard all detected references from $out.
+        # Requires __structuredAttrs = true (already set by nixpkgs' buildLinux).
+        unsafeDiscardReferences = (old.unsafeDiscardReferences or { }) // {
+          out = true;
+        };
 
-                        # Keep whole scripts dir''
-          ]
-          (old.postInstall or "");
-    })
-  );
+        postInstall =
+          builtins.replaceStrings
+            [ "# Keep whole scripts dir" ]
+            [
+              ''
+                # Keep rust Makefile and source files for rust-analyzer support
+                          [ -f rust/Makefile ] && chmod u-w rust/Makefile
+                          find rust -type f -name '*.rs' -print0 | xargs -0 -r chmod u-w
+
+                          # Keep whole scripts dir''
+            ]
+            (old.postInstall or "");
+      })
+    )).extend
+      (final: prev: {
+        bcachefs = discardModuleDevRefs prev.bcachefs;
+        ddcci-driver = discardModuleDevRefs prev.ddcci-driver;
+        acpi_call = discardModuleDevRefs prev.acpi_call;
+      });
 in
 {
   options.bunker.kernel = {
