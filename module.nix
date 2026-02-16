@@ -685,9 +685,13 @@ let
     AIC79XX_DEBUG_ENABLE = option no;
     AIC7XXX_DEBUG_ENABLE = option no;
     AIC94XX_DEBUG = option no;
+    CHROMEOS_LAPTOP = option no;
+    CHROMEOS_PSTORE = option no;
     CHROMEOS_TBMC = option no;
     CROS_EC = option no;
     CROS_EC_I2C = option no;
+    CROS_EC_ISHTP = option no;
+    CROS_EC_LPC = option no;
     CROS_EC_SPI = option no;
     CROS_KBD_LED_BACKLIGHT = option no;
     CEPH_FSCACHE = option no;
@@ -730,6 +734,7 @@ let
     FUNCTION_GRAPH_RETVAL = option no;
     HID_BPF = option no;
     MEDIA_ATTACH = option no;
+    PM_TRACE_RTC = option no;
   });
 
   networkingConfig = optionalAttrs cfg.networking {
