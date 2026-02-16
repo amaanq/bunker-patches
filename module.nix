@@ -27,6 +27,7 @@ let
 
   cfg = config.bunker.kernel;
   forceAll = mapAttrs (_: mkForce);
+
   isX86 = pkgs.stdenv.hostPlatform.isx86_64;
 
   # Map user-facing major.minor → latest stable point release
@@ -920,31 +921,55 @@ let
     };
   };
 
-  kernelPackage = pkgs.linuxKernel.packagesFor (
-    bunkernel.overrideAttrs (old: {
-      # The Clang+LTO+Rust kernel binary embeds build tool store paths
-      # (CC, LD, RUSTC, etc.) that Nix's reference scanner picks up as
-      # runtime dependencies.  The kernel image is loaded by the bootloader
-      # and has zero legitimate runtime store-path dependencies, so we can
-      # safely discard all detected references from $out.
-      # Requires __structuredAttrs = true (already set by nixpkgs' buildLinux).
-      unsafeDiscardReferences = (old.unsafeDiscardReferences or { }) // {
-        out = true;
-      };
+  bunkernel' = bunkernel.overrideAttrs (old: {
+    # The Clang+LTO+Rust kernel binary embeds build tool store paths
+    # (CC, LD, RUSTC, etc.) that Nix's reference scanner picks up as
+    # runtime dependencies.  The kernel image is loaded by the bootloader
+    # and has zero legitimate runtime store-path dependencies, so we can
+    # safely discard all detected references from $out.
+    # Requires __structuredAttrs = true (already set by nixpkgs' buildLinux).
+    unsafeDiscardReferences = (old.unsafeDiscardReferences or { }) // {
+      out = true;
+    };
 
-      postInstall =
-        builtins.replaceStrings
-          [ "# Keep whole scripts dir" ]
-          [
-            ''
-              # Keep rust Makefile and source files for rust-analyzer support
-                        [ -f rust/Makefile ] && chmod u-w rust/Makefile
-                        find rust -type f -name '*.rs' -print0 | xargs -0 -r chmod u-w
+    postInstall =
+      builtins.replaceStrings
+        [ "# Keep whole scripts dir" ]
+        [
+          ''
+            # Keep rust Makefile and source files for rust-analyzer support
+                      [ -f rust/Makefile ] && chmod u-w rust/Makefile
+                      find rust -type f -name '*.rs' -print0 | xargs -0 -r chmod u-w
 
-                        # Keep whole scripts dir''
-          ]
-          (old.postInstall or "");
-    })
+                      # Keep whole scripts dir''
+        ]
+        (old.postInstall or "");
+  });
+
+  # Discard kernel.dev references from out-of-tree kernel modules at Nix
+  # scan time.  Out-of-tree modules (.ko.zst) embed KBUILD_OUTPUT in their
+  # .modinfo section; zstd sometimes stores this path verbatim in a literal
+  # block.  system.replaceRuntimeDependencies patches raw bytes inside those
+  # compressed frames, corrupting the zstd content checksum and causing
+  # modprobe/insmod to fail with EINVAL at boot.  unsafeDiscardReferences
+  # breaks the toolchain reference during the Nix build scan instead,
+  # keeping the closure small without touching any compressed data.
+  kernelPackage = (pkgs.linuxKernel.packagesFor bunkernel').extend (
+    _: prev:
+    lib.optionalAttrs (prev ? bcachefs-tools) {
+      bcachefs-tools = prev.bcachefs-tools.overrideAttrs (old: {
+        unsafeDiscardReferences = (old.unsafeDiscardReferences or { }) // {
+          out = true;
+        };
+      });
+    }
+    // lib.optionalAttrs (prev ? bcachefs) {
+      bcachefs = prev.bcachefs.overrideAttrs (old: {
+        unsafeDiscardReferences = (old.unsafeDiscardReferences or { }) // {
+          out = true;
+        };
+      });
+    }
   );
 in
 {
@@ -1077,18 +1102,6 @@ in
       ];
 
       boot.kernelPackages = kernelPackage;
-
-      # Out-of-tree kernel modules embed KBUILD_OUTPUT (pointing at kernel.dev)
-      # in .ko modinfo. Nix's reference scanner treats these as runtime deps,
-      # dragging the entire Clang/Rust/LLD toolchain into the closure.
-      # Replace all references to kernel.dev with an empty directory so the
-      # toolchain is no longer reachable from the system closure.
-      system.replaceRuntimeDependencies = [
-        {
-          original = config.boot.kernelPackages.kernel.dev;
-          replacement = pkgs.runCommand "${config.boot.kernelPackages.kernel.name}-dev" { } "mkdir $out";
-        }
-      ];
     }
 
     (mkIf cfg.hardened {
