@@ -509,6 +509,7 @@ let
     EISA = option no; # Extended ISA bus (dead since ~2000)
     I3C = option no; # MIPI I3C bus (embedded/phone only)
     MTD = option no; # Memory Technology Devices (raw flash, embedded)
+    YENTA = no; # Yenta PCMCIA - Old laptop bus
 
     # --- Dead memory technologies ---
     X86_PMEM_LEGACY = option no; # non-standard NVDIMMs (selects LIBNVDIMM)
@@ -674,6 +675,130 @@ let
     APPLE_PROPERTIES = option no; # Apple device properties
     XEN = option no; # Xen hypervisor (we use KVM)
     SURFACE_PLATFORMS = option no; # Microsoft Surface
+
+    # Obsolete Network (10/100 NICs from 1990s/2000s)
+    ADAPTEC_STARFIRE = no; # Adaptec Starfire Ethernet - Old PCI NIC (1990s)
+    DE2104X = no; # DEC 21x4x Tulip Ethernet - Ancient PCI NIC
+    TULIP = no; # DEC Tulip Ethernet - Legacy 1990s NIC
+    WINBOND_840 = no; # Winbond W89c840 Ethernet - Obsolete 10/100 NIC
+    DM9102 = no; # Davicom DM9102 Ethernet - Old PCI NIC
+    ULI526X = no; # ULi M526x Ethernet - Legacy 10/100 NIC
+    HAMACHI = no; # Packet Engines Hamachi - Old Gigabit NIC
+    YELLOWFIN = no; # Packet Engines Yellowfin - Old Gigabit NIC
+    NATSEMI = no; # National Semiconductor DP8381x - Legacy 10/100 NIC
+    NS83820 = no; # National Semiconductor DP83820 - Old Gigabit NIC
+    S2IO = no; # Neterion S2IO 10GbE - Deprecated server NIC
+    NE2K_PCI = no; # NE2000 PCI Ethernet - Ancient 10Mbps NIC
+    FORCEDETH = no; # NVIDIA nForce Ethernet - Legacy chipset NIC
+    ETHOC = no; # OpenCores Ethernet - FPGA embedded NIC
+    R6040 = no; # RDC R6040 Ethernet - Embedded/industrial NIC
+    ATP = no; # Realtek RTL8012 ATP - Ancient 10Mbps ISA NIC
+
+    # Additional Ancient SCSI (pre-2010)
+    SCSI_3W_XXXX_RAID = no; # 3ware Escalade RAID - Ancient RAID (pre-2005)
+    SCSI_3W_9XXX = no; # 3ware 9000 series RAID - Legacy RAID controller
+    SCSI_3W_SAS = no; # 3ware SAS RAID - Obsolete SAS RAID
+    SCSI_MVSAS = no; # Marvell SAS/SATA - Old enterprise SAS
+    SCSI_MVUMI = no; # Marvell UMI - Legacy RAID
+    SCSI_ADVANSYS = no; # AdvanSys SCSI - Ancient SCSI card
+    SCSI_ARCMSR = no; # Areca RAID - Legacy RAID controller
+    SCSI_ESAS2R = no; # ATTO ESAS RAID - Old RAID controller
+    SCSI_HPTIOP = no; # HighPoint RocketRAID - Legacy RAID
+    SCSI_BUSLOGIC = no; # BusLogic SCSI - 1990s SCSI controller
+    SCSI_DMX3191D = no; # DMX3191D SCSI - Obsolete SCSI
+    SCSI_FDOMAIN = no; # Future Domain SCSI - Ancient SCSI card
+    SCSI_ISCI = no; # Intel C600 SAS - Old server chipset SAS
+    SCSI_IPS = no; # IBM ServeRAID - Legacy IBM RAID
+    SCSI_INITIO = no; # Initio SCSI - 1990s SCSI controller
+    SCSI_INIA100 = no; # InitIO INI-A100U/W - Ancient SCSI
+    SCSI_PPA = no; # Iomega PPA (parallel port) - Parallel port ZIP drive
+    SCSI_IMM = no; # Iomega IMM (parallel port) - Parallel port ZIP drive
+    SCSI_STEX = no; # Promise SuperTrak EX - Legacy RAID
+    SCSI_SYM53C8XX_2 = no; # Symbios 53C8xx SCSI - 1990s SCSI controller
+    SCSI_QLOGIC_1280 = no; # QLogic 1280 SCSI - Old SCSI controller
+    SCSI_DC395x = no; # Tekram DC395x SCSI - 1990s SCSI card
+    SCSI_AM53C974 = no; # AMD AM53C974 SCSI - Ancient SCSI
+    SCSI_WD719X = no; # Western Digital WD719x - 1990s SCSI controller
+    SCSI_PMCRAID = no; # PMC-Sierra RAID - Legacy RAID
+    SCSI_PM8001 = no; # PMC-Sierra 8001 SAS - Old SAS controller
+
+    # Legacy PATA/IDE Controllers (pre-SATA era)
+    PATA_ALI = no; # ALI PATA - Legacy chipset IDE
+    PATA_ARTOP = no; # ARTOP PATA - Old IDE controller
+    PATA_ATIIXP = no; # ATI IXP PATA - Legacy IDE
+    PATA_ATP867X = no; # ATP867X PATA - Obsolete IDE
+    PATA_CMD64X = no; # CMD64x PATA - 1990s IDE controller
+    PATA_CYPRESS = no; # Cypress PATA - Old IDE controller
+    PATA_EFAR = no; # EFAR PATA - Legacy IDE
+    PATA_HPT366 = no; # HPT366 PATA - Old IDE RAID
+    PATA_HPT37X = no; # HPT37x PATA - Legacy IDE RAID
+    PATA_HPT3X2N = no; # HPT3x2N PATA - Obsolete IDE RAID
+    PATA_IT8213 = no; # IT8213 PATA - Old IDE controller
+    PATA_IT821X = no; # IT821X PATA - Legacy IDE RAID
+    PATA_NETCELL = no; # NetCell PATA - Obsolete IDE
+    PATA_OLDPIIX = no; # Intel PIIX1/2 PATA - Ancient IDE (pre-2000)
+    PATA_PDC2027X = no; # Promise PDC2027x - Legacy IDE RAID
+    PATA_PDC_OLD = no; # Promise old PATA - Old IDE RAID
+    PATA_RADISYS = no; # Radisys PATA - Obsolete IDE
+    PATA_RDC = no; # RDC PATA - Legacy embedded IDE
+    PATA_TOSHIBA = no; # Toshiba PATA - Old laptop IDE
+    PATA_TRIFLEX = no; # Compaq Triflex PATA - Ancient IDE
+
+    # Old Wireless (Pre-WiFi 6 - 802.11b/g/n legacy)
+    ADM8211 = no; # ADMtek ADM8211 WLAN - 802.11b (1999)
+    ATH5K = no; # Atheros AR5xxx - 802.11a/b/g (pre-2008)
+    ATH9K = no; # Atheros AR9xxx - 802.11n (old gen)
+    ATH9K_HTC = no; # Atheros AR9271 USB - Old 802.11n USB
+    CARL9170 = no; # Atheros AR9170 USB - Legacy 802.11n
+    ATH6KL = no; # Atheros AR600x - Old embedded WiFi
+    AR5523 = no; # Atheros AR5523 - Legacy 802.11g USB
+    IPW2100 = no; # Intel PRO/Wireless 2100 - 802.11b (2003)
+    IPW2200 = no; # Intel PRO/Wireless 2200BG - 802.11b/g (2004)
+    IWL3945 = no; # Intel Wireless 3945ABG - 802.11a/b/g (2006)
+    IWL4965 = no; # Intel Wireless 4965AGN - 802.11n draft (2007)
+    LIBERTAS = no; # Marvell Libertas - 802.11b/g (old)
+    AT76C50X_USB = no; # Atmel AT76C50x - 802.11b USB
+    B43 = no; # Broadcom b43 - Legacy BCM43xx
+    B43LEGACY = no; # Broadcom b43legacy - Ancient BCM430x
+    MWIFIEX = no; # Marvell mwifiex - Old embedded WiFi
+    MWL8K = no; # Marvell 88W8xxx - Legacy PCI WiFi
+    P54_COMMON = no; # Prism54 - 802.11g (2004)
+    RT2X00 = no; # Ralink RT2x00 - Old 802.11n
+    RT2500USB = no; # Ralink RT2500 USB - 802.11g (2004)
+    RT73USB = no; # Ralink RT73 USB - 802.11g (2005)
+    RTL8180 = no; # Realtek RTL8180 - 802.11b PCI
+    RTL8187 = no; # Realtek RTL8187 - 802.11g USB
+    RTL8192CU = no; # Realtek RTL8192CU - Old 802.11n USB
+
+    # SoC-specific (ARM/MIPS only, not applicable to x86_64)
+    QCA7000 = no; # Qualcomm QCA7000 - Embedded PLC (Power Line)
+    QCOM_EMAC = no; # Qualcomm EMAC - ARM SoC Ethernet
+    RMNET = no; # Qualcomm RMNET - Mobile modem interface
+    SPI_FSL_LIB = no; # Freescale SPI - ARM SoC SPI
+    SPI_FSL_SPI = no; # Freescale SPI - ARM SoC SPI
+    SPI_LANTIQ_SSC = no; # Lantiq SSC SPI - MIPS/embedded SoC
+    I2C_RK3X = no; # Rockchip I2C - ARM SoC I2C
+
+    # Obsolete USB Ethernet Adapters (USB 1.1/2.0 era)
+    USB_CATC = no; # CATC USB Ethernet - Obsolete USB 1.1 NIC
+    USB_KAWETH = no; # Kawasaki LSI USB Ethernet - Ancient USB NIC
+    USB_RTL8150 = no; # Realtek RTL8150 - USB 1.1 10Mbps NIC
+    USB_PEGASUS = no; # Pegasus USB Ethernet - Old USB 1.1 NIC
+    USB_NET_DM9601 = no; # Davicom DM9601 USB - Obsolete USB NIC
+    USB_NET_SR9700 = no; # CoreChip SR9700 - Old USB 1.1 NIC
+    USB_NET_SR9800 = no; # CoreChip SR9800 - Old USB 2.0 NIC
+    USB_NET_GL620A = no; # Genesys GL620USB - Ancient USB host-to-host
+    USB_NET_PLUSB = no; # Prolific PL2301/2302 - Old USB host-to-host
+    USB_NET_MCS7830 = no; # MosChip MCS7830 - Obsolete USB NIC
+    USB_NET_ZAURUS = no; # Zaurus USB net - PDA from 2000s
+    USB_NET_CX82310_ETH = no; # Conexant CX82310 - Old USB modem
+    USB_NET_KALMIA = no; # Samsung Kalmia - Old modem
+    USB_HSO = no; # Option HSDPA modem - 3G USB modem
+    USB_NET_INT51X1 = no; # Intellon PLC - Power line comms
+    USB_CDC_PHONET = no; # Phonet USB - Nokia phone protocol
+    USB_SIERRA_NET = no; # Sierra Wireless - Old 3G/4G modem
+    USB_VL600 = no; # Samsung VL600 - Old LTE modem
+    USB_NET_CH9200 = no; # QinHeng CH9200 - Obsolete USB NIC
 
     # --- Virtual test drivers ---
     VIDEO_VIVID = option no; # Virtual video test driver
