@@ -510,7 +510,7 @@ let
     EISA = option no; # Extended ISA bus (dead since ~2000)
     I3C = option no; # MIPI I3C bus (embedded/phone only)
     MTD = option no; # Memory Technology Devices (raw flash, embedded)
-    YENTA = no; # Yenta PCMCIA - Old laptop bus
+    YENTA = option no; # Yenta PCMCIA - Old laptop bus (removed in 6.14)
 
     # --- Dead memory technologies ---
     X86_PMEM_LEGACY = option no; # non-standard NVDIMMs (selects LIBNVDIMM)
