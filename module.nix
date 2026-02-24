@@ -924,14 +924,17 @@ let
   };
 
   bunkernel' = bunkernel.overrideAttrs (old: {
-    # The Clang+LTO+Rust kernel binary embeds build tool store paths
-    # (CC, LD, RUSTC, etc.) that Nix's reference scanner picks up as
-    # runtime dependencies.  The kernel image is loaded by the bootloader
-    # and has zero legitimate runtime store-path dependencies, so we can
-    # safely discard all detected references from $out.
+    # The Clang+LTO+Rust kernel embeds build tool store paths (CC, LD,
+    # RUSTC, KBUILD_OUTPUT, etc.) that Nix's reference scanner picks up as
+    # runtime dependencies, dragging the entire toolchain into the closure.
+    # - out: the kernel image (vmlinuz) itself has no runtime store deps
+    # - dev: the kernel build directory embeds KBUILD_OUTPUT and toolchain
+    #        paths needed to build out-of-tree modules; these are build-time
+    #        only — no legitimate runtime store-path dependencies exist here
     # Requires __structuredAttrs = true (already set by nixpkgs' buildLinux).
     unsafeDiscardReferences = (old.unsafeDiscardReferences or { }) // {
       out = true;
+      dev = true;
     };
 
     postInstall =
