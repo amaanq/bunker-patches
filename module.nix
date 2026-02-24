@@ -693,10 +693,10 @@ let
     FORCEDETH = no; # NVIDIA nForce Ethernet - Legacy chipset NIC
     ETHOC = no; # OpenCores Ethernet - FPGA embedded NIC
     R6040 = no; # RDC R6040 Ethernet - Embedded/industrial NIC
-    ATP = no; # Realtek RTL8012 ATP - Ancient 10Mbps ISA NIC
+    ATP = option no; # Realtek RTL8012 ATP - Ancient 10Mbps ISA NIC (removed in 6.x)
 
     # Additional Ancient SCSI (pre-2010)
-    SCSI_3W_XXXX_RAID = no; # 3ware Escalade RAID - Ancient RAID (pre-2005)
+    SCSI_3W_XXXX_RAID = option no; # 3ware Escalade RAID - Ancient RAID (pre-2005, removed in 6.x)
     SCSI_3W_9XXX = no; # 3ware 9000 series RAID - Legacy RAID controller
     SCSI_3W_SAS = no; # 3ware SAS RAID - Obsolete SAS RAID
     SCSI_MVSAS = no; # Marvell SAS/SATA - Old enterprise SAS
@@ -707,13 +707,13 @@ let
     SCSI_HPTIOP = no; # HighPoint RocketRAID - Legacy RAID
     SCSI_BUSLOGIC = no; # BusLogic SCSI - 1990s SCSI controller
     SCSI_DMX3191D = no; # DMX3191D SCSI - Obsolete SCSI
-    SCSI_FDOMAIN = no; # Future Domain SCSI - Ancient SCSI card
+    SCSI_FDOMAIN = option no; # Future Domain SCSI - Ancient SCSI card (forced to 'm' by deps in some kernels)
     SCSI_ISCI = no; # Intel C600 SAS - Old server chipset SAS
     SCSI_IPS = no; # IBM ServeRAID - Legacy IBM RAID
     SCSI_INITIO = no; # Initio SCSI - 1990s SCSI controller
     SCSI_INIA100 = no; # InitIO INI-A100U/W - Ancient SCSI
-    SCSI_PPA = no; # Iomega PPA (parallel port) - Parallel port ZIP drive
-    SCSI_IMM = no; # Iomega IMM (parallel port) - Parallel port ZIP drive
+    SCSI_PPA = option no; # Iomega PPA (parallel port) - Parallel port ZIP drive (removed in 6.x)
+    SCSI_IMM = option no; # Iomega IMM (parallel port) - Parallel port ZIP drive (removed in 6.x)
     SCSI_STEX = no; # Promise SuperTrak EX - Legacy RAID
     SCSI_SYM53C8XX_2 = no; # Symbios 53C8xx SCSI - 1990s SCSI controller
     SCSI_QLOGIC_1280 = no; # QLogic 1280 SCSI - Old SCSI controller
@@ -765,17 +765,19 @@ let
     MWL8K = no; # Marvell 88W8xxx - Legacy PCI WiFi
     P54_COMMON = no; # Prism54 - 802.11g (2004)
     RT2X00 = no; # Ralink RT2x00 - Old 802.11n
-    RT2500USB = no; # Ralink RT2500 USB - 802.11g (2004)
-    RT73USB = no; # Ralink RT73 USB - 802.11g (2005)
+    RT2500USB = option no; # Ralink RT2500 USB - 802.11g (2004, removed in 6.x)
+    RT73USB = option no; # Ralink RT73 USB - 802.11g (2005, removed in 6.x)
+    RT2800USB_RT53XX = option no; # Ralink RT2800USB RT53xx - removed in 6.x (nixpkgs common-config override)
+    RT2800USB_RT55XX = option no; # Ralink RT2800USB RT55xx - removed in 6.x (nixpkgs common-config override)
     RTL8180 = no; # Realtek RTL8180 - 802.11b PCI
     RTL8187 = no; # Realtek RTL8187 - 802.11g USB
     RTL8192CU = no; # Realtek RTL8192CU - Old 802.11n USB
 
     # SoC-specific (ARM/MIPS only, not applicable to x86_64)
-    QCA7000 = no; # Qualcomm QCA7000 - Embedded PLC (Power Line)
+    QCA7000 = option no; # Qualcomm QCA7000 - Embedded PLC (Power Line, forced 'm' by deps in some configs)
     QCOM_EMAC = no; # Qualcomm EMAC - ARM SoC Ethernet
     RMNET = no; # Qualcomm RMNET - Mobile modem interface
-    SPI_FSL_LIB = no; # Freescale SPI - ARM SoC SPI
+    SPI_FSL_LIB = option no; # Freescale SPI - ARM SoC SPI (removed in 6.x)
     SPI_FSL_SPI = no; # Freescale SPI - ARM SoC SPI
     SPI_LANTIQ_SSC = no; # Lantiq SSC SPI - MIPS/embedded SoC
     I2C_RK3X = no; # Rockchip I2C - ARM SoC I2C
@@ -796,7 +798,7 @@ let
     USB_NET_KALMIA = no; # Samsung Kalmia - Old modem
     USB_HSO = no; # Option HSDPA modem - 3G USB modem
     USB_NET_INT51X1 = no; # Intellon PLC - Power line comms
-    USB_CDC_PHONET = no; # Phonet USB - Nokia phone protocol
+    USB_CDC_PHONET = option no; # Phonet USB - Nokia phone protocol (removed in 6.x)
     USB_SIERRA_NET = no; # Sierra Wireless - Old 3G/4G modem
     USB_VL600 = no; # Samsung VL600 - Old LTE modem
     USB_NET_CH9200 = no; # QinHeng CH9200 - Obsolete USB NIC
