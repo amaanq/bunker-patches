@@ -33,7 +33,7 @@ let
   # Map user-facing major.minor → latest stable point release
   stableRelease = {
     "6.18" = "6.18.10";
-    "6.19" = "6.19";
+    "6.19" = "6.19.3";
   };
 
   resolvedVersion =
@@ -237,7 +237,7 @@ let
   sourceHash =
     {
       "6.18.10" = "sha256-1tN3FhdBraL6so7taRQyd2NKKuteOIPlDAMViO3kjt4=";
-      "6.19" = "sha256-MDB5qCULjzgfgrA/kEY9EqyY1PaxSbdh6nWvEyNSE1c=";
+      "6.19.3" = "sha256-DkdJaK38vuMpFv0BqJ2Mz9EWjY0yVp52pcZkx5MZjr4=";
     }
     .${resolvedVersion};
 
