@@ -7,3 +7,5 @@
 !patches/
 !patches/*/
 !patches/*/*.patch
+!patches/*/*/
+!patches/*/*/*.patch

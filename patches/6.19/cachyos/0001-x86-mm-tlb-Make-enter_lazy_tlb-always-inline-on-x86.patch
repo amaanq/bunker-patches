@@ -1,7 +1,7 @@
-From f951befc8ae9eebcd0db047a6088143a95a96be5 Mon Sep 17 00:00:00 2001
+From ffeb0fd21255dece515fcdb48553048b1824ed59 Mon Sep 17 00:00:00 2001
 From: Xie Yuanbin <qq570070308@gmail.com>
 Date: Sun, 23 Nov 2025 20:18:25 +0800
-Subject: [PATCH 23/190] x86/mm/tlb: Make enter_lazy_tlb() always inline on x86
+Subject: [PATCH 23/194] x86/mm/tlb: Make enter_lazy_tlb() always inline on x86
 
 enter_lazy_tlb() on x86 is short enough, and is called in context
 switching, which is the hot code path.
@@ -61,10 +61,10 @@ index 73bf3b1b44e8..ecd134dcfb34 100644
  
  extern void mm_free_global_asid(struct mm_struct *mm);
 diff --git a/arch/x86/mm/tlb.c b/arch/x86/mm/tlb.c
-index f5b93e01e347..71abaf0bdb91 100644
+index 5d221709353e..cb715e8e75e4 100644
 --- a/arch/x86/mm/tlb.c
 +++ b/arch/x86/mm/tlb.c
-@@ -969,31 +969,10 @@ void switch_mm_irqs_off(struct mm_struct *unused, struct mm_struct *next,
+@@ -968,31 +968,10 @@ void switch_mm_irqs_off(struct mm_struct *unused, struct mm_struct *next,
  		cr4_update_pce_mm(next);
  		switch_ldt(prev, next);
  	}

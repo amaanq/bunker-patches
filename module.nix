@@ -49,158 +49,207 @@ let
     in
     if builtins.length parts >= 3 then resolvedVersion else "${resolvedVersion}.0";
 
-  # Patch group → 4-digit prefix strings
-  patchGroups = {
-    base = [ "0015" ];
+  # Application order for per-upstream subdir layout.
+  # Each subdir is applied in this index order; within a subdir, local prefix order.
+  subdirIndices = {
+    bunker = 0; # must be first: bunker/0001 adds config BUNKER referenced by zen/cachyos/etc.
+    zen = 1;
+    xanmod = 2;
+    cachyos = 3;
+    clear = 4;
+    grapheneos = 5;
+    hardened = 6;
+    upstream = 7;
+  };
+
+  # Shared patch group entries (stable numbering across all kernel versions).
+  # upstream/ has version-specific numbering (different backport sets per release).
+  sharedGroups = {
+    base = [ "bunker/0001" ];
     interactive = [
-      "0003"
-      "0011"
-      "0012"
-      "0014"
-      "0016"
-      "0017"
-      "0018"
-      "0019"
-      "0020"
-      "0021"
-      "0022"
-      "0023"
-      "0024"
-      "0025"
-      "0028"
-      "0029"
-      "0030"
-      "0031"
-      "0032"
-      "0033"
-      "0039"
-      "0040"
-      "0043"
-      "0044"
-      "0045"
-      "0051"
-      "0053"
-      "0054"
-      "0055"
-      "0171"
-      "0172"
-      "0173"
-      "0174"
-      "0175"
-      "0176"
-      "0177"
-      "0178"
-      "0185"
-      "0186"
-      "0187"
-      "0188"
-      "0189"
-      "0190"
-      "0194"
-      "0195"
-      "0212"
-      "0213"
-      "0214"
-      "0215"
-      "0216"
-      "0217"
-      "0218"
-      "0219"
-      "0220"
-      "0221"
-      "0222"
-      "0223"
-      "0224"
-      "0225"
+      # zen: O3, mm tuning, preempt, BFQ, EEVDF, swap/watermark/compaction
+      "zen/0003"
+      "zen/0009"
+      "zen/0010"
+      "zen/0012"
+      "zen/0013"
+      "zen/0014"
+      "zen/0015"
+      "zen/0016"
+      "zen/0017"
+      "zen/0018"
+      "zen/0019"
+      # cachyos: inline sched helpers, ADIOS, le9, compaction, BFQ lock, POCC
+      "cachyos/0001"
+      "cachyos/0002"
+      "cachyos/0003"
+      "cachyos/0010"
+      "cachyos/0011"
+      "cachyos/0013"
+      "cachyos/0014"
+      "cachyos/0016"
+      "cachyos/0017"
+      "cachyos/0023"
+      # xanmod: sched latency, yield, block/mq-deadline, vfs, rwsem, accept LIFO, dm-crypt
+      "xanmod/0001"
+      "xanmod/0002"
+      "xanmod/0003"
+      "xanmod/0004"
+      "xanmod/0005"
+      "xanmod/0006"
+      "xanmod/0007"
+      "xanmod/0013"
+      "xanmod/0014"
+      # clear: sched/fair cpu, timer slack, mmput, memcg, compaction, branch hints
+      "clear/0005"
+      "clear/0006"
+      "clear/0007"
+      "clear/0008"
+      "clear/0009"
+      "clear/0010"
+      "clear/0011"
+      # bunker: VM_READAHEAD_PAGES
+      "bunker/0005"
     ];
-    hardened = [
-      "0006"
-      "0007"
-      "0056"
-    ]
-    ++ (lib.genList (
-      i:
-      let
-        n = i + 60;
-      in
-      lib.fixedWidthString 4 "0" (toString n)
-    ) 107)
-    # 0060..0166
-    ++ [
-      "0182"
-      "0183"
-      "0184"
-      "0210"
-      "0211"
-    ];
+    hardened =
+      (lib.genList (i: "hardened/${lib.fixedWidthString 4 "0" (toString (i + 1))}") 101)
+      ++ (lib.genList (i: "grapheneos/${lib.fixedWidthString 4 "0" (toString (i + 1))}") 6)
+      ++ [
+        "cachyos/0018" # VMSCAPE/BHB clear mitigation
+        "bunker/0003" # rust: allow clang native randstruct
+        "bunker/0004" # enable RANDSTRUCT_FULL by default
+        "bunker/0006" # enable KSTACK_ERASE by default
+        "bunker/0007" # enable PAGE_TABLE_CHECK_ENFORCED by default
+        "bunker/0008" # disable PROC_KCORE by default
+      ];
     networking = [
-      "0027"
-      "0052"
-      "0167"
-      "0168"
-      "0169"
-      "0170"
-      "0191"
-      "0192"
-      "0193"
-      "0196"
-      "0197"
-      "0198"
-      "0199"
-      "0200"
-      "0201"
-      "0202"
-      "0203"
+      "cachyos/0004" # BBRv3
+      "xanmod/0012" # tcp: skip collapse sysctl
+      "clear/0001"
+      "clear/0002"
+      "clear/0003"
+      "clear/0004"
     ];
     drivers = [
-      "0001"
-      "0002"
-      "0004"
-      "0005"
-      "0008"
-      "0009"
-      "0010"
-      "0013"
-      "0026"
-      "0034"
-      "0036"
-      "0037"
-      "0038"
-      "0042"
-      "0057"
-      "0179"
-      "0180"
+      "zen/0001"
+      "zen/0002"
+      "zen/0004"
+      "zen/0005"
+      "zen/0006"
+      "zen/0007"
+      "zen/0008"
+      "zen/0011"
+      "cachyos/0005"
+      "cachyos/0007"
+      "cachyos/0008"
+      "cachyos/0009"
+      "cachyos/0019"
+      "cachyos/0022"
+      "bunker/0002"
+      "clear/0012" # PCI PME interval
     ];
     extras = [
-      "0035"
-      "0041"
-      "0046"
-      "0047"
-      "0048"
-      "0049"
-      "0050"
-      "0058"
-      "0059"
-      "0208"
-      "0209"
-      "0226"
+      "cachyos/0006"
+      "cachyos/0012"
+      "cachyos/0015"
+      "cachyos/0020"
+      "cachyos/0021"
+      "xanmod/0008"
+      "xanmod/0009"
+      "xanmod/0010"
+      "xanmod/0011"
+      "xanmod/0015"
     ];
   };
 
-  # Per-version extra patches (upstreamed or version-specific).
-  # 6.19-only patches (0186-0190 TEO, 0198 fq-tweak) are in shared groups
-  # and naturally skipped in 6.18 where the files don't exist.
-  versionExtra = {
+  # Per-version upstream/ entries + any version-specific group overrides.
+  # upstream/ numbering differs because each release has different backport sets.
+  versionGroups = {
     "6.18" = {
-      drivers = [
-        "0204"
-        "0206"
+      interactive = [
+        "upstream/0005"
+        "upstream/0006"
+        "upstream/0019"
       ];
-      extras = [ "0205" ];
+      hardened = [
+        "upstream/0017"
+        "upstream/0018"
+      ];
+      networking = [
+        "upstream/0002"
+        "upstream/0003"
+        "upstream/0004"
+        "upstream/0007"
+        "upstream/0008"
+        "upstream/0009"
+        "upstream/0010"
+        "upstream/0011"
+        "upstream/0012"
+        "upstream/0013"
+      ];
+      drivers = [
+        "upstream/0001" # drm/amdgpu SI tlb fence fix
+        "upstream/0014" # drm/amdgpu: GFP_ATOMIC fix (6.18-only backport)
+        "cachyos/0025" # amd-pstate (6.18-only)
+      ];
+      extras = [
+        "upstream/0015"
+        "upstream/0016"
+        "cachyos/0024" # crypto (6.18-only)
+      ];
+    };
+    "6.19" = {
+      interactive = [
+        "upstream/0002"
+        "upstream/0003"
+        "upstream/0004"
+        "upstream/0005"
+        "upstream/0006"
+        "upstream/0010"
+        "upstream/0011"
+        "upstream/0024"
+        "upstream/0025"
+        "upstream/0026"
+        "upstream/0027"
+        "upstream/0028"
+        "upstream/0029"
+        "upstream/0030"
+        "upstream/0031"
+        "upstream/0032"
+        "upstream/0033"
+        "upstream/0034"
+        "upstream/0035"
+        "upstream/0036"
+        "upstream/0037"
+      ];
+      hardened = [
+        "upstream/0022"
+        "upstream/0023"
+      ];
+      networking = [
+        "upstream/0007"
+        "upstream/0008"
+        "upstream/0009"
+        "upstream/0012"
+        "upstream/0013"
+        "upstream/0014"
+        "upstream/0015"
+        "upstream/0016"
+        "upstream/0017"
+        "upstream/0018"
+        "upstream/0019"
+      ];
+      drivers = [ "upstream/0001" ];
+      extras = [
+        "upstream/0020"
+        "upstream/0021"
+      ];
     };
   };
 
-  extra = versionExtra.${majorMinor} or { };
+  # Merge shared + version-specific.
+  vg = versionGroups.${majorMinor};
+  patchGroups = lib.mapAttrs (group: shared: shared ++ (vg.${group} or [ ])) sharedGroups;
 
   enabledGroups = [
     "base"
@@ -211,22 +260,43 @@ let
   ++ lib.optional cfg.drivers "drivers"
   ++ lib.optional cfg.extras "extras";
 
-  enabledNumbers = concatMap (g: patchGroups.${g} ++ (extra.${g} or [ ])) enabledGroups;
+  enabledNumbers = concatMap (g: patchGroups.${g}) enabledGroups;
   enabledSet = lib.genAttrs enabledNumbers (_: true);
 
-  # All patch files from the patches directory, sorted numerically
   patchDir = "${flake}/patches/${majorMinor}";
-  allPatchFiles =
-    builtins.filter (n: lib.hasSuffix ".patch" n) (builtins.attrNames (builtins.readDir patchDir))
-    |> builtins.sort builtins.lessThan;
 
-  # Filter patches by prefix membership, preserving numeric order
-  selectedPatches = builtins.filter (name: enabledSet ? ${builtins.substring 0 4 name}) allPatchFiles;
+  # Collect all .patch files, tracking subdir and local prefix.
+  # All versions use subdir layout: key = "zen/NNNN", "hardened/NNNN", etc.
+  collectPatches =
+    dir: subdir:
+    let
+      entries = builtins.readDir dir;
+      patches = lib.filterAttrs (n: t: t == "regular" && lib.hasSuffix ".patch" n) entries;
+      subdirs = lib.filterAttrs (_: t: t == "directory") entries;
+      localPrefix = n: builtins.substring 0 4 n;
+      patchEntries = map (n: {
+        name = n;
+        patch = "${dir}/${n}";
+        key = if subdir == "" then localPrefix n else "${subdir}/${localPrefix n}";
+        sortSubdir = subdir;
+        sortLocal = localPrefix n;
+      }) (lib.attrNames patches);
+      subPatches = lib.concatMap (d: collectPatches "${dir}/${d}" d) (lib.attrNames subdirs);
+    in
+    patchEntries ++ subPatches;
 
-  kernelPatches = map (name: {
-    inherit name;
-    patch = "${patchDir}/${name}";
-  }) selectedPatches;
+  allPatchEntries = lib.sort (
+    a: b:
+    let
+      ai = subdirIndices.${a.sortSubdir} or 99;
+      bi = subdirIndices.${b.sortSubdir} or 99;
+    in
+    if ai != bi then ai < bi else a.sortLocal < b.sortLocal
+  ) (collectPatches patchDir "");
+
+  selectedPatches = builtins.filter (e: enabledSet ? ${e.key}) allPatchEntries;
+
+  kernelPatches = map (e: { inherit (e) name patch; }) selectedPatches;
 
   # Full LLVM stdenv with clang + lld + llvm-ar/nm (required for LTO_CLANG / CFI)
   llvmStdenv = pkgs.overrideCC pkgs.llvmPackages.stdenv (
