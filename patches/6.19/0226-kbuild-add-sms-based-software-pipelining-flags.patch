@@ -1,0 +1,37 @@
+From b908345772a1734cb28b00878df9e936f7bd1841 Mon Sep 17 00:00:00 2001
+From: Alexandre Frade <kernel@xanmod.org>
+Date: Fri, 20 Jun 2025 01:14:28 +0000
+Subject: [PATCH] kbuild: Add SMS-based software pipelining flags
+
+Add support for Swing Modulo Scheduling (SMS) when default optimization level
+is enabled. This optimization performs software pipelining on innermost loops,
+overlapping iterations to improve instruction-level parallelism.
+
+[bunkernel: also apply to CC_OPTIMIZE_FOR_PERFORMANCE_O3 block]
+
+Signed-off-by: Alexandre Frade <kernel@xanmod.org>
+---
+ Makefile | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/Makefile b/Makefile
+--- a/Makefile
++++ b/Makefile
+@@ -887,12 +887,18 @@ KBUILD_CFLAGS	+= -fno-delete-null-pointer-checks
+
+ ifdef CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE
+ KBUILD_CFLAGS += -O2
++# Enable software pipelining (Swing Modulo Scheduling) for innermost loops.
++KBUILD_CFLAGS += $(call cc-option,-fmodulo-sched -fmodulo-sched-allow-regmoves) \
++		 $(call cc-option,-mllvm -enable-pipeliner)
+ KBUILD_RUSTFLAGS += -Copt-level=2
+ else ifdef CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3
+ KBUILD_CFLAGS += -O3
++KBUILD_CFLAGS += $(call cc-option,-fmodulo-sched -fmodulo-sched-allow-regmoves) \
++		 $(call cc-option,-mllvm -enable-pipeliner)
+ KBUILD_RUSTFLAGS += -Copt-level=3
+ else ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
+ KBUILD_CFLAGS += -Os
++KBUILD_CFLAGS += $(call cc-option,-mllvm -enable-pipeliner-opt-size)
+ KBUILD_RUSTFLAGS += -Copt-level=s
+ endif
