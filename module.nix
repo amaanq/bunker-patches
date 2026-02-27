@@ -79,17 +79,15 @@ let
       "zen/0017"
       "zen/0018"
       "zen/0019"
-      # cachyos: inline sched helpers, ADIOS, le9, compaction, BFQ lock, POCC
-      "cachyos/0001"
-      "cachyos/0002"
-      "cachyos/0003"
+      # cachyos: inline sched/mm/tick/vtime fixes, ADIOS, le9, compaction, BFQ lock, POCC
+      "cachyos/0002" # fixes: __always_inline sched/mm/tick/vtime, RCU QS, NUMA, quirks
+      "cachyos/0006"
+      "cachyos/0007"
+      "cachyos/0009"
       "cachyos/0010"
-      "cachyos/0011"
+      "cachyos/0012"
       "cachyos/0013"
-      "cachyos/0014"
-      "cachyos/0016"
-      "cachyos/0017"
-      "cachyos/0023"
+      "cachyos/0019"
       # xanmod: sched latency, yield, block/mq-deadline, vfs, rwsem, accept LIFO, dm-crypt
       "xanmod/0001"
       "xanmod/0002"
@@ -115,7 +113,7 @@ let
       (lib.genList (i: "hardened/${lib.fixedWidthString 4 "0" (toString (i + 1))}") 101)
       ++ (lib.genList (i: "grapheneos/${lib.fixedWidthString 4 "0" (toString (i + 1))}") 6)
       ++ [
-        "cachyos/0018" # VMSCAPE/BHB clear mitigation
+        "cachyos/0014" # VMSCAPE/BHB clear mitigation
         "bunker/0003" # rust: allow clang native randstruct
         "bunker/0004" # enable RANDSTRUCT_FULL by default
         "bunker/0006" # enable KSTACK_ERASE by default
@@ -123,7 +121,7 @@ let
         "bunker/0008" # disable PROC_KCORE by default
       ];
     networking = [
-      "cachyos/0004" # BBRv3
+      "cachyos/0001" # BBRv3
       "xanmod/0012" # tcp: skip collapse sysctl
       "clear/0001"
       "clear/0002"
@@ -139,21 +137,20 @@ let
       "zen/0007"
       "zen/0008"
       "zen/0011"
+      "cachyos/0003"
       "cachyos/0005"
-      "cachyos/0007"
-      "cachyos/0008"
-      "cachyos/0009"
-      "cachyos/0019"
-      "cachyos/0022"
+      "cachyos/0015"
+      "cachyos/0018"
       "bunker/0002"
+      "bunker/0009" # i2c-nct6775: OpenRGB SMBus for gaming motherboard RGB
       "clear/0012" # PCI PME interval
     ];
     extras = [
-      "cachyos/0006"
-      "cachyos/0012"
-      "cachyos/0015"
-      "cachyos/0020"
-      "cachyos/0021"
+      "cachyos/0004"
+      "cachyos/0008"
+      "cachyos/0011"
+      "cachyos/0016"
+      "cachyos/0017"
       "xanmod/0008"
       "xanmod/0009"
       "xanmod/0010"
@@ -386,7 +383,9 @@ let
       # --- Security features ---
       CFI = yes;
       CFI_PERMISSIVE = no;
+      X86_KERNEL_IBT = yes; # Intel CET indirect branch tracking — hardware CFI complement
       ZERO_CALL_USED_REGS = yes;
+      SLAB_BUCKETS = yes; # dedicated slab buckets — prevents cross-cache attacks (KSPP)
       SECURITY_SAFESETID = yes;
       BUG_ON_DATA_CORRUPTION = yes; # panic on slab/list corruption
       SECURITY_DMESG_RESTRICT = yes; # restrict dmesg before sysctl runs
