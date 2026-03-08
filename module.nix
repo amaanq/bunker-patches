@@ -111,7 +111,7 @@ let
     ];
     hardened =
       (lib.genList (i: "hardened/${lib.fixedWidthString 4 "0" (toString (i + 1))}") 101)
-      ++ (lib.genList (i: "grapheneos/${lib.fixedWidthString 4 "0" (toString (i + 1))}") 6)
+      ++ (lib.genList (i: "grapheneos/${lib.fixedWidthString 4 "0" (toString (i + 1))}") 5)
       ++ [
         "cachyos/0014" # VMSCAPE/BHB clear mitigation
         "bunker/0003" # rust: allow clang native randstruct
