@@ -20,6 +20,7 @@ let
     ;
   inherit (lib.kernel)
     freeform
+    module
     option
     yes
     no
@@ -969,6 +970,15 @@ let
     ${cfg.cpuArch} = yes;
   };
 
+  # ChromeOS EC base drivers for Framework laptops.
+  # Enables cros_ec and cros_ec_lpcs so the out-of-tree framework-laptop-kmod can bind.
+  # Off by default as most users do not have CrOS EC hardware.
+  frameworkConfig = optionalAttrs cfg.framework (forceAll {
+    CHROME_PLATFORMS = yes;
+    CROS_EC = module;
+    CROS_EC_LPC = module;
+  });
+
   bunkernel = pkgs.linuxKernel.buildLinux {
     pname = "linux-bunker";
     stdenv = llvmStdenv;
@@ -982,6 +992,7 @@ let
       // interactiveConfig
       // hardenedConfig
       // trimmedConfig
+      // frameworkConfig
       // networkingConfig
       // rustLtoConfig
       // ltoConfig
@@ -1094,6 +1105,12 @@ in
       type = types.bool;
       default = true;
       description = "Enable extra patches (sched_ext, v4l2loopback, Clang Polly, micro-arch targets, etc.).";
+    };
+
+    framework = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Enable CrOS EC base drivers for Framework laptops (used by framework-laptop-kmod).";
     };
 
     cpuArch = mkOption {
