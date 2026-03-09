@@ -144,6 +144,7 @@ let
       "cachyos/0018"
       "bunker/0002"
       "bunker/0009" # i2c-nct6775: OpenRGB SMBus for gaming motherboard RGB
+      "bunker/0010" # rust: backlight device abstraction
       "clear/0012" # PCI PME interval
     ];
     extras = [
