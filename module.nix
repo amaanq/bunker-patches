@@ -30,6 +30,7 @@ let
   forceAll = mapAttrs (_: mkForce);
 
   isX86 = pkgs.stdenv.hostPlatform.isx86_64;
+  isAarch64 = pkgs.stdenv.hostPlatform.isAarch64;
 
   # Map user-facing major.minor → latest stable point release
   stableRelease = {
@@ -366,6 +367,10 @@ let
       X86_FRED = yes; # Flexible Return and Event Delivery (Zen 5+ / Arrow Lake+)
       PERF_EVENTS_AMD_POWER = yes; # AMD power events for perf profiling
     }
+    // optionalAttrs isAarch64 {
+      ARM64_64K_PAGES = yes; # 64K pages — 10-15% compilation speedup from TLB coverage
+      ARM64_4K_PAGES = no;
+    }
     // mapAttrs (_: mkOverride 90) {
       PREEMPT = yes;
       PREEMPT_VOLUNTARY = no;
@@ -385,6 +390,8 @@ let
       # --- Security features ---
       CFI = yes;
       CFI_PERMISSIVE = no;
+    }
+    // optionalAttrs (cfg.hardened && isX86) {
       X86_KERNEL_IBT = yes; # Intel CET indirect branch tracking — hardware CFI complement
       ZERO_CALL_USED_REGS = yes;
       SLAB_BUCKETS = yes; # dedicated slab buckets — prevents cross-cache attacks (KSPP)
