@@ -31,6 +31,7 @@ let
 
   isX86 = pkgs.stdenv.hostPlatform.isx86_64;
   isAarch64 = pkgs.stdenv.hostPlatform.isAarch64;
+  isPpc64 = pkgs.stdenv.hostPlatform.isPower64;
 
   # Map user-facing major.minor → latest stable point release
   stableRelease = {
@@ -370,6 +371,10 @@ let
     // optionalAttrs isAarch64 {
       ARM64_64K_PAGES = yes; # 64K pages — 10-15% compilation speedup from TLB coverage
       ARM64_4K_PAGES = no;
+    }
+    // optionalAttrs isPpc64 {
+      PPC_64K_PAGES = yes; # 64K pages — native PPC64 page size
+      PPC_4K_PAGES = no;
     }
     // mapAttrs (_: mkOverride 90) {
       PREEMPT = yes;
