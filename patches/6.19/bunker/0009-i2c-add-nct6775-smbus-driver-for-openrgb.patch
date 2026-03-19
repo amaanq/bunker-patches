@@ -269,6 +269,7 @@ index 000000000000..0462f0952043
 +			break;
 +		case I2C_SMBUS_BYTE_DATA:
 +			tmp_data.byte = data->byte;
++			fallthrough;
 +		case I2C_SMBUS_BYTE:
 +			outb_p((addr << 1) | read_write,
 +			       SMBHSTADD);
@@ -520,7 +521,7 @@ index 000000000000..0462f0952043
 +	.probe		= nct6775_probe,
 +};
 +
-+static void __exit i2c_nct6775_exit(void)
++static void __maybe_unused __exit i2c_nct6775_exit(void)
 +{
 +	int i;
 +

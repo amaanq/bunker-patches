@@ -11018,7 +11018,7 @@ index 000000000000..3d775975bfc4
 +        }
 +}
 +
-+static u32
++static __maybe_unused u32
 +rtl8125_rx_desc_opts2(struct rtl8125_private *tp,
 +                      struct RxDesc *desc)
 +{
