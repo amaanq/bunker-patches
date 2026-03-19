@@ -326,12 +326,19 @@ let
   baseConfig = {
     BUNKER = yes;
     LOCALVERSION = freeform "-bunker";
-    MODULE_DECOMPRESS = yes; # in-kernel module decompression
-    FW_LOADER_COMPRESS_ZSTD = yes; # zstd firmware compression
+    MODULE_DECOMPRESS = option yes; # in-kernel module decompression
+    FW_LOADER_COMPRESS_ZSTD = option yes; # zstd firmware compression
+
+    BPF_SYSCALL = yes;
+    BPF_JIT = yes;
+    PSI = yes; # Pressure Stall Information (systemd-oomd)
+  }
+  // optionalAttrs isX86 {
+    MICROCODE = yes;
   }
   // forceAll {
-    MODULE_COMPRESS_ZSTD = yes;
-    MODULE_COMPRESS_XZ = no;
+    MODULE_COMPRESS_ZSTD = option yes;
+    MODULE_COMPRESS_XZ = option no;
   };
 
   interactiveConfig = optionalAttrs cfg.interactive (
@@ -348,7 +355,7 @@ let
       TREE_SRCU = yes;
       TASKS_RCU_GENERIC = yes;
       TASKS_RCU = yes;
-      TASKS_RUDE_RCU = yes;
+      TASKS_RUDE_RCU = option yes;
       TASKS_TRACE_RCU = yes;
       RCU_STALL_COMMON = yes;
       RCU_NEED_SEGCBLIST = yes;
@@ -382,6 +389,7 @@ let
       IOSCHED_BFQ = yes;
     }
     // forceAll {
+      TRANSPARENT_HUGEPAGE = yes;
       TRANSPARENT_HUGEPAGE_ALWAYS = yes;
       TRANSPARENT_HUGEPAGE_MADVISE = no;
       MQ_IOSCHED_KYBER = no;
@@ -395,18 +403,12 @@ let
       # --- Security features ---
       CFI = yes;
       CFI_PERMISSIVE = no;
-    }
-    // optionalAttrs (cfg.hardened && isX86) {
-      X86_KERNEL_IBT = yes; # Intel CET indirect branch tracking — hardware CFI complement
       ZERO_CALL_USED_REGS = yes;
       SLAB_BUCKETS = yes; # dedicated slab buckets — prevents cross-cache attacks (KSPP)
       SECURITY_SAFESETID = yes;
       BUG_ON_DATA_CORRUPTION = yes; # panic on slab/list corruption
       SECURITY_DMESG_RESTRICT = yes; # restrict dmesg before sysctl runs
-
       # --- ASLR maximization ---
-      ARCH_MMAP_RND_BITS = freeform "32"; # max ASLR entropy for mmap (default 28)
-      ARCH_MMAP_RND_COMPAT_BITS = freeform "16"; # max ASLR for 32-bit compat
       RANDOMIZE_KSTACK_OFFSET_DEFAULT = yes; # randomize kernel stack per syscall
 
       # --- Integrity & verified boot ---
@@ -414,8 +416,13 @@ let
       ENCRYPTED_KEYS = yes; # kernel-managed encrypted keys (dm-crypt, IMA)
       FS_VERITY = yes; # file-level Merkle tree integrity
       FS_VERITY_BUILTIN_SIGNATURES = yes; # verify fs-verity against built-in X.509
-      DM_VERITY_VERIFY_ROOTHASH_SIG = yes; # signature check on dm-verity root hash
-      FS_ENCRYPTION_INLINE_CRYPT = yes; # hardware crypto offload for fscrypt
+      DM_VERITY_VERIFY_ROOTHASH_SIG = option yes; # signature check on dm-verity root hash
+      FS_ENCRYPTION_INLINE_CRYPT = option yes; # hardware crypto offload for fscrypt
+    }
+    // optionalAttrs (cfg.hardened && isX86) {
+      X86_KERNEL_IBT = yes; # Intel CET indirect branch tracking — hardware CFI complement
+      ARCH_MMAP_RND_BITS = freeform "32"; # max ASLR entropy for mmap (default 28)
+      ARCH_MMAP_RND_COMPAT_BITS = freeform "16"; # max ASLR for 32-bit compat
     }
     // forceAll {
       # --- Disabled features — attack surface reduction, debug infra, etc. ---
@@ -566,7 +573,7 @@ let
     ISDN = option no; # ISDN telephony
     PCMCIA = option no; # CardBus
     PARPORT = option no; # Parallel port
-    INPUT_JOYSTICK = no; # Disables all gameport joystick drivers (bool, not tristate)
+    INPUT_JOYSTICK = option no; # Disables all gameport joystick drivers (bool, not tristate)
     GAMEPORT = option no; # Legacy gameport (freed by INPUT_JOYSTICK=n)
     COMEDI = option no; # Data acquisition
     GREYBUS = option no; # Project Ara
@@ -762,130 +769,130 @@ let
     SURFACE_PLATFORMS = option no; # Microsoft Surface
 
     # Obsolete Network (10/100 NICs from 1990s/2000s)
-    ADAPTEC_STARFIRE = no; # Adaptec Starfire Ethernet - Old PCI NIC (1990s)
-    DE2104X = no; # DEC 21x4x Tulip Ethernet - Ancient PCI NIC
-    TULIP = no; # DEC Tulip Ethernet - Legacy 1990s NIC
-    WINBOND_840 = no; # Winbond W89c840 Ethernet - Obsolete 10/100 NIC
-    DM9102 = no; # Davicom DM9102 Ethernet - Old PCI NIC
-    ULI526X = no; # ULi M526x Ethernet - Legacy 10/100 NIC
-    HAMACHI = no; # Packet Engines Hamachi - Old Gigabit NIC
-    YELLOWFIN = no; # Packet Engines Yellowfin - Old Gigabit NIC
-    NATSEMI = no; # National Semiconductor DP8381x - Legacy 10/100 NIC
-    NS83820 = no; # National Semiconductor DP83820 - Old Gigabit NIC
-    S2IO = no; # Neterion S2IO 10GbE - Deprecated server NIC
-    NE2K_PCI = no; # NE2000 PCI Ethernet - Ancient 10Mbps NIC
-    FORCEDETH = no; # NVIDIA nForce Ethernet - Legacy chipset NIC
-    ETHOC = no; # OpenCores Ethernet - FPGA embedded NIC
-    R6040 = no; # RDC R6040 Ethernet - Embedded/industrial NIC
+    ADAPTEC_STARFIRE = option no; # Adaptec Starfire Ethernet - Old PCI NIC (1990s)
+    DE2104X = option no; # DEC 21x4x Tulip Ethernet - Ancient PCI NIC
+    TULIP = option no; # DEC Tulip Ethernet - Legacy 1990s NIC
+    WINBOND_840 = option no; # Winbond W89c840 Ethernet - Obsolete 10/100 NIC
+    DM9102 = option no; # Davicom DM9102 Ethernet - Old PCI NIC
+    ULI526X = option no; # ULi M526x Ethernet - Legacy 10/100 NIC
+    HAMACHI = option no; # Packet Engines Hamachi - Old Gigabit NIC
+    YELLOWFIN = option no; # Packet Engines Yellowfin - Old Gigabit NIC
+    NATSEMI = option no; # National Semiconductor DP8381x - Legacy 10/100 NIC
+    NS83820 = option no; # National Semiconductor DP83820 - Old Gigabit NIC
+    S2IO = option no; # Neterion S2IO 10GbE - Deprecated server NIC
+    NE2K_PCI = option no; # NE2000 PCI Ethernet - Ancient 10Mbps NIC
+    FORCEDETH = option no; # NVIDIA nForce Ethernet - Legacy chipset NIC
+    ETHOC = option no; # OpenCores Ethernet - FPGA embedded NIC
+    R6040 = option no; # RDC R6040 Ethernet - Embedded/industrial NIC
     ATP = option no; # Realtek RTL8012 ATP - Ancient 10Mbps ISA NIC (removed in 6.x)
 
     # Additional Ancient SCSI (pre-2010)
     SCSI_3W_XXXX_RAID = option no; # 3ware Escalade RAID - Ancient RAID (pre-2005, removed in 6.x)
-    SCSI_3W_9XXX = no; # 3ware 9000 series RAID - Legacy RAID controller
-    SCSI_3W_SAS = no; # 3ware SAS RAID - Obsolete SAS RAID
-    SCSI_MVSAS = no; # Marvell SAS/SATA - Old enterprise SAS
-    SCSI_MVUMI = no; # Marvell UMI - Legacy RAID
-    SCSI_ADVANSYS = no; # AdvanSys SCSI - Ancient SCSI card
-    SCSI_ARCMSR = no; # Areca RAID - Legacy RAID controller
-    SCSI_ESAS2R = no; # ATTO ESAS RAID - Old RAID controller
-    SCSI_HPTIOP = no; # HighPoint RocketRAID - Legacy RAID
-    SCSI_BUSLOGIC = no; # BusLogic SCSI - 1990s SCSI controller
-    SCSI_DMX3191D = no; # DMX3191D SCSI - Obsolete SCSI
+    SCSI_3W_9XXX = option no; # 3ware 9000 series RAID - Legacy RAID controller
+    SCSI_3W_SAS = option no; # 3ware SAS RAID - Obsolete SAS RAID
+    SCSI_MVSAS = option no; # Marvell SAS/SATA - Old enterprise SAS
+    SCSI_MVUMI = option no; # Marvell UMI - Legacy RAID
+    SCSI_ADVANSYS = option no; # AdvanSys SCSI - Ancient SCSI card
+    SCSI_ARCMSR = option no; # Areca RAID - Legacy RAID controller
+    SCSI_ESAS2R = option no; # ATTO ESAS RAID - Old RAID controller
+    SCSI_HPTIOP = option no; # HighPoint RocketRAID - Legacy RAID
+    SCSI_BUSLOGIC = option no; # BusLogic SCSI - 1990s SCSI controller
+    SCSI_DMX3191D = option no; # DMX3191D SCSI - Obsolete SCSI
     SCSI_FDOMAIN = option no; # Future Domain SCSI - Ancient SCSI card (forced to 'm' by deps in some kernels)
-    SCSI_ISCI = no; # Intel C600 SAS - Old server chipset SAS
-    SCSI_IPS = no; # IBM ServeRAID - Legacy IBM RAID
-    SCSI_INITIO = no; # Initio SCSI - 1990s SCSI controller
-    SCSI_INIA100 = no; # InitIO INI-A100U/W - Ancient SCSI
+    SCSI_ISCI = option no; # Intel C600 SAS - Old server chipset SAS
+    SCSI_IPS = option no; # IBM ServeRAID - Legacy IBM RAID
+    SCSI_INITIO = option no; # Initio SCSI - 1990s SCSI controller
+    SCSI_INIA100 = option no; # InitIO INI-A100U/W - Ancient SCSI
     SCSI_PPA = option no; # Iomega PPA (parallel port) - Parallel port ZIP drive (removed in 6.x)
     SCSI_IMM = option no; # Iomega IMM (parallel port) - Parallel port ZIP drive (removed in 6.x)
-    SCSI_STEX = no; # Promise SuperTrak EX - Legacy RAID
-    SCSI_SYM53C8XX_2 = no; # Symbios 53C8xx SCSI - 1990s SCSI controller
-    SCSI_QLOGIC_1280 = no; # QLogic 1280 SCSI - Old SCSI controller
-    SCSI_DC395x = no; # Tekram DC395x SCSI - 1990s SCSI card
-    SCSI_AM53C974 = no; # AMD AM53C974 SCSI - Ancient SCSI
-    SCSI_WD719X = no; # Western Digital WD719x - 1990s SCSI controller
-    SCSI_PMCRAID = no; # PMC-Sierra RAID - Legacy RAID
-    SCSI_PM8001 = no; # PMC-Sierra 8001 SAS - Old SAS controller
+    SCSI_STEX = option no; # Promise SuperTrak EX - Legacy RAID
+    SCSI_SYM53C8XX_2 = option no; # Symbios 53C8xx SCSI - 1990s SCSI controller
+    SCSI_QLOGIC_1280 = option no; # QLogic 1280 SCSI - Old SCSI controller
+    SCSI_DC395x = option no; # Tekram DC395x SCSI - 1990s SCSI card
+    SCSI_AM53C974 = option no; # AMD AM53C974 SCSI - Ancient SCSI
+    SCSI_WD719X = option no; # Western Digital WD719x - 1990s SCSI controller
+    SCSI_PMCRAID = option no; # PMC-Sierra RAID - Legacy RAID
+    SCSI_PM8001 = option no; # PMC-Sierra 8001 SAS - Old SAS controller
 
     # Legacy PATA/IDE Controllers (pre-SATA era)
-    PATA_ALI = no; # ALI PATA - Legacy chipset IDE
-    PATA_ARTOP = no; # ARTOP PATA - Old IDE controller
-    PATA_ATIIXP = no; # ATI IXP PATA - Legacy IDE
-    PATA_ATP867X = no; # ATP867X PATA - Obsolete IDE
-    PATA_CMD64X = no; # CMD64x PATA - 1990s IDE controller
-    PATA_CYPRESS = no; # Cypress PATA - Old IDE controller
-    PATA_EFAR = no; # EFAR PATA - Legacy IDE
-    PATA_HPT366 = no; # HPT366 PATA - Old IDE RAID
-    PATA_HPT37X = no; # HPT37x PATA - Legacy IDE RAID
-    PATA_HPT3X2N = no; # HPT3x2N PATA - Obsolete IDE RAID
-    PATA_IT8213 = no; # IT8213 PATA - Old IDE controller
-    PATA_IT821X = no; # IT821X PATA - Legacy IDE RAID
-    PATA_NETCELL = no; # NetCell PATA - Obsolete IDE
-    PATA_OLDPIIX = no; # Intel PIIX1/2 PATA - Ancient IDE (pre-2000)
-    PATA_PDC2027X = no; # Promise PDC2027x - Legacy IDE RAID
-    PATA_PDC_OLD = no; # Promise old PATA - Old IDE RAID
-    PATA_RADISYS = no; # Radisys PATA - Obsolete IDE
-    PATA_RDC = no; # RDC PATA - Legacy embedded IDE
-    PATA_TOSHIBA = no; # Toshiba PATA - Old laptop IDE
-    PATA_TRIFLEX = no; # Compaq Triflex PATA - Ancient IDE
+    PATA_ALI = option no; # ALI PATA - Legacy chipset IDE
+    PATA_ARTOP = option no; # ARTOP PATA - Old IDE controller
+    PATA_ATIIXP = option no; # ATI IXP PATA - Legacy IDE
+    PATA_ATP867X = option no; # ATP867X PATA - Obsolete IDE
+    PATA_CMD64X = option no; # CMD64x PATA - 1990s IDE controller
+    PATA_CYPRESS = option no; # Cypress PATA - Old IDE controller
+    PATA_EFAR = option no; # EFAR PATA - Legacy IDE
+    PATA_HPT366 = option no; # HPT366 PATA - Old IDE RAID
+    PATA_HPT37X = option no; # HPT37x PATA - Legacy IDE RAID
+    PATA_HPT3X2N = option no; # HPT3x2N PATA - Obsolete IDE RAID
+    PATA_IT8213 = option no; # IT8213 PATA - Old IDE controller
+    PATA_IT821X = option no; # IT821X PATA - Legacy IDE RAID
+    PATA_NETCELL = option no; # NetCell PATA - Obsolete IDE
+    PATA_OLDPIIX = option no; # Intel PIIX1/2 PATA - Ancient IDE (pre-2000)
+    PATA_PDC2027X = option no; # Promise PDC2027x - Legacy IDE RAID
+    PATA_PDC_OLD = option no; # Promise old PATA - Old IDE RAID
+    PATA_RADISYS = option no; # Radisys PATA - Obsolete IDE
+    PATA_RDC = option no; # RDC PATA - Legacy embedded IDE
+    PATA_TOSHIBA = option no; # Toshiba PATA - Old laptop IDE
+    PATA_TRIFLEX = option no; # Compaq Triflex PATA - Ancient IDE
 
     # Old Wireless (Pre-WiFi 6 - 802.11b/g/n legacy)
-    ADM8211 = no; # ADMtek ADM8211 WLAN - 802.11b (1999)
-    ATH5K = no; # Atheros AR5xxx - 802.11a/b/g (pre-2008)
-    ATH9K = no; # Atheros AR9xxx - 802.11n (old gen)
-    ATH9K_HTC = no; # Atheros AR9271 USB - Old 802.11n USB
-    CARL9170 = no; # Atheros AR9170 USB - Legacy 802.11n
-    ATH6KL = no; # Atheros AR600x - Old embedded WiFi
-    AR5523 = no; # Atheros AR5523 - Legacy 802.11g USB
-    IPW2100 = no; # Intel PRO/Wireless 2100 - 802.11b (2003)
-    IPW2200 = no; # Intel PRO/Wireless 2200BG - 802.11b/g (2004)
-    IWL3945 = no; # Intel Wireless 3945ABG - 802.11a/b/g (2006)
-    IWL4965 = no; # Intel Wireless 4965AGN - 802.11n draft (2007)
-    LIBERTAS = no; # Marvell Libertas - 802.11b/g (old)
-    AT76C50X_USB = no; # Atmel AT76C50x - 802.11b USB
-    B43 = no; # Broadcom b43 - Legacy BCM43xx
-    B43LEGACY = no; # Broadcom b43legacy - Ancient BCM430x
-    MWIFIEX = no; # Marvell mwifiex - Old embedded WiFi
-    MWL8K = no; # Marvell 88W8xxx - Legacy PCI WiFi
-    P54_COMMON = no; # Prism54 - 802.11g (2004)
-    RT2X00 = no; # Ralink RT2x00 - Old 802.11n
+    ADM8211 = option no; # ADMtek ADM8211 WLAN - 802.11b (1999)
+    ATH5K = option no; # Atheros AR5xxx - 802.11a/b/g (pre-2008)
+    ATH9K = option no; # Atheros AR9xxx - 802.11n (old gen)
+    ATH9K_HTC = option no; # Atheros AR9271 USB - Old 802.11n USB
+    CARL9170 = option no; # Atheros AR9170 USB - Legacy 802.11n
+    ATH6KL = option no; # Atheros AR600x - Old embedded WiFi
+    AR5523 = option no; # Atheros AR5523 - Legacy 802.11g USB
+    IPW2100 = option no; # Intel PRO/Wireless 2100 - 802.11b (2003)
+    IPW2200 = option no; # Intel PRO/Wireless 2200BG - 802.11b/g (2004)
+    IWL3945 = option no; # Intel Wireless 3945ABG - 802.11a/b/g (2006)
+    IWL4965 = option no; # Intel Wireless 4965AGN - 802.11n draft (2007)
+    LIBERTAS = option no; # Marvell Libertas - 802.11b/g (old)
+    AT76C50X_USB = option no; # Atmel AT76C50x - 802.11b USB
+    B43 = option no; # Broadcom b43 - Legacy BCM43xx
+    B43LEGACY = option no; # Broadcom b43legacy - Ancient BCM430x
+    MWIFIEX = option no; # Marvell mwifiex - Old embedded WiFi
+    MWL8K = option no; # Marvell 88W8xxx - Legacy PCI WiFi
+    P54_COMMON = option no; # Prism54 - 802.11g (2004)
+    RT2X00 = option no; # Ralink RT2x00 - Old 802.11n
     RT2500USB = option no; # Ralink RT2500 USB - 802.11g (2004, removed in 6.x)
     RT73USB = option no; # Ralink RT73 USB - 802.11g (2005, removed in 6.x)
     RT2800USB_RT53XX = option no; # Ralink RT2800USB RT53xx - removed in 6.x (nixpkgs common-config override)
     RT2800USB_RT55XX = option no; # Ralink RT2800USB RT55xx - removed in 6.x (nixpkgs common-config override)
-    RTL8180 = no; # Realtek RTL8180 - 802.11b PCI
-    RTL8187 = no; # Realtek RTL8187 - 802.11g USB
-    RTL8192CU = no; # Realtek RTL8192CU - Old 802.11n USB
+    RTL8180 = option no; # Realtek RTL8180 - 802.11b PCI
+    RTL8187 = option no; # Realtek RTL8187 - 802.11g USB
+    RTL8192CU = option no; # Realtek RTL8192CU - Old 802.11n USB
 
     # SoC-specific (ARM/MIPS only, not applicable to x86_64)
     QCA7000 = option no; # Qualcomm QCA7000 - Embedded PLC (Power Line, forced 'm' by deps in some configs)
-    QCOM_EMAC = no; # Qualcomm EMAC - ARM SoC Ethernet
-    RMNET = no; # Qualcomm RMNET - Mobile modem interface
+    QCOM_EMAC = option no; # Qualcomm EMAC - ARM SoC Ethernet
+    RMNET = option no; # Qualcomm RMNET - Mobile modem interface
     SPI_FSL_LIB = option no; # Freescale SPI - ARM SoC SPI (removed in 6.x)
-    SPI_FSL_SPI = no; # Freescale SPI - ARM SoC SPI
-    SPI_LANTIQ_SSC = no; # Lantiq SSC SPI - MIPS/embedded SoC
-    I2C_RK3X = no; # Rockchip I2C - ARM SoC I2C
+    SPI_FSL_SPI = option no; # Freescale SPI - ARM SoC SPI
+    SPI_LANTIQ_SSC = option no; # Lantiq SSC SPI - MIPS/embedded SoC
+    I2C_RK3X = option no; # Rockchip I2C - ARM SoC I2C
 
     # Obsolete USB Ethernet Adapters (USB 1.1/2.0 era)
-    USB_CATC = no; # CATC USB Ethernet - Obsolete USB 1.1 NIC
-    USB_KAWETH = no; # Kawasaki LSI USB Ethernet - Ancient USB NIC
-    USB_RTL8150 = no; # Realtek RTL8150 - USB 1.1 10Mbps NIC
-    USB_PEGASUS = no; # Pegasus USB Ethernet - Old USB 1.1 NIC
-    USB_NET_DM9601 = no; # Davicom DM9601 USB - Obsolete USB NIC
-    USB_NET_SR9700 = no; # CoreChip SR9700 - Old USB 1.1 NIC
-    USB_NET_SR9800 = no; # CoreChip SR9800 - Old USB 2.0 NIC
-    USB_NET_GL620A = no; # Genesys GL620USB - Ancient USB host-to-host
-    USB_NET_PLUSB = no; # Prolific PL2301/2302 - Old USB host-to-host
-    USB_NET_MCS7830 = no; # MosChip MCS7830 - Obsolete USB NIC
-    USB_NET_ZAURUS = no; # Zaurus USB net - PDA from 2000s
-    USB_NET_CX82310_ETH = no; # Conexant CX82310 - Old USB modem
-    USB_NET_KALMIA = no; # Samsung Kalmia - Old modem
-    USB_HSO = no; # Option HSDPA modem - 3G USB modem
-    USB_NET_INT51X1 = no; # Intellon PLC - Power line comms
+    USB_CATC = option no; # CATC USB Ethernet - Obsolete USB 1.1 NIC
+    USB_KAWETH = option no; # Kawasaki LSI USB Ethernet - Ancient USB NIC
+    USB_RTL8150 = option no; # Realtek RTL8150 - USB 1.1 10Mbps NIC
+    USB_PEGASUS = option no; # Pegasus USB Ethernet - Old USB 1.1 NIC
+    USB_NET_DM9601 = option no; # Davicom DM9601 USB - Obsolete USB NIC
+    USB_NET_SR9700 = option no; # CoreChip SR9700 - Old USB 1.1 NIC
+    USB_NET_SR9800 = option no; # CoreChip SR9800 - Old USB 2.0 NIC
+    USB_NET_GL620A = option no; # Genesys GL620USB - Ancient USB host-to-host
+    USB_NET_PLUSB = option no; # Prolific PL2301/2302 - Old USB host-to-host
+    USB_NET_MCS7830 = option no; # MosChip MCS7830 - Obsolete USB NIC
+    USB_NET_ZAURUS = option no; # Zaurus USB net - PDA from 2000s
+    USB_NET_CX82310_ETH = option no; # Conexant CX82310 - Old USB modem
+    USB_NET_KALMIA = option no; # Samsung Kalmia - Old modem
+    USB_HSO = option no; # Option HSDPA modem - 3G USB modem
+    USB_NET_INT51X1 = option no; # Intellon PLC - Power line comms
     USB_CDC_PHONET = option no; # Phonet USB - Nokia phone protocol (removed in 6.x)
-    USB_SIERRA_NET = no; # Sierra Wireless - Old 3G/4G modem
-    USB_VL600 = no; # Samsung VL600 - Old LTE modem
-    USB_NET_CH9200 = no; # QinHeng CH9200 - Obsolete USB NIC
+    USB_SIERRA_NET = option no; # Sierra Wireless - Old 3G/4G modem
+    USB_VL600 = option no; # Samsung VL600 - Old LTE modem
+    USB_NET_CH9200 = option no; # QinHeng CH9200 - Obsolete USB NIC
 
     # --- Virtual test drivers ---
     VIDEO_VIVID = option no; # Virtual video test driver
@@ -950,14 +957,14 @@ let
   });
 
   networkingConfig = optionalAttrs cfg.networking {
-    TCP_CONG_BBR = yes;
-    DEFAULT_BBR = yes;
+    TCP_CONG_BBR = option yes;
+    DEFAULT_BBR = option yes;
     NET_SCH_DEFAULT = yes;
-    DEFAULT_FQ_CODEL = yes;
+    DEFAULT_FQ_CODEL = option yes;
   };
 
   rustLtoConfig = optionalAttrs (cfg.rust && cfg.lto != "none") (forceAll {
-    DEBUG_INFO_BTF = no;
+    DEBUG_INFO_BTF = option no;
     NOVA_CORE = option no;
     NET_SCH_BPF = option no;
     SCHED_CLASS_EXT = option no;
