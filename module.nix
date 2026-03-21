@@ -385,6 +385,7 @@ let
     }
     // mapAttrs (_: mkOverride 90) {
       PREEMPT = yes;
+      PREEMPT_LAZY = option no;
       PREEMPT_VOLUNTARY = no;
       IOSCHED_BFQ = yes;
     }
@@ -1052,14 +1053,17 @@ let
         (old.postInstall or "");
   });
 
-  # Discard kernel.dev references from out-of-tree kernel modules at Nix
-  # scan time.  Out-of-tree modules (.ko.zst) embed KBUILD_OUTPUT in their
-  # .modinfo section; zstd sometimes stores this path verbatim in a literal
-  # block.  system.replaceRuntimeDependencies patches raw bytes inside those
-  # compressed frames, corrupting the zstd content checksum and causing
-  # modprobe/insmod to fail with EINVAL at boot.  unsafeDiscardReferences
-  # breaks the toolchain reference during the Nix build scan instead,
-  # keeping the closure small without touching any compressed data.
+  # Out-of-tree kernel modules embed KBUILD_OUTPUT (kernel.dev store path)
+  # in DWARF debug info.  zstd may store these paths verbatim in literal
+  # blocks.  NixOS's modules-closure.sh runs nuke-refs on the compressed
+  # .ko.zst, byte-patching any /nix/store/ strings it finds — corrupting
+  # the zstd frame checksum.  depmod then silently skips the module,
+  # producing an empty modules.dep entry and a stage-2 boot failure.
+  #
+  # Fix: strip debug sections from .ko files after install (before zstd
+  # compresses them), removing the embedded store paths at the source.
+  # The kernel's own modules use the same compiler but are stripped by
+  # the in-tree build system; out-of-tree modules skip that step.
   kernelPackage = (pkgs.linuxKernel.packagesFor bunkernel').extend (
     _: prev:
     lib.optionalAttrs (prev ? bcachefs-tools) {
@@ -1069,12 +1073,33 @@ let
         };
       });
     }
+    # modules-closure.sh runs nuke-refs on compressed .ko.zst to strip
+    # Nix store paths.  When zstd literal blocks contain kernel.dev
+    # paths, nuke-refs corrupts the zstd frame checksum.  depmod
+    # silently skips the file → empty modules.dep → stage-2 boot
+    # failure.  Decompress, strip debug sections + nuke refs, then
+    # recompress — keeps checksums intact for depmod/modprobe.
     // lib.optionalAttrs (prev ? bcachefs) {
-      bcachefs = prev.bcachefs.overrideAttrs (old: {
-        unsafeDiscardReferences = (old.unsafeDiscardReferences or { }) // {
-          out = true;
-        };
-      });
+      bcachefs =
+        pkgs.runCommand "${prev.bcachefs.name}-stripped"
+          {
+            nativeBuildInputs = [
+              pkgs.nukeReferences
+              pkgs.zstd
+              pkgs.binutils
+            ];
+            inherit (prev.bcachefs) meta;
+          }
+          ''
+            cp -r --no-preserve=mode ${prev.bcachefs} $out
+            find $out -name '*.ko.zst' | while read -r f; do
+              zstd -d --rm "$f"
+              ko="''${f%.zst}"
+              strip --strip-debug "$ko"
+              nuke-refs "$ko"
+              zstd --rm -q "$ko"
+            done
+          '';
     }
   );
 in
@@ -1214,6 +1239,11 @@ in
       ];
 
       boot.kernelPackages = kernelPackage;
+
+      # NixOS's bcachefs module creates its own module instance via
+      # callPackage, bypassing our kernel packages overlay.  Point it
+      # at the stripped version explicitly.
+      boot.bcachefs.modulePackage = kernelPackage.bcachefs;
     }
 
     (mkIf cfg.hardened {
