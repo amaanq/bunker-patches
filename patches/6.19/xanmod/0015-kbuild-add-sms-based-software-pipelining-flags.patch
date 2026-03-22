@@ -17,7 +17,7 @@ Signed-off-by: Alexandre Frade <kernel@xanmod.org>
 diff --git a/Makefile b/Makefile
 --- a/Makefile
 +++ b/Makefile
-@@ -887,12 +887,18 @@ KBUILD_CFLAGS	+= -fno-delete-null-pointer-checks
+@@ -889,12 +889,18 @@ KBUILD_CFLAGS	+= -fno-delete-null-pointer-checks
 
  ifdef CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE
  KBUILD_CFLAGS += -O2

@@ -33,64 +33,25 @@ Link: https://patch.msgid.link/5959091.DvuYhMxLoT@rafael.j.wysocki
  1 file changed, 11 insertions(+), 11 deletions(-)
 
 diff --git a/drivers/cpuidle/governors/menu.c b/drivers/cpuidle/governors/menu.c
-index ef9c5a84643e..c6052055ba0f 100644
 --- a/drivers/cpuidle/governors/menu.c
 +++ b/drivers/cpuidle/governors/menu.c
-@@ -237,11 +237,11 @@ static int menu_select(struct cpuidle_driver *drv, struct cpuidle_device *dev,
- 		menu_update_intervals(data, UINT_MAX);
- 	}
- 
- 	/* Find the shortest expected idle interval. */
- 	predicted_ns = get_typical_interval(data) * NSEC_PER_USEC;
--	if (predicted_ns > RESIDENCY_THRESHOLD_NS) {
-+	if (predicted_ns > RESIDENCY_THRESHOLD_NS || tick_nohz_tick_stopped()) {
- 		unsigned int timer_us;
- 
- 		/* Determine the time till the closest timer. */
- 		delta = tick_nohz_get_sleep_length(&delta_tick);
- 		if (unlikely(delta < 0)) {
-@@ -257,10 +257,20 @@ static int menu_select(struct cpuidle_driver *drv, struct cpuidle_device *dev,
- 					data->next_timer_ns *
- 						data->correction_factor[data->bucket],
- 				   RESOLUTION * DECAY * NSEC_PER_USEC);
- 		/* Use the lowest expected idle interval to pick the idle state. */
- 		predicted_ns = min((u64)timer_us * NSEC_PER_USEC, predicted_ns);
-+		/*
-+		 * If the tick is already stopped, the cost of possible short
-+		 * idle duration misprediction is much higher, because the CPU
-+		 * may be stuck in a shallow idle state for a long time as a
-+		 * result of it.  In that case, say we might mispredict and use
+@@ -274,6 +274,16 @@ static int menu_select(struct cpuidle_dr
+ 		 * Because the next timer event is not going to be determined
+ 		 * in this case, assume that without the tick the closest timer
+ 		 * will be in distant future and that the closest tick will occur
 +		 * the known time till the closest timer event for the idle
 +		 * state selection.
 +		 */
 +		if (tick_nohz_tick_stopped() && predicted_ns < TICK_NSEC)
 +			predicted_ns = data->next_timer_ns;
- 	} else {
- 		/*
- 		 * Because the next timer event is not going to be determined
- 		 * in this case, assume that without the tick the closest timer
- 		 * will be in distant future and that the closest tick will occur
-@@ -282,20 +292,10 @@ static int menu_select(struct cpuidle_driver *drv, struct cpuidle_device *dev,
++	} else {
++		/*
++		 * Because the next timer event is not going to be determined
++		 * in this case, assume that without the tick the closest timer
++		 * will be in distant future and that the closest tick will occur
+ 		 * after 1/2 of the tick period.
  		 */
- 		*stop_tick = !(drv->states[0].flags & CPUIDLE_FLAG_POLLING);
- 		return 0;
- 	}
- 
--	/*
--	 * If the tick is already stopped, the cost of possible short idle
--	 * duration misprediction is much higher, because the CPU may be stuck
--	 * in a shallow idle state for a long time as a result of it.  In that
--	 * case, say we might mispredict and use the known time till the closest
--	 * timer event for the idle state selection.
--	 */
--	if (tick_nohz_tick_stopped() && predicted_ns < TICK_NSEC)
--		predicted_ns = data->next_timer_ns;
--
- 	/*
- 	 * Find the idle state with the lowest power while satisfying
- 	 * our constraints.
- 	 */
- 	idx = -1;
+ 		data->next_timer_ns = KTIME_MAX;
+
 -- 
 2.52.0
-

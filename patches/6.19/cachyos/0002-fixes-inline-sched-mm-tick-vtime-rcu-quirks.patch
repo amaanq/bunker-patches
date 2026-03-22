@@ -36,10 +36,9 @@ Signed-off-by: Peter Jung <admin@ptr1337.dev>
  28 files changed, 115 insertions(+), 131 deletions(-)
 
 diff --git a/arch/arm/include/asm/mmu_context.h b/arch/arm/include/asm/mmu_context.h
-index db2cb06aa8cf..bebde469f81a 100644
 --- a/arch/arm/include/asm/mmu_context.h
 +++ b/arch/arm/include/asm/mmu_context.h
-@@ -80,7 +80,7 @@ static inline void check_and_switch_context(struct mm_struct *mm,
+@@ -80,7 +80,7 @@ static inline void check_and_switch_cont
  #ifndef MODULE
  #define finish_arch_post_lock_switch \
  	finish_arch_post_lock_switch
@@ -48,8 +47,8 @@ index db2cb06aa8cf..bebde469f81a 100644
  {
  	struct mm_struct *mm = current->mm;
  
+
 diff --git a/arch/riscv/include/asm/sync_core.h b/arch/riscv/include/asm/sync_core.h
-index 9153016da8f1..2fe6b7fe6b12 100644
 --- a/arch/riscv/include/asm/sync_core.h
 +++ b/arch/riscv/include/asm/sync_core.h
 @@ -6,7 +6,7 @@
@@ -61,11 +60,11 @@ index 9153016da8f1..2fe6b7fe6b12 100644
  {
  	asm volatile ("fence.i" ::: "memory");
  }
+
 diff --git a/arch/s390/include/asm/mmu_context.h b/arch/s390/include/asm/mmu_context.h
-index d9b8501bc93d..c124ef6a01b3 100644
 --- a/arch/s390/include/asm/mmu_context.h
 +++ b/arch/s390/include/asm/mmu_context.h
-@@ -97,7 +97,7 @@ static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
+@@ -97,7 +97,7 @@ static inline void switch_mm(struct mm_s
  }
  
  #define finish_arch_post_lock_switch finish_arch_post_lock_switch
@@ -74,11 +73,11 @@ index d9b8501bc93d..c124ef6a01b3 100644
  {
  	struct task_struct *tsk = current;
  	struct mm_struct *mm = tsk->mm;
+
 diff --git a/arch/sparc/include/asm/mmu_context_64.h b/arch/sparc/include/asm/mmu_context_64.h
-index 78bbacc14d2d..d1967214ef25 100644
 --- a/arch/sparc/include/asm/mmu_context_64.h
 +++ b/arch/sparc/include/asm/mmu_context_64.h
-@@ -160,7 +160,7 @@ static inline void arch_start_context_switch(struct task_struct *prev)
+@@ -160,7 +160,7 @@ static inline void arch_start_context_sw
  }
  
  #define finish_arch_post_lock_switch	finish_arch_post_lock_switch
@@ -87,11 +86,11 @@ index 78bbacc14d2d..d1967214ef25 100644
  {
  	/* Restore the state of MCDPER register for the new process
  	 * just switched to.
+
 diff --git a/arch/x86/include/asm/mmu_context.h b/arch/x86/include/asm/mmu_context.h
-index 73bf3b1b44e8..ecd134dcfb34 100644
 --- a/arch/x86/include/asm/mmu_context.h
 +++ b/arch/x86/include/asm/mmu_context.h
-@@ -136,8 +136,29 @@ static inline void mm_reset_untag_mask(struct mm_struct *mm)
+@@ -136,8 +136,29 @@ static inline void mm_reset_untag_mask(s
  }
  #endif
  
@@ -122,11 +121,11 @@ index 73bf3b1b44e8..ecd134dcfb34 100644
  
  #define mm_init_global_asid mm_init_global_asid
  extern void mm_init_global_asid(struct mm_struct *mm);
+
 diff --git a/arch/x86/include/asm/sync_core.h b/arch/x86/include/asm/sync_core.h
-index 96bda43538ee..4b55fa353bb5 100644
 --- a/arch/x86/include/asm/sync_core.h
 +++ b/arch/x86/include/asm/sync_core.h
-@@ -93,7 +93,7 @@ static __always_inline void sync_core(void)
+@@ -93,7 +93,7 @@ static __always_inline void sync_core(vo
   * to user-mode. x86 implements return to user-space through sysexit,
   * sysrel, and sysretq, which are not core serializing.
   */
@@ -135,15 +134,14 @@ index 96bda43538ee..4b55fa353bb5 100644
  {
  	/* With PTI, we unconditionally serialize before running user code. */
  	if (static_cpu_has(X86_FEATURE_PTI))
+
 diff --git a/arch/x86/mm/tlb.c b/arch/x86/mm/tlb.c
-index f5b93e01e347..71abaf0bdb91 100644
 --- a/arch/x86/mm/tlb.c
 +++ b/arch/x86/mm/tlb.c
-@@ -971,27 +971,6 @@ void switch_mm_irqs_off(struct mm_struct *unused, struct mm_struct *next,
- 	}
+@@ -972,27 +972,6 @@ reload_tlb:
  }
  
--/*
+ /*
 - * Please ignore the name of this function.  It should be called
 - * switch_to_kernel_thread().
 - *
@@ -164,23 +162,24 @@ index f5b93e01e347..71abaf0bdb91 100644
 -	this_cpu_write(cpu_tlbstate_shared.is_lazy, true);
 -}
 -
- /*
+-/*
   * Using a temporary mm allows to set temporary mappings that are not accessible
   * by other CPUs. Such mappings are needed to perform sensitive memory writes
+  * that override the kernel memory protections (e.g., W^X), without exposing the
+
 diff --git a/drivers/bluetooth/btusb.c b/drivers/bluetooth/btusb.c
-index 80ccfa8fd982..0d5eae8295d4 100644
 --- a/drivers/bluetooth/btusb.c
 +++ b/drivers/bluetooth/btusb.c
-@@ -559,6 +559,8 @@ static const struct usb_device_id quirks_table[] = {
+@@ -563,6 +563,8 @@ static const struct usb_device_id quirks
  						     BTUSB_WIDEBAND_SPEECH },
- 	{ USB_DEVICE(0x13d3, 0x3592), .driver_info = BTUSB_REALTEK |
+ 	{ USB_DEVICE(0x13d3, 0x3612), .driver_info = BTUSB_REALTEK |
  						     BTUSB_WIDEBAND_SPEECH },
 +	{ USB_DEVICE(0x0489, 0xe112), .driver_info = BTUSB_REALTEK |
 +						     BTUSB_WIDEBAND_SPEECH },
  	{ USB_DEVICE(0x0489, 0xe122), .driver_info = BTUSB_REALTEK |
  						     BTUSB_WIDEBAND_SPEECH },
  
-@@ -669,6 +671,8 @@ static const struct usb_device_id quirks_table[] = {
+@@ -675,6 +677,8 @@ static const struct usb_device_id quirks
  						     BTUSB_WIDEBAND_SPEECH },
  
  	/* MediaTek MT7922 Bluetooth devices */
@@ -189,11 +188,11 @@ index 80ccfa8fd982..0d5eae8295d4 100644
  	{ USB_DEVICE(0x13d3, 0x3585), .driver_info = BTUSB_MEDIATEK |
  						     BTUSB_WIDEBAND_SPEECH },
  	{ USB_DEVICE(0x13d3, 0x3610), .driver_info = BTUSB_MEDIATEK |
+
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
-index d2c3885de711..8900e0dc8a61 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
-@@ -5068,7 +5068,7 @@ void amdgpu_device_fini_hw(struct amdgpu_device *adev)
+@@ -5081,7 +5081,7 @@ void amdgpu_device_fini_hw(struct amdgpu
  	 * before ip_fini_early to prevent kfd locking refcount issues by calling
  	 * amdgpu_amdkfd_suspend()
  	 */
@@ -202,7 +201,7 @@ index d2c3885de711..8900e0dc8a61 100644
  		amdgpu_amdkfd_device_fini_sw(adev);
  
  	amdgpu_device_ip_fini_early(adev);
-@@ -5080,7 +5080,7 @@ void amdgpu_device_fini_hw(struct amdgpu_device *adev)
+@@ -5093,7 +5093,7 @@ void amdgpu_device_fini_hw(struct amdgpu
  
  	amdgpu_gart_dummy_page_fini(adev);
  
@@ -211,8 +210,8 @@ index d2c3885de711..8900e0dc8a61 100644
  		amdgpu_device_unmap_mmio(adev);
  
  }
+
 diff --git a/drivers/gpu/drm/i915/gt/intel_rc6.c b/drivers/gpu/drm/i915/gt/intel_rc6.c
-index 286d49ecc449..472c68b32516 100644
 --- a/drivers/gpu/drm/i915/gt/intel_rc6.c
 +++ b/drivers/gpu/drm/i915/gt/intel_rc6.c
 @@ -2,9 +2,9 @@
@@ -226,7 +225,7 @@ index 286d49ecc449..472c68b32516 100644
  
  #include <drm/drm_print.h>
  
-@@ -497,6 +497,17 @@ static bool rc6_supported(struct intel_rc6 *rc6)
+@@ -497,6 +497,17 @@ static bool rc6_supported(struct intel_r
  	if (!HAS_RC6(i915))
  		return false;
  
@@ -244,11 +243,11 @@ index 286d49ecc449..472c68b32516 100644
  	if (intel_vgpu_active(i915))
  		return false;
  
+
 diff --git a/drivers/iommu/iommu.c b/drivers/iommu/iommu.c
-index 2ca990dfbb88..7c50e672dc84 100644
 --- a/drivers/iommu/iommu.c
 +++ b/drivers/iommu/iommu.c
-@@ -1218,6 +1218,11 @@ static int iommu_create_device_direct_mappings(struct iommu_domain *domain,
+@@ -1218,6 +1218,11 @@ map_end:
  				ret = iommu_map(domain, addr - map_size,
  						addr - map_size, map_size,
  						entry->prot, GFP_KERNEL);
@@ -260,13 +259,13 @@ index 2ca990dfbb88..7c50e672dc84 100644
  				if (ret)
  					goto out;
  				map_size = 0;
+
 diff --git a/drivers/usb/core/quirks.c b/drivers/usb/core/quirks.c
-index c4d85089d19b..f4c80063864f 100644
 --- a/drivers/usb/core/quirks.c
 +++ b/drivers/usb/core/quirks.c
-@@ -377,6 +377,9 @@ static const struct usb_device_id usb_quirk_list[] = {
- 	/* SanDisk Extreme 55AE */
- 	{ USB_DEVICE(0x0781, 0x55ae), .driver_info = USB_QUIRK_NO_LPM },
+@@ -384,6 +384,9 @@ static const struct usb_device_id usb_qu
+ 	/* Avermedia Live Gamer Ultra 2.1 (GC553G2) - BOS descriptor fetch hangs at SuperSpeed Plus */
+ 	{ USB_DEVICE(0x07ca, 0x2553), .driver_info = USB_QUIRK_NO_BOS },
  
 +	/* Avermedia Live Gamer Ultra 2.1 (GC553G2) - BOS descriptor fetch hangs at SuperSpeed Plus */
 +	{ USB_DEVICE(0x07ca, 0x2553), .driver_info = USB_QUIRK_NO_BOS },
@@ -274,9 +273,9 @@ index c4d85089d19b..f4c80063864f 100644
  	/* Realforce 87U Keyboard */
  	{ USB_DEVICE(0x0853, 0x011b), .driver_info = USB_QUIRK_NO_LPM },
  
-@@ -437,6 +440,9 @@ static const struct usb_device_id usb_quirk_list[] = {
- 	{ USB_DEVICE(0x0b05, 0x17e0), .driver_info =
- 			USB_QUIRK_IGNORE_REMOTE_WAKEUP },
+@@ -447,6 +450,9 @@ static const struct usb_device_id usb_qu
+ 	/* ASUS TUF 4K PRO - BOS descriptor fetch hangs at SuperSpeed Plus */
+ 	{ USB_DEVICE(0x0b05, 0x1ab9), .driver_info = USB_QUIRK_NO_BOS },
  
 +	/* ASUS TUF 4K PRO - BOS descriptor fetch hangs at SuperSpeed Plus */
 +	{ USB_DEVICE(0x0b05, 0x1ab9), .driver_info = USB_QUIRK_NO_BOS },
@@ -284,21 +283,21 @@ index c4d85089d19b..f4c80063864f 100644
  	/* Realtek Semiconductor Corp. Mass Storage Device (Multicard Reader)*/
  	{ USB_DEVICE(0x0bda, 0x0151), .driver_info = USB_QUIRK_CONFIG_INTF_STRINGS },
  
-@@ -565,6 +571,9 @@ static const struct usb_device_id usb_quirk_list[] = {
+@@ -577,6 +583,9 @@ static const struct usb_device_id usb_qu
  
- 	{ USB_DEVICE(0x2386, 0x350e), .driver_info = USB_QUIRK_NO_LPM },
- 
+ 	/* UGREEN 35871 - BOS descriptor fetch hangs at SuperSpeed Plus */
+ 	{ USB_DEVICE(0x2b89, 0x5871), .driver_info = USB_QUIRK_NO_BOS },
++
 +	/* UGREEN 35871 - BOS descriptor fetch hangs at SuperSpeed Plus */
 +	{ USB_DEVICE(0x2b89, 0x5871), .driver_info = USB_QUIRK_NO_BOS },
-+
+ 
  	/* APTIV AUTOMOTIVE HUB */
  	{ USB_DEVICE(0x2c48, 0x0132), .driver_info =
- 			USB_QUIRK_SHORT_SET_ADDRESS_REQ_TIMEOUT },
+
 diff --git a/include/linux/perf_event.h b/include/linux/perf_event.h
-index 9ded2e582c60..fbe94b65b30a 100644
 --- a/include/linux/perf_event.h
 +++ b/include/linux/perf_event.h
-@@ -1624,7 +1624,7 @@ static inline void perf_event_task_migrate(struct task_struct *task)
+@@ -1624,7 +1624,7 @@ static inline void perf_event_task_migra
  		task->sched_migrated = 1;
  }
  
@@ -307,11 +306,11 @@ index 9ded2e582c60..fbe94b65b30a 100644
  					    struct task_struct *task)
  {
  	if (static_branch_unlikely(&perf_sched_events))
+
 diff --git a/include/linux/sched/mm.h b/include/linux/sched/mm.h
-index 95d0040df584..4a279ee2d026 100644
 --- a/include/linux/sched/mm.h
 +++ b/include/linux/sched/mm.h
-@@ -44,7 +44,7 @@ static inline void smp_mb__after_mmgrab(void)
+@@ -44,7 +44,7 @@ static inline void smp_mb__after_mmgrab(
  
  extern void __mmdrop(struct mm_struct *mm);
  
@@ -320,7 +319,7 @@ index 95d0040df584..4a279ee2d026 100644
  {
  	/*
  	 * The implicit full barrier implied by atomic_dec_and_test() is
-@@ -71,14 +71,14 @@ static inline void __mmdrop_delayed(struct rcu_head *rhp)
+@@ -71,14 +71,14 @@ static inline void __mmdrop_delayed(stru
   * Invoked from finish_task_switch(). Delegates the heavy lifting on RT
   * kernels via RCU.
   */
@@ -337,7 +336,7 @@ index 95d0040df584..4a279ee2d026 100644
  {
  	mmdrop(mm);
  }
-@@ -104,7 +104,7 @@ static inline void mmdrop_lazy_tlb(struct mm_struct *mm)
+@@ -104,7 +104,7 @@ static inline void mmdrop_lazy_tlb(struc
  	}
  }
  
@@ -355,8 +354,8 @@ index 95d0040df584..4a279ee2d026 100644
  {
  	/*
  	 * The atomic_read() below prevents CSE. The following should
+
 diff --git a/include/linux/sched/topology.h b/include/linux/sched/topology.h
-index 45c0022b91ce..bbcfdf12aa6e 100644
 --- a/include/linux/sched/topology.h
 +++ b/include/linux/sched/topology.h
 @@ -92,9 +92,6 @@ struct sched_domain {
@@ -369,11 +368,11 @@ index 45c0022b91ce..bbcfdf12aa6e 100644
  	u64 max_newidle_lb_cost;
  	unsigned long last_decay_max_lb_cost;
  
+
 diff --git a/include/linux/tick.h b/include/linux/tick.h
-index ac76ae9fa36d..fce16aa10ba2 100644
 --- a/include/linux/tick.h
 +++ b/include/linux/tick.h
-@@ -175,7 +175,7 @@ extern cpumask_var_t tick_nohz_full_mask;
+@@ -175,7 +175,7 @@ extern cpumask_var_t tick_nohz_full_mask
  #ifdef CONFIG_NO_HZ_FULL
  extern bool tick_nohz_full_running;
  
@@ -382,7 +381,7 @@ index ac76ae9fa36d..fce16aa10ba2 100644
  {
  	if (!context_tracking_enabled())
  		return false;
-@@ -299,7 +299,7 @@ static inline void __tick_nohz_task_switch(void) { }
+@@ -299,7 +299,7 @@ static inline void __tick_nohz_task_swit
  static inline void tick_nohz_full_setup(cpumask_var_t cpumask) { }
  #endif
  
@@ -391,11 +390,11 @@ index ac76ae9fa36d..fce16aa10ba2 100644
  {
  	if (tick_nohz_full_enabled())
  		__tick_nohz_task_switch();
+
 diff --git a/include/linux/vtime.h b/include/linux/vtime.h
-index 29dd5b91dd7d..428464bb81b3 100644
 --- a/include/linux/vtime.h
 +++ b/include/linux/vtime.h
-@@ -67,24 +67,24 @@ static __always_inline void vtime_account_guest_exit(void)
+@@ -67,24 +67,24 @@ static __always_inline void vtime_accoun
   * For now vtime state is tied to context tracking. We might want to decouple
   * those later if necessary.
   */
@@ -424,31 +423,31 @@ index 29dd5b91dd7d..428464bb81b3 100644
  {
  	if (vtime_accounting_enabled_this_cpu())
  		vtime_task_switch_generic(prev);
+
 diff --git a/include/net/netfilter/nf_tables.h b/include/net/netfilter/nf_tables.h
-index 7eac73f9b4ce..05f57ba62244 100644
 --- a/include/net/netfilter/nf_tables.h
 +++ b/include/net/netfilter/nf_tables.h
-@@ -456,6 +456,7 @@ struct nft_set_ext;
-  *	@init: initialize private data of new set instance
-  *	@destroy: destroy private data of set instance
-  *	@gc_init: initialize garbage collection
-+ *	@abort_skip_removal: skip removal of elements from abort path
+@@ -458,6 +458,7 @@ struct nft_set_ext;
   *	@elemsize: element private size
   *
   *	Operations lookup, update and delete have simpler interfaces, are faster
-@@ -513,6 +514,7 @@ struct nft_set_ops {
- 						   const struct nft_set *set);
- 	void				(*gc_init)(const struct nft_set *set);
- 
-+	bool				abort_skip_removal;
++ *	Operations lookup, update and delete have simpler interfaces, are faster
+  *	and currently only used in the packet path. All the rest are slower,
+  *	control plane functions.
+  */
+@@ -516,6 +517,7 @@ struct nft_set_ops {
  	unsigned int			elemsize;
  };
  
++
+ /**
+  *      struct nft_set_type - nf_tables set type
+  *
+
 diff --git a/kernel/rcu/tree.c b/kernel/rcu/tree.c
-index 293bbd9ac3f4..2c1c9759e278 100644
 --- a/kernel/rcu/tree.c
 +++ b/kernel/rcu/tree.c
-@@ -160,6 +160,7 @@ static void rcu_report_qs_rnp(unsigned long mask, struct rcu_node *rnp,
+@@ -160,6 +160,7 @@ static void rcu_report_qs_rnp(unsigned l
  			      unsigned long gps, unsigned long flags);
  static void invoke_rcu_core(void);
  static void rcu_report_exp_rdp(struct rcu_data *rdp);
@@ -456,7 +455,7 @@ index 293bbd9ac3f4..2c1c9759e278 100644
  static void check_cb_ovld_locked(struct rcu_data *rdp, struct rcu_node *rnp);
  static bool rcu_rdp_is_offloaded(struct rcu_data *rdp);
  static bool rcu_rdp_cpu_online(struct rcu_data *rdp);
-@@ -1983,6 +1984,17 @@ static noinline_for_stack bool rcu_gp_init(void)
+@@ -1983,6 +1984,17 @@ static noinline_for_stack bool rcu_gp_in
  	if (IS_ENABLED(CONFIG_RCU_STRICT_GRACE_PERIOD))
  		on_each_cpu(rcu_strict_gp_boundary, NULL, 0);
  
@@ -474,11 +473,11 @@ index 293bbd9ac3f4..2c1c9759e278 100644
  	return true;
  }
  
+
 diff --git a/kernel/sched/core.c b/kernel/sched/core.c
-index dbf4e32a063f..1a6b1bfdb497 100644
 --- a/kernel/sched/core.c
 +++ b/kernel/sched/core.c
-@@ -124,7 +124,6 @@ EXPORT_TRACEPOINT_SYMBOL_GPL(sched_exit_tp);
+@@ -124,7 +124,6 @@ EXPORT_TRACEPOINT_SYMBOL_GPL(sched_exit_
  EXPORT_TRACEPOINT_SYMBOL_GPL(sched_set_need_resched_tp);
  
  DEFINE_PER_CPU_SHARED_ALIGNED(struct rq, runqueues);
@@ -498,7 +497,7 @@ index dbf4e32a063f..1a6b1bfdb497 100644
  /*
   * double_rq_lock - safely lock two runqueues
   */
-@@ -4873,7 +4867,7 @@ static inline void prepare_task(struct task_struct *next)
+@@ -4876,7 +4870,7 @@ static inline void prepare_task(struct t
  	WRITE_ONCE(next->on_cpu, 1);
  }
  
@@ -507,7 +506,7 @@ index dbf4e32a063f..1a6b1bfdb497 100644
  {
  	/*
  	 * This must be the very last reference to @prev from this CPU. After
-@@ -4889,7 +4883,7 @@ static inline void finish_task(struct task_struct *prev)
+@@ -4892,7 +4886,7 @@ static inline void finish_task(struct ta
  	smp_store_release(&prev->on_cpu, 0);
  }
  
@@ -516,7 +515,7 @@ index dbf4e32a063f..1a6b1bfdb497 100644
  {
  	void (*func)(struct rq *rq);
  	struct balance_callback *next;
-@@ -4924,7 +4918,7 @@ struct balance_callback balance_push_callback = {
+@@ -4927,7 +4921,7 @@ struct balance_callback balance_push_cal
  	.func = balance_push,
  };
  
@@ -525,7 +524,7 @@ index dbf4e32a063f..1a6b1bfdb497 100644
  __splice_balance_callbacks(struct rq *rq, bool split)
  {
  	struct balance_callback *head = rq->balance_callback;
-@@ -4954,7 +4948,7 @@ struct balance_callback *splice_balance_callbacks(struct rq *rq)
+@@ -4957,7 +4951,7 @@ struct balance_callback *splice_balance_
  	return __splice_balance_callbacks(rq, true);
  }
  
@@ -534,7 +533,7 @@ index dbf4e32a063f..1a6b1bfdb497 100644
  {
  	if (rf)
  		rq_unpin_lock(rq, rf);
-@@ -4991,7 +4985,7 @@ prepare_lock_switch(struct rq *rq, struct task_struct *next, struct rq_flags *rf
+@@ -4994,7 +4988,7 @@ prepare_lock_switch(struct rq *rq, struc
  #endif
  }
  
@@ -543,7 +542,7 @@ index dbf4e32a063f..1a6b1bfdb497 100644
  {
  	/*
  	 * If we are tracking spinlock dependencies then we have to
-@@ -5023,7 +5017,7 @@ static inline void kmap_local_sched_out(void)
+@@ -5026,7 +5020,7 @@ static inline void kmap_local_sched_out(
  #endif
  }
  
@@ -552,7 +551,7 @@ index dbf4e32a063f..1a6b1bfdb497 100644
  {
  #ifdef CONFIG_KMAP_LOCAL
  	if (unlikely(current->kmap_ctrl.idx))
-@@ -5076,7 +5070,7 @@ prepare_task_switch(struct rq *rq, struct task_struct *prev,
+@@ -5079,7 +5073,7 @@ prepare_task_switch(struct rq *rq, struc
   * past. 'prev == current' is still correct but we need to recalculate this_rq
   * because prev may have moved to another CPU.
   */
@@ -561,7 +560,7 @@ index dbf4e32a063f..1a6b1bfdb497 100644
  	__releases(rq->lock)
  {
  	struct rq *rq = this_rq();
-@@ -8495,8 +8489,6 @@ void __init sched_init_smp(void)
+@@ -8498,8 +8492,6 @@ void __init sched_init_smp(void)
  {
  	sched_init_numa(NUMA_NO_NODE);
  
@@ -570,11 +569,11 @@ index dbf4e32a063f..1a6b1bfdb497 100644
  	/*
  	 * There's no userspace yet to cause hotplug operations; hence all the
  	 * CPU masks are stable and all blatant races in the below code cannot
+
 diff --git a/kernel/sched/ext.c b/kernel/sched/ext.c
-index 0bb8fa927e9e..94d75bf0c119 100644
 --- a/kernel/sched/ext.c
 +++ b/kernel/sched/ext.c
-@@ -3488,8 +3488,8 @@ static void destroy_dsq(struct scx_sched *sch, u64 dsq_id)
+@@ -3487,8 +3487,8 @@ static void destroy_dsq(struct scx_sched
  	 * operations inside scheduler locks.
  	 */
  	dsq->id = SCX_DSQ_INVALID;
@@ -585,10 +584,11 @@ index 0bb8fa927e9e..94d75bf0c119 100644
  
  out_unlock_dsq:
  	raw_spin_unlock_irqrestore(&dsq->lock, flags);
+
 diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
 --- a/kernel/sched/fair.c
 +++ b/kernel/sched/fair.c
-@@ -12241,27 +12236,11 @@ void update_max_interval(void)
+@@ -12318,27 +12318,11 @@ void update_max_interval(void)
  	max_load_balance_interval = HZ*num_online_cpus()/10;
  }
  
@@ -617,7 +617,7 @@ diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
  	if (cost > sd->max_newidle_lb_cost) {
  		/*
  		 * Track max cost of a domain to make sure to not delay the
-@@ -12309,7 +12288,7 @@ static void sched_balance_domains(struct rq *rq, enum cpu_idle_type idle)
+@@ -12386,7 +12370,7 @@ static void sched_balance_domains(struct
  		 * Decay the newidle max times here because this is a regular
  		 * visit to all the domains.
  		 */
@@ -626,7 +626,7 @@ diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
  		max_cost += sd->max_newidle_lb_cost;
  
  		/*
-@@ -12945,22 +12924,6 @@ static int sched_balance_newidle(struct rq *this_rq, struct rq_flags *rf)
+@@ -13022,22 +13006,6 @@ static int sched_balance_newidle(struct
  			break;
  
  		if (sd->flags & SD_BALANCE_NEWIDLE) {
@@ -649,7 +649,7 @@ diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
  
  			pulled_task = sched_balance_rq(this_cpu, this_rq,
  						   sd, CPU_NEWLY_IDLE,
-@@ -12968,14 +12931,10 @@ static int sched_balance_newidle(struct rq *this_rq, struct rq_flags *rf)
+@@ -13045,14 +13013,10 @@ static int sched_balance_newidle(struct
  
  			t1 = sched_clock_cpu(this_cpu);
  			domain_cost = t1 - t0;
@@ -666,8 +666,8 @@ diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
  		}
  
  		/*
+
 diff --git a/kernel/sched/features.h b/kernel/sched/features.h
-index 136a6584be79..3c12d9f93331 100644
 --- a/kernel/sched/features.h
 +++ b/kernel/sched/features.h
 @@ -121,8 +121,3 @@ SCHED_FEAT(WA_BIAS, true)
@@ -679,8 +679,8 @@ index 136a6584be79..3c12d9f93331 100644
 - * Do newidle balancing proportional to its success rate using randomization.
 - */
 -SCHED_FEAT(NI_RANDOM, true)
+
 diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
-index 7294157bfadc..18503287e561 100644
 --- a/kernel/sched/sched.h
 +++ b/kernel/sched/sched.h
 @@ -5,7 +5,6 @@
@@ -691,7 +691,7 @@ index 7294157bfadc..18503287e561 100644
  #include <linux/sched/affinity.h>
  #include <linux/sched/autogroup.h>
  #include <linux/sched/cpufreq.h>
-@@ -1351,12 +1350,6 @@ static inline bool is_migration_disabled(struct task_struct *p)
+@@ -1351,12 +1350,6 @@ static inline bool is_migration_disabled
  }
  
  DECLARE_PER_CPU_SHARED_ALIGNED(struct rq, runqueues);
@@ -704,7 +704,7 @@ index 7294157bfadc..18503287e561 100644
  
  #define cpu_rq(cpu)		(&per_cpu(runqueues, (cpu)))
  #define this_rq()		this_cpu_ptr(&runqueues)
-@@ -1403,12 +1396,12 @@ static inline struct cpumask *sched_group_span(struct sched_group *sg);
+@@ -1403,12 +1396,12 @@ static inline struct cpumask *sched_grou
  
  DECLARE_STATIC_KEY_FALSE(__sched_core_enabled);
  
@@ -719,7 +719,7 @@ index 7294157bfadc..18503287e561 100644
  {
  	return !static_branch_unlikely(&__sched_core_enabled);
  }
-@@ -1417,7 +1410,7 @@ static inline bool sched_core_disabled(void)
+@@ -1417,7 +1410,7 @@ static inline bool sched_core_disabled(v
   * Be careful with this function; not for general use. The return value isn't
   * stable unless you actually hold a relevant rq->__lock.
   */
@@ -728,7 +728,7 @@ index 7294157bfadc..18503287e561 100644
  {
  	if (sched_core_enabled(rq))
  		return &rq->core->__lock;
-@@ -1425,7 +1418,7 @@ static inline raw_spinlock_t *rq_lockp(struct rq *rq)
+@@ -1425,7 +1418,7 @@ static inline raw_spinlock_t *rq_lockp(s
  	return &rq->__lock;
  }
  
@@ -737,7 +737,7 @@ index 7294157bfadc..18503287e561 100644
  {
  	if (rq->core_enabled)
  		return &rq->core->__lock;
-@@ -1519,12 +1512,12 @@ static inline bool sched_core_disabled(void)
+@@ -1519,12 +1512,12 @@ static inline bool sched_core_disabled(v
  	return true;
  }
  
@@ -752,7 +752,7 @@ index 7294157bfadc..18503287e561 100644
  {
  	return &rq->__lock;
  }
-@@ -1573,20 +1566,24 @@ static inline void lockdep_assert_rq_held(struct rq *rq)
+@@ -1573,20 +1566,24 @@ static inline void lockdep_assert_rq_hel
  
  extern void raw_spin_rq_lock_nested(struct rq *rq, int subclass);
  extern bool raw_spin_rq_trylock(struct rq *rq);
@@ -781,11 +781,11 @@ index 7294157bfadc..18503287e561 100644
  {
  	raw_spin_rq_unlock(rq);
  	local_irq_enable();
+
 diff --git a/kernel/sched/topology.c b/kernel/sched/topology.c
-index cf643a5ddedd..711076aa4980 100644
 --- a/kernel/sched/topology.c
 +++ b/kernel/sched/topology.c
-@@ -1669,12 +1669,6 @@ sd_init(struct sched_domain_topology_level *tl,
+@@ -1669,12 +1669,6 @@ sd_init(struct sched_domain_topology_lev
  
  		.last_balance		= jiffies,
  		.balance_interval	= sd_weight,
@@ -798,52 +798,18 @@ index cf643a5ddedd..711076aa4980 100644
  		.max_newidle_lb_cost	= 0,
  		.last_decay_max_lb_cost	= jiffies,
  		.child			= child,
-diff --git a/net/netfilter/nf_tables_api.c b/net/netfilter/nf_tables_api.c
-index 8dae197c7faf..3b9c559ab123 100644
---- a/net/netfilter/nf_tables_api.c
-+++ b/net/netfilter/nf_tables_api.c
-@@ -7702,7 +7702,8 @@ static bool nft_trans_elems_new_abort(const struct nft_ctx *ctx,
- 			continue;
- 		}
- 
--		if (!te->set->ops->abort || nft_setelem_is_catchall(te->set, te->elems[i].priv))
-+		if (!te->set->ops->abort_skip_removal ||
-+		    nft_setelem_is_catchall(te->set, te->elems[i].priv))
- 			nft_setelem_remove(ctx->net, te->set, te->elems[i].priv);
- 
- 		if (!nft_setelem_is_catchall(te->set, te->elems[i].priv))
-diff --git a/net/netfilter/nft_set_pipapo.c b/net/netfilter/nft_set_pipapo.c
-index 6d77a5f0088a..18e1903b1d3d 100644
---- a/net/netfilter/nft_set_pipapo.c
-+++ b/net/netfilter/nft_set_pipapo.c
-@@ -2370,6 +2370,7 @@ const struct nft_set_type nft_set_pipapo_type = {
- 		.gc_init	= nft_pipapo_gc_init,
- 		.commit		= nft_pipapo_commit,
- 		.abort		= nft_pipapo_abort,
-+		.abort_skip_removal = true,
- 		.elemsize	= offsetof(struct nft_pipapo_elem, ext),
- 	},
- };
-@@ -2394,6 +2395,7 @@ const struct nft_set_type nft_set_pipapo_avx2_type = {
- 		.gc_init	= nft_pipapo_gc_init,
- 		.commit		= nft_pipapo_commit,
- 		.abort		= nft_pipapo_abort,
-+		.abort_skip_removal = true,
- 		.elemsize	= offsetof(struct nft_pipapo_elem, ext),
- 	},
- };
+
 diff --git a/sound/hda/codecs/realtek/alc269.c b/sound/hda/codecs/realtek/alc269.c
-index 15203c5855eb..c1791b136620 100644
 --- a/sound/hda/codecs/realtek/alc269.c
 +++ b/sound/hda/codecs/realtek/alc269.c
-@@ -6321,6 +6321,7 @@ static const struct hda_quirk alc269_fixup_tbl[] = {
- 	SND_PCI_QUIRK(0x1025, 0x079b, "Acer Aspire V5-573G", ALC282_FIXUP_ASPIRE_V5_PINS),
- 	SND_PCI_QUIRK(0x1025, 0x080d, "Acer Aspire V5-122P", ALC269_FIXUP_ASPIRE_HEADSET_MIC),
- 	SND_PCI_QUIRK(0x1025, 0x0840, "Acer Aspire E1", ALC269VB_FIXUP_ASPIRE_E1_COEF),
-+	SND_PCI_QUIRK(0x1025, 0x0943, "Acer Aspire V3-572G", ALC269_FIXUP_ASPIRE_HEADSET_MIC),
+@@ -6625,6 +6625,7 @@ static const struct hda_quirk alc269_fix
  	SND_PCI_QUIRK(0x1025, 0x100c, "Acer Aspire E5-574G", ALC255_FIXUP_ACER_LIMIT_INT_MIC_BOOST),
  	SND_PCI_QUIRK(0x1025, 0x101c, "Acer Veriton N2510G", ALC269_FIXUP_LIFEBOOK),
  	SND_PCI_QUIRK(0x1025, 0x102b, "Acer Aspire C24-860", ALC286_FIXUP_ACER_AIO_MIC_NO_PRESENCE),
--- 
-2.53.0
++	SND_PCI_QUIRK(0x1025, 0x102b, "Acer Aspire C24-860", ALC286_FIXUP_ACER_AIO_MIC_NO_PRESENCE),
+ 	SND_PCI_QUIRK(0x1025, 0x1065, "Acer Aspire C20-820", ALC269VC_FIXUP_ACER_HEADSET_MIC),
+ 	SND_PCI_QUIRK(0x1025, 0x106d, "Acer Cloudbook 14", ALC283_FIXUP_CHROME_BOOK),
+ 	SND_PCI_QUIRK(0x1025, 0x1094, "Acer Aspire E5-575T", ALC255_FIXUP_ACER_LIMIT_INT_MIC_BOOST),
 
+-- 
+2.52.0

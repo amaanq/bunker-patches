@@ -10,12 +10,9 @@ Signed-off-by: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
  1 file changed, 10 insertions(+)
 
 diff --git a/mm/slub.c b/mm/slub.c
-index 2b58345ef695..434a6289472e 100644
 --- a/mm/slub.c
 +++ b/mm/slub.c
-@@ -876,10 +876,12 @@ static inline void set_orig_size(struct kmem_cache *s,
- 
- 	if (!slub_debug_orig_size(s))
+@@ -873,9 +873,11 @@ static inline void set_orig_size(struct
  		return;
  
  	p += get_info_end(s);
@@ -23,12 +20,12 @@ index 2b58345ef695..434a6289472e 100644
 +		p = (void *)p + sizeof(void *);
  	p += sizeof(struct track) * 2;
  
- 	*(unsigned int *)p = orig_size;
+-	*(unsigned long *)p = orig_size;
++	*(unsigned int *)p = orig_size;
  }
  
-@@ -892,10 +894,12 @@ static inline unsigned int get_orig_size(struct kmem_cache *s, void *object)
- 
- 	if (!slub_debug_orig_size(s))
+ static inline unsigned long get_orig_size(struct kmem_cache *s, void *object)
+@@ -889,6 +891,8 @@ static inline unsigned long get_orig_siz
  		return s->object_size;
  
  	p += get_info_end(s);
@@ -37,11 +34,7 @@ index 2b58345ef695..434a6289472e 100644
  	p += sizeof(struct track) * 2;
  
  	return *(unsigned int *)p;
- }
- 
-@@ -2525,12 +2529,18 @@ bool slab_free_hook(struct kmem_cache *s, void *x, bool init,
- 		inuse = get_info_end(s);
- 		orig_size = get_orig_size(s, x);
+@@ -2631,8 +2635,14 @@ bool slab_free_hook(struct kmem_cache *s
  		if (!kasan_has_integrated_init())
  			memset(kasan_reset_tag(x), 0, orig_size);
  		rsize = (s->flags & SLAB_RED_ZONE) ? s->red_left_pad : 0;
@@ -56,8 +49,6 @@ index 2b58345ef695..434a6289472e 100644
  		/*
  		 * Restore orig_size, otherwise kmalloc redzone overwritten
  		 * would be reported
- 		 */
- 		set_orig_size(s, x, orig_size);
+
 -- 
 2.52.0
-
