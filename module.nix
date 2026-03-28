@@ -402,8 +402,9 @@ let
   hardenedConfig = optionalAttrs cfg.hardened (
     {
       # --- Security features ---
-      CFI = yes;
-      CFI_PERMISSIVE = no;
+      # CFI requires Clang — only available when using llvmStdenv
+      CFI = if pkgs.stdenv.cc.isClang then yes else option no;
+      CFI_PERMISSIVE = if pkgs.stdenv.cc.isClang then no else option no;
       ZERO_CALL_USED_REGS = yes;
       SLAB_BUCKETS = yes; # dedicated slab buckets — prevents cross-cache attacks (KSPP)
       SECURITY_SAFESETID = yes;
@@ -1000,6 +1001,26 @@ let
     CROS_EC_LPC = module;
   });
 
+  isBigEndian = pkgs.stdenv.hostPlatform.isBigEndian;
+
+  # Options from nixpkgs common-config.nix that don't exist on arm64 big-endian
+  # (EFI is disabled, BPF_JIT unavailable, ACPI absent, x86-only options).
+  bigEndianConfig = optionalAttrs isBigEndian (forceAll {
+    EFI = option no;
+    EFI_STUB = option no;
+    EFI_ZBOOT = option no;
+    FB_EFI = option no;
+    SYSFB_SIMPLEFB = option no;
+    HOTPLUG_PCI_ACPI = option no;
+    DRM_AMD_ISP = option no;
+    PINCTRL_AMD = option no;
+    KERNEL_ZSTD = option no;
+    ACPI_DEBUG = option no;
+    NET_SCH_BPF = option no;
+    SCHED_CLASS_EXT = option no;
+    FUNCTION_GRAPH_RETVAL = option no;
+  });
+
   bunkernel = pkgs.linuxKernel.buildLinux {
     pname = "linux-bunker";
     stdenv = llvmStdenv;
@@ -1017,7 +1038,15 @@ let
       // networkingConfig
       // rustLtoConfig
       // ltoConfig
-      // cpuArchConfig;
+      // cpuArchConfig
+      // bigEndianConfig
+      # Disable slab canary on 7.0 — the sheaves rework introduced call paths
+      # (kfree_nolock, alloc_from_pcs_bulk) that bypass slab_free_hook, leaving
+      # canaries in inconsistent states.  Upstream linux-hardened hasn't ported
+      # to 7.0 yet; re-enable when they do.
+      // optionalAttrs (cfg.hardened && lib.versionAtLeast majorMinor "7.0") {
+        SLAB_CANARY = mkForce no;
+      };
 
     extraMeta = {
       branch = majorMinor;
