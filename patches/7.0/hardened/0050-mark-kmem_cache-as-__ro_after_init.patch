@@ -1,0 +1,30 @@
+From ebb27be2be091359b2f20279359269cb2d6e6bcd Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Sun, 28 May 2017 18:51:30 -0400
+Subject: [PATCH 107/190] mark kmem_cache as __ro_after_init
+
+---
+ mm/slab_common.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+ 
+diff --git a/mm/slab_common.c b/mm/slab_common.c
+index 75b13a58a60b..d1c33dfddf7f 100644
+--- a/mm/slab_common.c
++++ b/mm/slab_common.c
+@@ -38,12 +38,12 @@
+ #include <trace/events/kmem.h>
+ 
+ enum slab_state slab_state __ro_after_init;
+ LIST_HEAD(slab_caches);
+ DEFINE_MUTEX(slab_mutex);
+-struct kmem_cache *kmem_cache;
++struct kmem_cache *kmem_cache __ro_after_init;
+ 
+ /*
+  * Set of flags that will prevent slab merging.
+  * Any flag that adds per-object metadata should be included,
+  * since slab merging can update s->inuse that affects the metadata layout.
+  */
+-- 
+2.52.0
+

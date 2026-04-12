@@ -1,0 +1,110 @@
+From c78f3bf02559eb52d537ab9ba353f44a4b275219 Mon Sep 17 00:00:00 2001
+From: Miguel Ojeda <ojeda@kernel.org>
+Date: Tue, 19 Nov 2024 19:57:47 +0100
+Subject: [PATCH 161/190] rust: allow Clang-native RANDSTRUCT configs
+
+The kernel supports RANDSTRUCT_FULL with Clang 16+, and bindgen
+(which uses libclang under the hood) inherits the information, so the
+generated bindings look correct.
+
+Thus allow those configurations by requiring a Clang compiler to use
+RANDSTRUCT. In addition, remove the !GCC_PLUGIN_RANDSTRUCT check
+since it is not needed.
+
+This version incorporates Kees Cook's refinement to make the anonymous
+struct wrapper in task_struct unconditional, simplifying the Rust bindings.
+
+Reviewed-by: Kees Cook <kees@kernel.org>
+Signed-off-by: Miguel Ojeda <ojeda@kernel.org>
+---
+ include/linux/compiler_types.h |  5 -----
+ include/linux/sched.h          |  4 ++--
+ init/Kconfig                   |  3 +--
+ rust/kernel/task.rs            |  6 +++---
+ 4 files changed, 6 insertions(+), 12 deletions(-)
+
+diff --git a/include/linux/compiler_types.h b/include/linux/compiler_types.h
+--- a/include/linux/compiler_types.h
++++ b/include/linux/compiler_types.h
+@@ -473,14 +473,9 @@ struct ftrace_likely_data {
+ #if defined(RANDSTRUCT) && !defined(__CHECKER__)
+ # define __randomize_layout __designated_init __attribute__((randomize_layout))
+ # define __no_randomize_layout __attribute__((no_randomize_layout))
+-/* This anon struct can add padding, so only enable it under randstruct. */
+-# define randomized_struct_fields_start	struct {
+-# define randomized_struct_fields_end	} __randomize_layout;
+ #else
+ # define __randomize_layout __designated_init
+ # define __no_randomize_layout
+-# define randomized_struct_fields_start
+-# define randomized_struct_fields_end
+ #endif
+ 
+ #ifndef __no_kstack_erase
+diff --git a/include/linux/sched.h b/include/linux/sched.h
+--- a/include/linux/sched.h
++++ b/include/linux/sched.h
+@@ -834,7 +834,7 @@ struct task_struct {
+ 	 * This begins the randomizable portion of task_struct. Only
+ 	 * scheduling-critical items should be added above here.
+ 	 */
+-	randomized_struct_fields_start
++	struct {
+ 
+ 	void				*stack;
+ 	refcount_t			usage;
+@@ -1643,7 +1643,7 @@ struct task_struct {
+ 	 * New fields for task_struct should be added above here, so that
+ 	 * they are included in the randomized portion of task_struct.
+ 	 */
+-	randomized_struct_fields_end
++	} __randomize_layout;
+ } __attribute__ ((aligned (64)));
+ 
+ #ifdef CONFIG_SCHED_PROXY_EXEC
+diff --git a/init/Kconfig b/init/Kconfig
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -2141,8 +2141,8 @@ config RUST
+ 	depends on RUST_IS_AVAILABLE
+ 	select EXTENDED_MODVERSIONS if MODVERSIONS
+ 	depends on !MODVERSIONS || GENDWARFKSYMS
+-	depends on !GCC_PLUGIN_RANDSTRUCT
+-	depends on !RANDSTRUCT
++
++	depends on !RANDSTRUCT || CC_IS_CLANG
+ 	depends on !DEBUG_INFO_BTF || (PAHOLE_HAS_LANG_EXCLUDE && !LTO)
+ 	depends on !CFI || HAVE_CFI_ICALL_NORMALIZE_INTEGERS_RUSTC
+ 	select CFI_ICALL_NORMALIZE_INTEGERS if CFI
+diff --git a/rust/kernel/task.rs b/rust/kernel/task.rs
+--- a/rust/kernel/task.rs
++++ b/rust/kernel/task.rs
+@@ -208,7 +208,7 @@ impl Task {
+     pub fn pid(&self) -> Pid {
+         // SAFETY: The pid of a task never changes after initialization, so reading this field is
+         // not a data race.
+-        unsafe { *ptr::addr_of!((*self.as_ptr()).pid) }
++        unsafe { *ptr::addr_of!((*self.as_ptr()).__bindgen_anon_1.pid) }
+     }
+ 
+     /// Returns the UID of the given task.
+@@ -279,7 +279,7 @@ impl CurrentTask {
+     pub fn mm(&self) -> Option<&MmWithUser> {
+         // SAFETY: The `mm` field of `current` is not modified from other threads, so reading it is
+         // not a data race.
+-        let mm = unsafe { (*self.as_ptr()).mm };
++        let mm = unsafe { (*self.as_ptr()).__bindgen_anon_1.mm };
+ 
+         if mm.is_null() {
+             return None;
+@@ -338,7 +338,7 @@ impl CurrentTask {
+     pub fn group_leader(&self) -> &Task {
+         // SAFETY: The group leader of a task never changes while the task is running, and `self`
+         // is the current task, which is guaranteed running.
+-        let ptr = unsafe { (*self.as_ptr()).group_leader };
++        let ptr = unsafe { (*self.as_ptr()).__bindgen_anon_1.group_leader };
+ 
+         // SAFETY: `current->group_leader` stays valid for at least the duration in which `current`
+         // is running, and the signature of this function ensures that the returned `&Task` can
+--
+2.52.0

@@ -1,0 +1,150 @@
+From 16fece38b3aaca5491bd56d430cddd8cec4f843c Mon Sep 17 00:00:00 2001
+From: Thibaut Sautereau <thibaut.sautereau@ssi.gouv.fr>
+Date: Tue, 7 May 2019 11:46:21 +0200
+Subject: [PATCH 126/190] mm: Fix extra_latent_entropy
+
+Commit a9cd410a3d29 ("mm/page_alloc.c: memory hotplug: free pages as
+higher order") changed `static void __init __free_pages_boot_core()`
+into `void __free_pages_core()`, causing the following section mismatch
+warning at compile time:
+
+    WARNING: vmlinux.o(.text+0x180fe4): Section mismatch in reference from the function __free_pages_core() to the variable .meminit.data:extra_latent_entropy
+    The function __free_pages_core() references the variable __meminitdata extra_latent_entropy.
+    This is often because __free_pages_core lacks a __meminitdata annotation or the annotation of extra_latent_entropy is wrong.
+
+This commit is an attempt at fixing this issue. I'm not sure it's OK as
+we are accessing pages that are still managed by the memblock allocator.
+The prefetching part is not an issue as it only affects struct pages.
+
+Signed-off-by: Thibaut Sautereau <thibaut.sautereau@ssi.gouv.fr>
+[levente@leventepolyak.net: most of core MM initialization moved to mm/mm_init.c]
+Signed-off-by: Levente Polyak <levente@leventepolyak.net>
+[nicolas.bouchinet@ssi.gouv.fr: MAX_ORDER has been renamed to MAX_PAGE_ORDER (see 5e0a760b44417f7ca)]
+Signed-off-by: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
+---
+ mm/internal.h   |  3 +++
+ mm/mm_init.c    |  3 +++
+ mm/page_alloc.c | 34 +++++++++++++++++++---------------
+ 3 files changed, 25 insertions(+), 15 deletions(-)
+
+diff --git a/mm/internal.h b/mm/internal.h
+index 1561fc2ff5b8..017661455a3f 100644
+--- a/mm/internal.h
++++ b/mm/internal.h
+@@ -787,10 +787,13 @@ static inline struct folio *page_rmappable_folio(struct page *page)
+ 	if (folio && folio_test_large(folio))
+ 		folio_set_large_rmappable(folio);
+ 	return folio;
+ }
+ 
++extern void __init __gather_extra_latent_entropy(struct page *page,
++						 unsigned int nr_pages);
++
+ static inline void prep_compound_head(struct page *page, unsigned int order)
+ {
+ 	struct folio *folio = (struct folio *)page;
+ 
+ 	folio_set_order(folio, order);
+diff --git a/mm/mm_init.c b/mm/mm_init.c
+index 7712d887b696..904db4846b9a 100644
+--- a/mm/mm_init.c
++++ b/mm/mm_init.c
+@@ -1999,10 +1999,11 @@ static void __init deferred_free_pages(unsigned long pfn,
+ 	/* Free a large naturally-aligned chunk if possible */
+ 	if (nr_pages == MAX_ORDER_NR_PAGES && IS_MAX_ORDER_ALIGNED(pfn)) {
+ 		for (i = 0; i < nr_pages; i += pageblock_nr_pages)
+ 			init_pageblock_migratetype(page + i, MIGRATE_MOVABLE,
+ 					false);
++		__gather_extra_latent_entropy(page, 1 << MAX_PAGE_ORDER);
+ 		__free_pages_core(page, MAX_PAGE_ORDER, MEMINIT_EARLY);
+ 		return;
+ 	}
+ 
+ 	/* Accept chunks smaller than MAX_PAGE_ORDER upfront */
+@@ -2010,10 +2011,11 @@ static void __init deferred_free_pages(unsigned long pfn,
+ 
+ 	for (i = 0; i < nr_pages; i++, page++, pfn++) {
+ 		if (pageblock_aligned(pfn))
+ 			init_pageblock_migratetype(page, MIGRATE_MOVABLE,
+ 					false);
++		__gather_extra_latent_entropy(page, 1);
+ 		__free_pages_core(page, 0, MEMINIT_EARLY);
+ 	}
+ }
+ 
+ /* Completion tracking for deferred_init_memmap() threads */
+@@ -2495,10 +2497,11 @@ void __init memblock_free_pages(struct page *page, unsigned long pfn,
+ 		return;
+ 	}
+ 
+ 	/* pages were reserved and not allocated */
+ 	clear_page_tag_ref(page);
++	__gather_extra_latent_entropy(page, 1 << order);
+ 	__free_pages_core(page, order, MEMINIT_EARLY);
+ }
+ 
+ DEFINE_STATIC_KEY_MAYBE(CONFIG_INIT_ON_ALLOC_DEFAULT_ON, init_on_alloc);
+ EXPORT_SYMBOL(init_on_alloc);
+diff --git a/mm/page_alloc.c b/mm/page_alloc.c
+index 52490cdf5627..a6404593b945 100644
+--- a/mm/page_alloc.c
++++ b/mm/page_alloc.c
+@@ -1589,10 +1589,29 @@ static void __free_pages_ok(struct page *page, unsigned int order,
+ 
+ 	if (free_pages_prepare(page, order))
+ 		free_one_page(zone, page, pfn, order, fpi_flags);
+ }
+ 
++void __init __gather_extra_latent_entropy(struct page *page,
++					  unsigned int nr_pages)
++{
++	if (extra_latent_entropy && !PageHighMem(page) && page_to_pfn(page) < 0x100000) {
++		unsigned long hash = 0;
++		size_t index, end = PAGE_SIZE * nr_pages / sizeof hash;
++		const unsigned long *data = lowmem_page_address(page);
++
++		for (index = 0; index < end; index++)
++			hash ^= hash + data[index];
++#ifdef CONFIG_GCC_PLUGIN_LATENT_ENTROPY
++		latent_entropy ^= hash;
++		add_device_randomness((const void *)&latent_entropy, sizeof(latent_entropy));
++#else
++		add_device_randomness((const void *)&hash, sizeof(hash));
++#endif
++	}
++}
++
+ void __meminit __free_pages_core(struct page *page, unsigned int order,
+ 		enum meminit_context context)
+ {
+ 	unsigned int nr_pages = 1 << order;
+ 	struct page *p = page;
+@@ -1619,25 +1638,10 @@ void __meminit __free_pages_core(struct page *page, unsigned int order,
+ 		for (loop = 0; loop < nr_pages; loop++, p++) {
+ 			__ClearPageReserved(p);
+ 			set_page_count(p, 0);
+ 		}
+ 
+-		if (extra_latent_entropy && !PageHighMem(page) && page_to_pfn(page) < 0x100000) {
+-			unsigned long hash = 0;
+-			size_t index, end = PAGE_SIZE * nr_pages / sizeof hash;
+-			const unsigned long *data = lowmem_page_address(page);
+-
+-			for (index = 0; index < end; index++)
+-				hash ^= hash + data[index];
+-#ifdef CONFIG_GCC_PLUGIN_LATENT_ENTROPY
+-			latent_entropy ^= hash;
+-			add_device_randomness((const void *)&latent_entropy, sizeof(latent_entropy));
+-#else
+-			add_device_randomness((const void *)&hash, sizeof(hash));
+-#endif
+-		}
+-
+ 		/* memblock adjusts totalram_pages() manually. */
+ 		atomic_long_add(nr_pages, &page_zone(page)->managed_pages);
+ 	}
+ 
+ 	if (page_contains_unaccepted(page, order)) {
+-- 
+2.52.0
+

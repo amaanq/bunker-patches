@@ -1,0 +1,28 @@
+From 3a4a95222025f5592afdbece37f399467d580415 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Sun, 20 Aug 2017 15:39:25 -0400
+Subject: [PATCH 67/190] enable SLAB_FREELIST_HARDENED by default
+
+---
+ mm/Kconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/mm/Kconfig b/mm/Kconfig
+index 4c580c499edf..86cfa7c1950f 100644
+--- a/mm/Kconfig
++++ b/mm/Kconfig
+@@ -210,10 +210,11 @@ config SLAB_FREELIST_RANDOM
+ 	  allocator against heap overflows.
+ 
+ config SLAB_FREELIST_HARDENED
+ 	bool "Harden slab freelist metadata"
+ 	depends on !SLUB_TINY
++	default y
+ 	help
+ 	  Many kernel heap attacks try to target slab cache metadata and
+ 	  other infrastructure. This options makes minor performance
+ 	  sacrifices to harden the kernel slab allocator against common
+ 	  freelist exploit methods.
+-- 
+2.52.0
+

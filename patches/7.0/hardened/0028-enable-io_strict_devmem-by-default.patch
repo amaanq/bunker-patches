@@ -1,0 +1,28 @@
+From fa34a981edf10840ad4cf4bb1f2168ee7fa7b352 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Fri, 5 Jan 2018 12:43:49 -0500
+Subject: [PATCH 85/190] enable IO_STRICT_DEVMEM by default
+
+---
+ lib/Kconfig.debug | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/lib/Kconfig.debug b/lib/Kconfig.debug
+index 152f9f03c7fa..efbe70a533ee 100644
+--- a/lib/Kconfig.debug
++++ b/lib/Kconfig.debug
+@@ -1917,10 +1917,11 @@ config STRICT_DEVMEM
+ 	  If in doubt, say Y.
+ 
+ config IO_STRICT_DEVMEM
+ 	bool "Filter I/O access to /dev/mem"
+ 	depends on STRICT_DEVMEM
++	default y
+ 	help
+ 	  If this option is disabled, you allow userspace (root) access to all
+ 	  io-memory regardless of whether a driver is actively using that
+ 	  range.  Accidental access to this is obviously disastrous, but
+ 	  specific access can be used by people debugging kernel drivers.
+-- 
+2.52.0
+

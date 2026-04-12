@@ -1,0 +1,28 @@
+From 3b9b6321e92e8ee7a37258dac6f9d0388bbadb94 Mon Sep 17 00:00:00 2001
+From: Bernhard40 <32568352+Bernhard40@users.noreply.github.com>
+Date: Fri, 6 Oct 2017 10:24:10 +0000
+Subject: [PATCH 78/190] disable AIO by default
+
+---
+ init/Kconfig | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/init/Kconfig b/init/Kconfig
+index 5022b44b35f7..6fd55ef02a21 100644
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -1826,11 +1826,10 @@ config SHMEM
+ 	  option replaces shmem and tmpfs with the much simpler ramfs code,
+ 	  which may be appropriate on small systems without swap.
+ 
+ config AIO
+ 	bool "Enable AIO support"
+-	default y
+ 	help
+ 	  This option enables POSIX asynchronous I/O which may by used
+ 	  by some high performance threaded applications. Disabling
+ 	  this option saves about 7k.
+ 
+-- 
+2.52.0
+

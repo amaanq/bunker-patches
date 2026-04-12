@@ -1,0 +1,354 @@
+From 495d53ae15f1f3432aa9c10b6e26ec6227dea38b Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Mon, 9 Mar 2026 00:23:42 -0400
+Subject: [PATCH] rust: add backlight device abstraction
+
+---
+ rust/bindings/bindings_helper.h |   1 +
+ rust/kernel/backlight.rs        | 300 ++++++++++++++++++++++++++++++++
+ rust/kernel/lib.rs              |   2 +
+ 3 files changed, 303 insertions(+)
+ create mode 100644 rust/kernel/backlight.rs
+
+diff --git a/rust/bindings/bindings_helper.h b/rust/bindings/bindings_helper.h
+index a067038b4b422..3525db6886e84 100644
+--- a/rust/bindings/bindings_helper.h
++++ b/rust/bindings/bindings_helper.h
+@@ -34,10 +34,11 @@
+ #include <drm/drm_file.h>
+ #include <drm/drm_gem.h>
+ #include <drm/drm_ioctl.h>
+ #include <kunit/test.h>
+ #include <linux/auxiliary_bus.h>
++#include <linux/backlight.h>
+ #include <linux/bitmap.h>
+ #include <linux/blk-mq.h>
+ #include <linux/blk_types.h>
+ #include <linux/blkdev.h>
+ #include <linux/clk.h>
+diff --git a/rust/kernel/backlight.rs b/rust/kernel/backlight.rs
+new file mode 100644
+index 0000000000000..d421896c5eb75
+--- /dev/null
++++ b/rust/kernel/backlight.rs
+@@ -0,0 +1,300 @@
++// SPDX-License-Identifier: GPL-2.0
++
++//! Backlight device abstraction.
++//!
++//! C header: [`include/linux/backlight.h`](srctree/include/linux/backlight.h).
++//!
++//! Reference: <https://www.kernel.org/doc/html/latest/driver-api/backlight.html>
++
++use crate::{
++    bindings,
++    device::Device,
++    error::{from_err_ptr, to_result, Result},
++    prelude::*,
++    types::Opaque,
++};
++
++/// Properties for a backlight device.
++///
++/// Used when registering a new backlight device.
++pub struct BacklightProperties {
++    props: bindings::backlight_properties,
++}
++
++impl BacklightProperties {
++    /// Create new backlight properties.
++    ///
++    /// `brightness` is the initial brightness and `max_brightness` is the maximum value.
++    /// `type_` specifies the backlight type (use [`BACKLIGHT_RAW`], [`BACKLIGHT_PLATFORM`], or
++    /// [`BACKLIGHT_FIRMWARE`]).
++    pub fn new(brightness: i32, max_brightness: i32, type_: u32) -> Self {
++        // SAFETY: All zeros is valid for `backlight_properties`, then we set the required fields.
++        let mut props: bindings::backlight_properties =
++            unsafe { core::mem::MaybeUninit::zeroed().assume_init() };
++        props.brightness = brightness;
++        props.max_brightness = max_brightness;
++        props.type_ = type_;
++        Self { props }
++    }
++
++    /// Set the brightness scale.
++    pub fn set_scale(mut self, scale: u32) -> Self {
++        self.props.scale = scale;
++        self
++    }
++
++    /// Set the power state.
++    pub fn set_power(mut self, power: i32) -> Self {
++        self.props.power = power;
++        self
++    }
++
++    fn as_raw(&self) -> &bindings::backlight_properties {
++        &self.props
++    }
++}
++
++/// A registered backlight device.
++///
++/// Wraps a `struct backlight_device` registered with the kernel's backlight class.
++///
++/// # Invariants
++///
++/// - `bd` is a valid pointer to a `struct backlight_device` returned by
++///   `backlight_device_register()`.
++/// - The device remains registered for the lifetime of this struct.
++/// - Deregistration occurs exactly once in [`Drop`].
++pub struct BacklightRegistration {
++    bd: *mut bindings::backlight_device,
++}
++
++// SAFETY: `backlight_device_unregister` can be called from any thread.
++unsafe impl Send for BacklightRegistration {}
++// SAFETY: `backlight_device` operations are internally serialized by `update_lock` and `ops_lock`.
++unsafe impl Sync for BacklightRegistration {}
++
++impl BacklightRegistration {
++    /// Register a new backlight device.
++    ///
++    /// `name` is the device name (appears in `/sys/class/backlight/<name>/`).
++    /// `parent` is the parent device.
++    /// `devdata` is an opaque pointer stored as driver data, retrievable via
++    /// [`BacklightDevice::get_data`].
++    /// `ops` must point to a `backlight_ops` struct that lives at least as long as this
++    /// registration.
++    /// `props` specifies the initial backlight properties.
++    ///
++    /// # Safety
++    ///
++    /// - `ops` must point to a valid `backlight_ops` with a `'static` lifetime.
++    /// - `devdata` must be valid for the lifetime of the registration, or null.
++    /// - Callback functions in `ops` must be safe to call with the registered `backlight_device`.
++    pub unsafe fn register(
++        name: &CStr,
++        parent: &Device,
++        devdata: *mut core::ffi::c_void,
++        ops: &'static bindings::backlight_ops,
++        props: &BacklightProperties,
++    ) -> Result<Self> {
++        // SAFETY: All pointers are valid per the safety requirements. `backlight_device_register`
++        // returns a valid `backlight_device` pointer or an ERR_PTR on failure.
++        let bd = unsafe {
++            from_err_ptr(bindings::backlight_device_register(
++                name.as_char_ptr(),
++                parent.as_raw(),
++                devdata,
++                ops,
++                props.as_raw(),
++            ))
++        }?;
++
++        Ok(Self { bd })
++    }
++
++    /// Returns a reference to the underlying [`BacklightDevice`].
++    pub fn device(&self) -> &BacklightDevice {
++        // SAFETY: `self.bd` is valid by the type invariant, and `BacklightDevice` is a
++        // `#[repr(transparent)]` wrapper around `Opaque<backlight_device>`.
++        unsafe { &*self.bd.cast::<BacklightDevice>() }
++    }
++
++    /// Returns the raw pointer to the underlying `struct backlight_device`.
++    pub fn as_raw(&self) -> *mut bindings::backlight_device {
++        self.bd
++    }
++}
++
++impl Drop for BacklightRegistration {
++    fn drop(&mut self) {
++        // SAFETY: `self.bd` was returned by a successful `backlight_device_register` call
++        // and has not been unregistered yet.
++        unsafe { bindings::backlight_device_unregister(self.bd) };
++    }
++}
++
++/// A reference to a `struct backlight_device`.
++///
++/// This is a transparent wrapper used in callbacks to provide safe access to backlight properties.
++#[repr(transparent)]
++pub struct BacklightDevice(Opaque<bindings::backlight_device>);
++
++impl BacklightDevice {
++    /// Create a reference from a raw pointer.
++    ///
++    /// # Safety
++    ///
++    /// `ptr` must be a valid pointer to a registered `backlight_device` for the duration of `'a`.
++    pub unsafe fn from_raw<'a>(ptr: *mut bindings::backlight_device) -> &'a Self {
++        // SAFETY: `BacklightDevice` is `#[repr(transparent)]` over
++        // `Opaque<bindings::backlight_device>`, so the cast is valid. The caller guarantees
++        // the pointer is valid for `'a`.
++        unsafe { &*ptr.cast::<Self>() }
++    }
++
++    /// Returns the raw pointer.
++    pub fn as_raw(&self) -> *mut bindings::backlight_device {
++        self.0.get()
++    }
++
++    /// Returns the current brightness requested by the user.
++    pub fn brightness(&self) -> i32 {
++        // SAFETY: `self` is a valid `backlight_device`.
++        unsafe { (*self.as_raw()).props.brightness }
++    }
++
++    /// Returns the maximum brightness value.
++    pub fn max_brightness(&self) -> i32 {
++        // SAFETY: `self` is a valid `backlight_device`.
++        unsafe { (*self.as_raw()).props.max_brightness }
++    }
++
++    /// Set the maximum brightness value.
++    ///
++    /// # Safety
++    ///
++    /// Must only be called from backlight ops callbacks or with appropriate synchronization.
++    pub unsafe fn set_max_brightness(&self, max: i32) {
++        // SAFETY: The caller ensures proper synchronization.
++        unsafe { (*self.as_raw()).props.max_brightness = max };
++    }
++
++    /// Returns the current power state.
++    ///
++    /// `0` = full on ([`BACKLIGHT_POWER_ON`]), `4` = full off ([`BACKLIGHT_POWER_OFF`]).
++    pub fn power(&self) -> i32 {
++        // SAFETY: `self` is a valid `backlight_device`.
++        unsafe { (*self.as_raw()).props.power }
++    }
++
++    /// Returns the backlight state flags.
++    pub fn state(&self) -> u32 {
++        // SAFETY: `self` is a valid `backlight_device`.
++        unsafe { (*self.as_raw()).props.state }
++    }
++
++    /// Returns `true` if the display is expected to be blank.
++    ///
++    /// The display is blank if power is not `BACKLIGHT_POWER_ON` or if the state has
++    /// `BL_CORE_SUSPENDED` or `BL_CORE_FBBLANK` set.
++    pub fn is_blank(&self) -> bool {
++        // SAFETY: `self` is a valid `backlight_device`.
++        unsafe {
++            let props = &(*self.as_raw()).props;
++            props.power != BACKLIGHT_POWER_ON
++                || props.state & (BL_CORE_SUSPENDED | BL_CORE_FBBLANK) != 0
++        }
++    }
++
++    /// Returns the effective brightness value.
++    ///
++    /// Returns `0` if the display is blank, otherwise returns the current brightness.
++    /// Backlight drivers should use this in their `update_status` callback.
++    pub fn get_brightness(&self) -> i32 {
++        if self.is_blank() {
++            0
++        } else {
++            self.brightness()
++        }
++    }
++
++    /// Returns the driver data pointer.
++    ///
++    /// This is the `devdata` pointer passed during registration.
++    ///
++    /// # Safety
++    ///
++    /// The caller must ensure the returned pointer is used according to its original type.
++    pub unsafe fn get_data<T>(&self) -> *mut T {
++        // SAFETY: `self` is a valid `backlight_device`. `dev_get_drvdata` returns the devdata
++        // pointer set during registration.
++        unsafe {
++            bindings::dev_get_drvdata(core::ptr::addr_of!((*self.as_raw()).dev)) as *mut T
++        }
++    }
++
++    /// Returns a reference to the underlying kernel `struct device`.
++    pub fn dev(&self) -> &Device {
++        // SAFETY: `self` is a valid `backlight_device`, so `&self.dev` is a valid `struct device`.
++        unsafe { Device::from_raw(core::ptr::addr_of_mut!((*self.as_raw()).dev)) }
++    }
++}
++
++/// Force an update of the backlight device status.
++///
++/// Calls `backlight_device_set_brightness` which validates the brightness value and calls the
++/// driver's `update_status` callback.
++pub fn set_brightness(reg: &BacklightRegistration, brightness: u32) -> Result {
++    // SAFETY: `reg.bd` is a valid registered backlight device.
++    to_result(unsafe {
++        bindings::backlight_device_set_brightness(reg.bd, brightness as usize)
++    })
++}
++
++/// Force the backlight core to re-read brightness from hardware.
++///
++/// Calls the driver's `get_brightness` callback and generates a uevent.
++pub fn force_update(reg: &BacklightRegistration, reason: u32) {
++    // SAFETY: `reg.bd` is a valid registered backlight device.
++    unsafe { bindings::backlight_force_update(reg.bd, reason) };
++}
++
++// Constants from include/linux/backlight.h — stable kernel ABI values.
++
++/// Backlight type: controlled using hardware registers.
++pub const BACKLIGHT_RAW: u32 = 1;
++
++/// Backlight type: controlled using a platform-specific interface.
++pub const BACKLIGHT_PLATFORM: u32 = 2;
++
++/// Backlight type: controlled using a standard firmware interface.
++pub const BACKLIGHT_FIRMWARE: u32 = 3;
++
++/// Power state: full on.
++pub const BACKLIGHT_POWER_ON: i32 = 0;
++
++/// Power state: full off.
++pub const BACKLIGHT_POWER_OFF: i32 = 4;
++
++/// State flag: backlight is suspended.
++pub const BL_CORE_SUSPENDED: u32 = 1 << 0;
++
++/// State flag: backlight is under a framebuffer blank event.
++pub const BL_CORE_FBBLANK: u32 = 1 << 1;
++
++/// Option flag: call `update_status` on suspend/resume.
++pub const BL_CORE_SUSPENDRESUME: u32 = 1 << 0;
++
++/// Backlight scale: unknown.
++pub const BACKLIGHT_SCALE_UNKNOWN: u32 = 0;
++
++/// Backlight scale: linear.
++pub const BACKLIGHT_SCALE_LINEAR: u32 = 1;
++
++/// Backlight scale: non-linear.
++pub const BACKLIGHT_SCALE_NON_LINEAR: u32 = 2;
++
++/// Update reason: hotkey.
++pub const BACKLIGHT_UPDATE_HOTKEY: u32 = 0;
++
++/// Update reason: sysfs.
++pub const BACKLIGHT_UPDATE_SYSFS: u32 = 1;
+diff --git a/rust/kernel/lib.rs b/rust/kernel/lib.rs
+index f812cf1200428..e2bdbb3ed76a2 100644
+--- a/rust/kernel/lib.rs
++++ b/rust/kernel/lib.rs
+@@ -66,10 +66,12 @@
+ 
+ pub mod acpi;
+ pub mod alloc;
+ #[cfg(CONFIG_AUXILIARY_BUS)]
+ pub mod auxiliary;
++#[cfg(CONFIG_BACKLIGHT_CLASS_DEVICE)]
++pub mod backlight;
+ pub mod bitmap;
+ pub mod bits;
+ #[cfg(CONFIG_BLOCK)]
+ pub mod block;
+ pub mod bug;
+-- 
+2.53.0
+

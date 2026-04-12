@@ -1,0 +1,86 @@
+From 2be06f7713b989b411dbd678cb87093e4e4ad648 Mon Sep 17 00:00:00 2001
+From: Matt Brown <matt@nmatt.com>
+Date: Mon, 29 May 2017 17:37:59 -0400
+Subject: [PATCH 131/190] security: tty: Add owner user namespace to tty_struct
+
+This patch adds struct user_namespace *owner_user_ns to the tty_struct.
+Then it is set to current_user_ns() in the alloc_tty_struct function.
+
+This is done to facilitate capability checks against the original user
+namespace that allocated the tty.
+
+E.g. ns_capable(tty->owner_user_ns,CAP_SYS_ADMIN)
+
+This combined with the use of user namespace's will allow hardening
+protections to be built to mitigate container escapes that utilize TTY
+ioctls such as TIOCSTI.
+
+See: https://bugzilla.redhat.com/show_bug.cgi?id=1411256
+
+Acked-by: Serge Hallyn <serge@hallyn.com>
+Reviewed-by: Kees Cook <keescook@chromium.org>
+Signed-off-by: Matt Brown <matt@nmatt.com>
+---
+ drivers/tty/tty_io.c | 2 ++
+ include/linux/tty.h  | 2 ++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/drivers/tty/tty_io.c b/drivers/tty/tty_io.c
+index e2d92cf70eb7..1ac71a0960b3 100644
+--- a/drivers/tty/tty_io.c
++++ b/drivers/tty/tty_io.c
+@@ -169,10 +169,11 @@ static void release_tty(struct tty_struct *tty, int idx);
+ static void free_tty_struct(struct tty_struct *tty)
+ {
+ 	tty_ldisc_deinit(tty);
+ 	put_device(tty->dev);
+ 	kvfree(tty->write_buf);
++	put_user_ns(tty->owner_user_ns);
+ 	kfree(tty);
+ }
+ 
+ static inline struct tty_struct *file_tty(struct file *file)
+ {
+@@ -3128,10 +3129,11 @@ struct tty_struct *alloc_tty_struct(struct tty_driver *driver, int idx)
+ 	tty->driver = driver;
+ 	tty->ops = driver->ops;
+ 	tty->index = idx;
+ 	tty_line_name(driver, idx, tty->name);
+ 	tty->dev = tty_get_device(tty);
++	tty->owner_user_ns = get_user_ns(current_user_ns());
+ 
+ 	return tty;
+ }
+ 
+ /**
+diff --git a/include/linux/tty.h b/include/linux/tty.h
+index 0a46e4054dec..99c733852fb2 100644
+--- a/include/linux/tty.h
++++ b/include/linux/tty.h
+@@ -12,10 +12,11 @@
+ #include <linux/mutex.h>
+ #include <linux/tty_flags.h>
+ #include <uapi/linux/tty.h>
+ #include <linux/rwsem.h>
+ #include <linux/llist.h>
++#include <linux/user_namespace.h>
+ 
+ 
+ /*
+  * (Note: the *_driver.minor_start values 1, 64, 128, 192 are
+  * hardcoded at present.)
+@@ -238,10 +239,11 @@ struct tty_struct {
+ 	u8 *write_buf;
+ 
+ 	struct list_head tty_files;
+ 
+ 	struct work_struct SAK_work;
++	struct user_namespace *owner_user_ns;
+ } __randomize_layout;
+ 
+ /* Each of a tty's open files has private_data pointing to tty_file_private */
+ struct tty_file_private {
+ 	struct tty_struct *tty;
+-- 
+2.52.0
+

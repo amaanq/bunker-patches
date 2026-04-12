@@ -1,0 +1,113 @@
+From cc3a76c0f11ea3f0c917ea86968e0819a32b188b Mon Sep 17 00:00:00 2001
+From: Emese Revfy <re.emese@gmail.com>
+Date: Tue, 31 May 2016 01:34:02 +0200
+Subject: [PATCH 125/190] Add the extra_latent_entropy kernel parameter
+
+When extra_latent_entropy is passed on the kernel command line,
+entropy will be extracted from up to the first 4GB of RAM while the
+runtime memory allocator is being initialized.
+
+Based on work created by the PaX Team.
+
+Signed-off-by: Emese Revfy <re.emese@gmail.com>
+Signed-off-by: Daniel Micay <danielmicay@gmail.com>
+Signed-off-by: Levente Polyak <levente@leventepolyak.net>
+---
+ .../admin-guide/kernel-parameters.txt         |  5 ++++
+ mm/page_alloc.c                               | 24 +++++++++++++++++++
+ scripts/gcc-plugins/Kconfig                   |  5 ++++
+ 3 files changed, 34 insertions(+)
+
+diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
+index 6c42061ca20e..b7decc4777b3 100644
+--- a/Documentation/admin-guide/kernel-parameters.txt
++++ b/Documentation/admin-guide/kernel-parameters.txt
+@@ -4791,10 +4791,15 @@
+ 	pause_on_oops=<int>
+ 			Halt all CPUs after the first oops has been printed for
+ 			the specified number of seconds.  This is to be used if
+ 			your oopses keep scrolling off the screen.
+ 
++	extra_latent_entropy
++			Enable a very simple form of latent entropy extraction
++			from the first 4GB of memory as the bootmem allocator
++			passes the memory pages to the buddy allocator.
++
+ 	pcbit=		[HW,ISDN]
+ 
+ 	pci=option[,option...]	[PCI,EARLY] various PCI subsystem options.
+ 
+ 				Some options herein operate on a specific device
+diff --git a/mm/page_alloc.c b/mm/page_alloc.c
+index 2b86eadeb6c6..52490cdf5627 100644
+--- a/mm/page_alloc.c
++++ b/mm/page_alloc.c
+@@ -184,10 +184,19 @@ DEFINE_PER_CPU(int, _numa_mem_);		/* Kernel "local memory" node */
+ EXPORT_PER_CPU_SYMBOL(_numa_mem_);
+ #endif
+ 
+ static DEFINE_MUTEX(pcpu_drain_mutex);
+ 
++bool __meminitdata extra_latent_entropy;
++
++static int __init setup_extra_latent_entropy(char *str)
++{
++	extra_latent_entropy = true;
++	return 0;
++}
++early_param("extra_latent_entropy", setup_extra_latent_entropy);
++
+ #ifdef CONFIG_GCC_PLUGIN_LATENT_ENTROPY
+ volatile unsigned long latent_entropy __latent_entropy;
+ EXPORT_SYMBOL(latent_entropy);
+ #endif
+ 
+@@ -1610,10 +1619,25 @@ void __meminit __free_pages_core(struct page *page, unsigned int order,
+ 		for (loop = 0; loop < nr_pages; loop++, p++) {
+ 			__ClearPageReserved(p);
+ 			set_page_count(p, 0);
+ 		}
+ 
++		if (extra_latent_entropy && !PageHighMem(page) && page_to_pfn(page) < 0x100000) {
++			unsigned long hash = 0;
++			size_t index, end = PAGE_SIZE * nr_pages / sizeof hash;
++			const unsigned long *data = lowmem_page_address(page);
++
++			for (index = 0; index < end; index++)
++				hash ^= hash + data[index];
++#ifdef CONFIG_GCC_PLUGIN_LATENT_ENTROPY
++			latent_entropy ^= hash;
++			add_device_randomness((const void *)&latent_entropy, sizeof(latent_entropy));
++#else
++			add_device_randomness((const void *)&hash, sizeof(hash));
++#endif
++		}
++
+ 		/* memblock adjusts totalram_pages() manually. */
+ 		atomic_long_add(nr_pages, &page_zone(page)->managed_pages);
+ 	}
+ 
+ 	if (page_contains_unaccepted(page, order)) {
+diff --git a/scripts/gcc-plugins/Kconfig b/scripts/gcc-plugins/Kconfig
+index 6b34ba19358d..d83e715c9d40 100644
+--- a/scripts/gcc-plugins/Kconfig
++++ b/scripts/gcc-plugins/Kconfig
+@@ -27,10 +27,15 @@ config GCC_PLUGIN_LATENT_ENTROPY
+ 	  program state.  This will help especially embedded systems where
+ 	  there is little 'natural' source of entropy normally.  The cost
+ 	  is some slowdown of the boot process (about 0.5%) and fork and
+ 	  irq processing.
+ 
++	  When extra_latent_entropy is passed on the kernel command line,
++	  entropy will be extracted from up to the first 4GB of RAM while the
++	  runtime memory allocator is being initialized.  This costs even more
++	  slowdown of the boot process.
++
+ 	  Note that entropy extracted this way is not cryptographically
+ 	  secure!
+ 
+ 	  This plugin was ported from grsecurity/PaX. More information at:
+ 	   * https://grsecurity.net/
+-- 
+2.52.0
+

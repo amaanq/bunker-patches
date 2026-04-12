@@ -1,0 +1,63 @@
+From 7a3ac869178fc11568bf5d538b8d3b52ef8ee44e Mon Sep 17 00:00:00 2001
+From: Levente Polyak <levente@leventepolyak.net>
+Date: Thu, 11 Mar 2021 23:09:50 +0100
+Subject: [PATCH 141/190] ovl: add config to disable unprivileged user namespace mounts
+
+When disabled, unprivileged users will not be able to create
+new overlayfs mounts. This cuts the attack surface if no
+unprivileged user namespace mounts are required like for
+running rootless containers.
+
+Signed-off-by: Levente Polyak <levente@leventepolyak.net>
+---
+ fs/overlayfs/Kconfig | 16 ++++++++++++++++
+ fs/overlayfs/super.c |  2 ++
+ 2 files changed, 18 insertions(+)
+
+diff --git a/fs/overlayfs/Kconfig b/fs/overlayfs/Kconfig
+index 2ac67e04a6fb..3340e13c959c 100644
+--- a/fs/overlayfs/Kconfig
++++ b/fs/overlayfs/Kconfig
+@@ -132,5 +132,21 @@ config OVERLAY_FS_DEBUG
+ 	depends on OVERLAY_FS
+ 	help
+ 	  Say Y here to enable extra debugging checks in overlayfs.
+ 
+ 	  If unsure, say N.
++
++config OVERLAY_FS_UNPRIVILEGED
++	bool "Overlayfs: turn on unprivileged user namespace mounts"
++	default n
++	depends on OVERLAY_FS
++	help
++	  When disabled, unprivileged users will not be able to create
++	  new overlayfs mounts. This cuts the attack surface if no
++	  unprivileged user namespace mounts are required like for
++	  running rootless containers.
++
++	  Overlayfs has been part of several recent local privilege
++	  escalation exploits, so if you are security-conscious
++	  you want to disable this.
++
++	  If unsure, say N.
+diff --git a/fs/overlayfs/super.c b/fs/overlayfs/super.c
+index 43ee4c7296a7..527d709bd62d 100644
+--- a/fs/overlayfs/super.c
++++ b/fs/overlayfs/super.c
+@@ -1576,11 +1576,13 @@ int ovl_fill_super(struct super_block *sb, struct fs_context *fc)
+ struct file_system_type ovl_fs_type = {
+ 	.owner			= THIS_MODULE,
+ 	.name			= "overlay",
+ 	.init_fs_context	= ovl_init_fs_context,
+ 	.parameters		= ovl_parameter_spec,
++#ifdef CONFIG_OVERLAY_FS_UNPRIVILEGED
+ 	.fs_flags		= FS_USERNS_MOUNT,
++#endif
+ 	.kill_sb		= kill_anon_super,
+ };
+ MODULE_ALIAS_FS("overlay");
+ 
+ static void ovl_inode_init_once(void *foo)
+-- 
+2.52.0
+

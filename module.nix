@@ -37,6 +37,7 @@ let
   stableRelease = {
     "6.18" = "6.18.10";
     "6.19" = "6.19.12";
+    "7.0" = "7.0";
   };
 
   resolvedVersion =
@@ -246,6 +247,7 @@ let
         "upstream/0021"
       ];
     };
+    "7.0" = { };
   };
 
   # Merge shared + version-specific.
@@ -310,13 +312,16 @@ let
     {
       "6.18.10" = "sha256-1tN3FhdBraL6so7taRQyd2NKKuteOIPlDAMViO3kjt4=";
       "6.19.12" = "sha256-zlxPEgX5cpKGtWmwN2SVkVVfMcoeA8xQS9O3C45YqNU=";
+      "7.0" = "sha256-u39tgLOHx1e30Uu5MCj8uQ95PFwNNnc27oFaEAs4kfA=";
     }
     .${resolvedVersion};
 
+  sourceUrl = "https://cdn.kernel.org/pub/linux/kernel/v${
+    builtins.substring 0 1 cfg.version
+  }.x/linux-${resolvedVersion}.tar.xz";
+
   kernelSrc = pkgs.fetchurl {
-    url = "https://cdn.kernel.org/pub/linux/kernel/v${
-      builtins.substring 0 1 cfg.version
-    }.x/linux-${resolvedVersion}.tar.xz";
+    url = sourceUrl;
     hash = sourceHash;
   };
 
@@ -386,7 +391,7 @@ let
     // mapAttrs (_: mkOverride 90) {
       PREEMPT = yes;
       PREEMPT_LAZY = option no;
-      PREEMPT_VOLUNTARY = no;
+      PREEMPT_VOLUNTARY = option no; # removed on archs with ARCH_HAS_PREEMPT_LAZY in 7.0+
       IOSCHED_BFQ = yes;
     }
     // forceAll {
@@ -1140,8 +1145,9 @@ in
       type = types.enum [
         "6.18"
         "6.19"
+        "7.0"
       ];
-      default = "6.19";
+      default = "7.0";
       description = "Linux kernel major.minor version. Automatically resolves to the latest stable point release.";
     };
 

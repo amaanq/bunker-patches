@@ -1,0 +1,45 @@
+From d79e95c5f5ab3e2c3fcceef500e6a6c3f5db10a1 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Tue, 17 Sep 2019 18:06:10 +0200
+Subject: [PATCH 118/190] BUG on kmem_cache_free with the wrong cache
+
+If CONFIG_BUG_ON_DATA_CORRUPTION is enabled, BUG on a slab cache
+mismatch in the free path rather than merely warning.
+
+Signed-off-by: Daniel Micay <danielmicay@gmail.com>
+Signed-off-by: Levente Polyak <levente@leventepolyak.net>
+Signed-off-by: Thibaut Sautereau <thibaut.sautereau@ssi.gouv.fr>
+[nicolas.bouchinet@ssi.gouv.fr: adapt to inline kmem_cache_free_debug]
+Signed-off-by: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
+---
+ mm/slub.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/mm/slub.c b/mm/slub.c
+--- a/mm/slub.c
++++ b/mm/slub.c
+@@ -6366,11 +6366,16 @@ void kmem_cache_free_debug(struct kmem_c
+ 	cachep = slab->slab_cache;
+ 
+-	if (WARN_ONCE(cachep != s,
+-			"kmem_cache_free(%s, %p): object belongs to different cache %s\n",
+-			s->name, obj, cachep ? cachep->name : "(NULL)")) {
+-		if (cachep)
+-			print_tracking(cachep, obj);
+-		return;
++	if (cachep != s) {
++#ifdef CONFIG_BUG_ON_DATA_CORRUPTION
++		BUG();
++#else
++		WARN_ONCE(1,
++			"kmem_cache_free(%s, %p): object belongs to different cache %s\n",
++			s->name, obj, cachep ? cachep->name : "(NULL)");
++		if (cachep)
++			print_tracking(cachep, obj);
++		return;
++#endif
+ 	}
+ }
+
+-- 
+2.52.0

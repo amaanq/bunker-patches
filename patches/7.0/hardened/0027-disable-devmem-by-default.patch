@@ -1,0 +1,28 @@
+From 18e6584db89405757e19916b577a04b4c251b7a4 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Fri, 5 Jan 2018 12:41:42 -0500
+Subject: [PATCH 84/190] disable DEVMEM by default
+
+---
+ drivers/char/Kconfig | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/drivers/char/Kconfig b/drivers/char/Kconfig
+index 258a33a54e8e..72907b30ef13 100644
+--- a/drivers/char/Kconfig
++++ b/drivers/char/Kconfig
+@@ -308,11 +308,10 @@ config NSC_GPIO
+ 	  pc8736x_gpio drivers.  If those drivers are built as
+ 	  modules, this one will be too, named nsc_gpio
+ 
+ config DEVMEM
+ 	bool "/dev/mem virtual device support"
+-	default y
+ 	help
+ 	  Say Y here if you want to support the /dev/mem device.
+ 	  The /dev/mem device is used to access areas of physical
+ 	  memory.
+ 	  When in doubt, say "Y".
+-- 
+2.52.0
+

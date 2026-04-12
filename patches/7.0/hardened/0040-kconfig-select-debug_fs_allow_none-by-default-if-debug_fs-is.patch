@@ -1,0 +1,31 @@
+From 51b2f0c8b04668e1c5f0a8d7e48c5c48bc48e411 Mon Sep 17 00:00:00 2001
+From: Levente Polyak <levente@leventepolyak.net>
+Date: Sun, 27 Sep 2020 00:43:48 +0200
+Subject: [PATCH 97/190] kconfig: select DEBUG_FS_ALLOW_NONE by default if DEBUG_FS is
+ enabled
+
+Signed-off-by: Levente Polyak <levente@leventepolyak.net>
+---
+ lib/Kconfig.debug | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/lib/Kconfig.debug b/lib/Kconfig.debug
+index ba36939fda79..e14e4f2a0536 100644
+--- a/lib/Kconfig.debug
++++ b/lib/Kconfig.debug
+@@ -681,11 +681,11 @@ config DEBUG_FS
+ 	  If unsure, say N.
+ 
+ choice
+ 	prompt "Debugfs default access"
+ 	depends on DEBUG_FS
+-	default DEBUG_FS_ALLOW_ALL
++	default DEBUG_FS_ALLOW_NONE
+ 	help
+ 	  This selects the default access restrictions for debugfs.
+ 	  It can be overridden with kernel command line option
+ 	  debugfs=[on,off]. The restrictions apply for API access
+ 	  and filesystem registration.
+-- 
+2.52.0
+

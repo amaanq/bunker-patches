@@ -1,0 +1,29 @@
+From c84cd96f1fa6e2562d0fc7a201d2a6646f9d37fe Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Mon, 29 May 2017 12:21:21 -0400
+Subject: [PATCH 65/190] enable BUG_ON_DATA_CORRUPTION by default
+
+Signed-off-by: Daniel Micay <danielmicay@gmail.com>
+---
+ security/Kconfig.hardening | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/security/Kconfig.hardening b/security/Kconfig.hardening
+index ed25c8ea8381..11bd5d6c5f7f 100644
+--- a/security/Kconfig.hardening
++++ b/security/Kconfig.hardening
+@@ -268,10 +268,11 @@ config RUST_BITMAP_HARDENED
+ 	  If unsure, say N.
+ 
+ config BUG_ON_DATA_CORRUPTION
+ 	bool "Trigger a BUG when data corruption is detected"
+ 	select LIST_HARDENED
++	default y
+ 	help
+ 	  Select this option if the kernel should BUG when it encounters
+ 	  data corruption in kernel memory structures when they get checked
+ 	  for validity.
+ 
+-- 
+2.52.0
+
