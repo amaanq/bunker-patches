@@ -13,7 +13,6 @@ Signed-off-by: Peter Jung <admin@ptr1337.dev>
  arch/x86/include/asm/sync_core.h           |  2 +-
  arch/x86/mm/tlb.c                          | 21 ---------
  drivers/bluetooth/btusb.c                  |  4 ++
- drivers/gpu/drm/amd/amdgpu/amdgpu_device.c |  4 +-
  drivers/gpu/drm/i915/gt/intel_rc6.c        | 13 ++++-
  drivers/iommu/iommu.c                      |  5 ++
  drivers/usb/core/quirks.c                  |  9 ++++
@@ -33,7 +32,7 @@ Signed-off-by: Peter Jung <admin@ptr1337.dev>
  net/netfilter/nf_tables_api.c              |  3 +-
  net/netfilter/nft_set_pipapo.c             |  2 +
  sound/hda/codecs/realtek/alc269.c          |  1 +
- 28 files changed, 115 insertions(+), 131 deletions(-)
+ 27 files changed, 111 insertions(+), 127 deletions(-)
 
 diff --git a/arch/arm/include/asm/mmu_context.h b/arch/arm/include/asm/mmu_context.h
 --- a/arch/arm/include/asm/mmu_context.h
@@ -188,28 +187,6 @@ diff --git a/drivers/bluetooth/btusb.c b/drivers/bluetooth/btusb.c
  	{ USB_DEVICE(0x13d3, 0x3585), .driver_info = BTUSB_MEDIATEK |
  						     BTUSB_WIDEBAND_SPEECH },
  	{ USB_DEVICE(0x13d3, 0x3610), .driver_info = BTUSB_MEDIATEK |
-
-diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
---- a/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
-+++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
-@@ -5081,7 +5081,7 @@ void amdgpu_device_fini_hw(struct amdgpu
- 	 * before ip_fini_early to prevent kfd locking refcount issues by calling
- 	 * amdgpu_amdkfd_suspend()
- 	 */
--	if (drm_dev_is_unplugged(adev_to_drm(adev)))
-+	if (pci_dev_is_disconnected(adev->pdev))
- 		amdgpu_amdkfd_device_fini_sw(adev);
- 
- 	amdgpu_device_ip_fini_early(adev);
-@@ -5093,7 +5093,7 @@ void amdgpu_device_fini_hw(struct amdgpu
- 
- 	amdgpu_gart_dummy_page_fini(adev);
- 
--	if (drm_dev_is_unplugged(adev_to_drm(adev)))
-+	if (pci_dev_is_disconnected(adev->pdev))
- 		amdgpu_device_unmap_mmio(adev);
- 
- }
 
 diff --git a/drivers/gpu/drm/i915/gt/intel_rc6.c b/drivers/gpu/drm/i915/gt/intel_rc6.c
 --- a/drivers/gpu/drm/i915/gt/intel_rc6.c
