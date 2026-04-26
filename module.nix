@@ -1057,8 +1057,10 @@ let
     # file ("Failed to run rustfmt: No such file or directory") and emits the
     # raw bindgen output. Compiles fine either way; wire it up so the warnings
     # go away and the embedded source is human-readable when debugging.
+    # ppc64 vDSO links via `clang -fuse-ld=lld`, which needs `ld.lld` on PATH.
     nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [
       pkgsKernel.buildPackages.rustfmt
+      pkgsKernel.pkgsBuildBuild.lld.out
     ];
 
     postInstall =
