@@ -120,6 +120,7 @@ let
     drivers = [
       "zen/0001"
       "zen/0002"
+      "bunker/0015" # NVMe remap: NULL-check devm_kzalloc (must follow zen/0002)
       "zen/0004"
       "zen/0005"
       "zen/0006"
