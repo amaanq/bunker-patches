@@ -47,7 +47,7 @@ new file mode 100644
 index 000000000000..0462f0952043
 --- /dev/null
 +++ b/drivers/i2c/busses/i2c-nct6775.c
-@@ -0,0 +1,647 @@
+@@ -0,0 +1,665 @@
 +/*
 + * i2c-nct6775 - Driver for the SMBus master functionality of
 + *	       Nuvoton NCT677x Super-I/O chips
@@ -94,17 +94,15 @@ index 000000000000..0462f0952043
 +
 +#define DRVNAME "i2c-nct6775"
 +
-+/* Nuvoton SMBus address offsets */
 +#define SMBHSTDAT       (0 + nuvoton_nct6793d_smba)
 +#define SMBBLKSZ        (1 + nuvoton_nct6793d_smba)
 +#define SMBHSTCMD       (2 + nuvoton_nct6793d_smba)
-+#define SMBHSTIDX       (3 + nuvoton_nct6793d_smba)  //Index field is the Command field on other controllers
++#define SMBHSTIDX       (3 + nuvoton_nct6793d_smba)  /* command on other controllers */
 +#define SMBHSTCTL       (4 + nuvoton_nct6793d_smba)
 +#define SMBHSTADD       (5 + nuvoton_nct6793d_smba)
 +#define SMBHSTERR       (9 + nuvoton_nct6793d_smba)
 +#define SMBHSTSTS       (0xE + nuvoton_nct6793d_smba)
 +
-+/* Command register */
 +#define NCT6793D_READ_BYTE      0
 +#define NCT6793D_READ_WORD      1
 +#define NCT6793D_READ_BLOCK     2
@@ -114,21 +112,17 @@ index 000000000000..0462f0952043
 +#define NCT6793D_WRITE_WORD     9
 +#define NCT6793D_WRITE_BLOCK    10
 +
-+/* Control register */
 +#define NCT6793D_MANUAL_START   128
 +#define NCT6793D_SOFT_RESET     64
 +
-+/* Error register */
 +#define NCT6793D_NO_ACK         32
 +
-+/* Status register */
 +#define NCT6793D_FIFO_EMPTY     1
 +#define NCT6793D_FIFO_FULL      2
 +#define NCT6793D_MANUAL_ACTIVE  4
 +
 +#define NCT6775_LD_SMBUS		0x0B
 +
-+/* Other settings */
 +#define MAX_RETRIES		400
 +
 +enum kinds { nct6106, nct6775, nct6776, nct6779, nct6791, nct6792, nct6793,
@@ -139,7 +133,6 @@ index 000000000000..0462f0952043
 +	enum kinds kind;
 +};
 +
-+/* used to set data->name = nct6775_device_names[data->sio_kind] */
 +static const char * const nct6775_device_names[] = {
 +	"nct6106",
 +	"nct6775",
@@ -206,9 +199,6 @@ index 000000000000..0462f0952043
 +static inline int
 +superio_enter(int ioreg)
 +{
-+	/*
-+	 * Try to reserve <ioreg> and <ioreg + 1> for exclusive access.
-+	 */
 +	if (!request_muxed_region(ioreg, 2, DRVNAME))
 +		return -EBUSY;
 +
@@ -227,14 +217,14 @@ index 000000000000..0462f0952043
 +	release_region(ioreg, 2);
 +}
 +
-+/*
-+ * ISA constants
-+ */
-+
 +#define IOREGION_ALIGNMENT	(~7)
-+#define IOREGION_LENGTH		2
++/* SMBus registers span offsets 0..0xE, not just the Super-I/O pair. */
++#define IOREGION_LENGTH		15
 +#define ADDR_REG_OFFSET		0
 +#define DATA_REG_OFFSET		1
++
++/* Guard both possible Super-I/O instances; i2c-core only serializes per adapter. */
++static DEFINE_MUTEX(nct6775_smbus_lock);
 +
 +#define NCT6775_REG_BANK	0x4E
 +#define NCT6775_REG_CONFIG	0x40
@@ -245,7 +235,6 @@ index 000000000000..0462f0952043
 +	unsigned short smba;
 +};
 +
-+/* Return negative errno on error. */
 +static s32 nct6775_access(struct i2c_adapter * adap, u16 addr,
 +		 unsigned short flags, char read_write,
 +		 u8 command, int size, union i2c_smbus_data * data)
@@ -255,10 +244,13 @@ index 000000000000..0462f0952043
 +	int i, len, cnt;
 +	union i2c_smbus_data tmp_data;
 +	int timeout = 0;
++	int ret = 0;
 +
 +	tmp_data.word = 0;
 +	cnt = 0;
 +	len = 0;
++
++	mutex_lock(&nct6775_smbus_lock);
 +
 +	outb_p(NCT6793D_SOFT_RESET, SMBHSTCTL);
 +
@@ -301,13 +293,15 @@ index 000000000000..0462f0952043
 +			outb_p(command, SMBHSTIDX);
 +			if (read_write == I2C_SMBUS_WRITE) {
 +				len = data->block[0];
-+				if (len == 0 || len > I2C_SMBUS_BLOCK_MAX)
-+					return -EINVAL;
++				if (len == 0 || len > I2C_SMBUS_BLOCK_MAX) {
++					ret = -EINVAL;
++					goto out;
++				}
 +				outb_p(len, SMBBLKSZ);
 +
 +				cnt = 1;
 +				if (len >= 4) {
-+					for (i = cnt; i <= 4; i++) {
++					for (i = cnt; i < cnt + 4; i++) {
 +						outb_p(data->block[i], SMBHSTDAT);
 +					}
 +
@@ -315,7 +309,7 @@ index 000000000000..0462f0952043
 +					cnt += 4;
 +				}
 +				else {
-+					for (i = cnt; i <= len; i++ ) {
++					for (i = cnt; i < cnt + len; i++) {
 +						outb_p(data->block[i], SMBHSTDAT);
 +					}
 +
@@ -325,12 +319,14 @@ index 000000000000..0462f0952043
 +				outb_p(NCT6793D_WRITE_BLOCK, SMBHSTCMD);
 +			}
 +			else {
-+				return -ENOTSUPP;
++				ret = -ENOTSUPP;
++				goto out;
 +			}
 +			break;
 +		default:
 +			dev_warn(&adap->dev, "Unsupported transaction %d\n", size);
-+			return -EOPNOTSUPP;
++			ret = -EOPNOTSUPP;
++			goto out;
 +	}
 +
 +	outb_p(NCT6793D_MANUAL_START, SMBHSTCTL);
@@ -340,17 +336,16 @@ index 000000000000..0462f0952043
 +			timeout = 0;
 +			while ((inb_p(SMBHSTSTS) & NCT6793D_FIFO_EMPTY) == 0)
 +			{
-+				if(timeout > MAX_RETRIES)
-+				{
-+					return -ETIMEDOUT;
++				if (timeout > MAX_RETRIES) {
++					ret = -ETIMEDOUT;
++					goto out;
 +				}
 +				usleep_range(250, 500);
 +				timeout++;
 +			}
 +
-+			//Load more bytes into FIFO
 +			if (len >= 4) {
-+				for (i = cnt; i <= (cnt + 4); i++) {
++				for (i = cnt; i < cnt + 4; i++) {
 +					outb_p(data->block[i], SMBHSTDAT);
 +				}
 +
@@ -358,7 +353,7 @@ index 000000000000..0462f0952043
 +				cnt += 4;
 +			}
 +			else {
-+				for (i = cnt; i <= (cnt + len); i++) {
++				for (i = cnt; i < cnt + len; i++) {
 +					outb_p(data->block[i], SMBHSTDAT);
 +				}
 +
@@ -366,29 +361,28 @@ index 000000000000..0462f0952043
 +			}
 +		}
 +		else {
-+			return -ENOTSUPP;
++			ret = -ENOTSUPP;
++			goto out;
 +		}
-+		
 +	}
 +
-+	//wait for manual mode to complete
 +	timeout = 0;
 +	while ((inb_p(SMBHSTSTS) & NCT6793D_MANUAL_ACTIVE) != 0)
 +	{
-+		if(timeout > MAX_RETRIES)
-+		{
-+			return -ETIMEDOUT;
++		if (timeout > MAX_RETRIES) {
++			ret = -ETIMEDOUT;
++			goto out;
 +		}
 +		usleep_range(250, 500);
 +		timeout++;
 +	}
 +
-+	if ((inb_p(SMBHSTERR) & NCT6793D_NO_ACK) != 0) {    	
-+		return -ENXIO;
++	if ((inb_p(SMBHSTERR) & NCT6793D_NO_ACK) != 0) {
++		ret = -ENXIO;
++		goto out;
 +	}
-+	else if ((read_write == I2C_SMBUS_WRITE) || (size == I2C_SMBUS_QUICK)) {
-+		return 0;
-+	}
++	if ((read_write == I2C_SMBUS_WRITE) || (size == I2C_SMBUS_QUICK))
++		goto out;
 +
 +	switch (size) {
 +		case I2C_SMBUS_QUICK:
@@ -399,7 +393,10 @@ index 000000000000..0462f0952043
 +			data->word = inb_p(SMBHSTDAT) + (inb_p(SMBHSTDAT) << 8);
 +			break;
 +	}
-+	return 0;
++
++out:
++	mutex_unlock(&nct6775_smbus_lock);
++	return ret;
 +}
 +
 +static u32 nct6775_func(struct i2c_adapter *adapter)
@@ -464,8 +461,6 @@ index 000000000000..0462f0952043
 +	}
 +}
 +
-+//static SIMPLE_DEV_PM_OPS(nct6775_dev_pm_ops, nct6775_suspend, nct6775_resume);
-+
 +/*
 + * when Super-I/O functions move to a separate file, the Super-I/O
 + * bus will manage the lifetime of the device and this module will only keep
@@ -492,31 +487,15 @@ index 000000000000..0462f0952043
 +	case nct6795:
 +	case nct6796:
 +	case nct6798:
-+		nct6775_add_adapter(res->start, "", &nct6775_adapter);
-+		break;
++		return nct6775_add_adapter(res->start, "", &nct6775_adapter);
 +	default:
 +		return -ENODEV;
 +	}
-+
-+	return 0;
 +}
-+/*
-+static void nct6791_enable_io_mapping(int sioaddr)
-+{
-+	int val;
-+
-+	val = superio_inb(sioaddr, NCT6791_REG_HM_IO_SPACE_LOCK_ENABLE);
-+	if (val & 0x10) {
-+		pr_info("Enabling hardware monitor logical device mappings.\n");
-+		superio_outb(sioaddr, NCT6791_REG_HM_IO_SPACE_LOCK_ENABLE,
-+			     val & ~0x10);
-+	}
-+}*/
 +
 +static struct platform_driver i2c_nct6775_driver = {
 +	.driver = {
 +		.name	= DRVNAME,
-+//		.pm	= &nct6775_dev_pm_ops,
 +	},
 +	.probe		= nct6775_probe,
 +};
@@ -587,7 +566,6 @@ index 000000000000..0462f0952043
 +		return -ENODEV;
 +	}
 +
-+	/* We have a known chip, find the SMBus I/O address */
 +	superio_select(sioaddr, NCT6775_LD_SMBUS);
 +	val = (superio_inb(sioaddr, SIO_REG_SMBA) << 8)
 +	    | superio_inb(sioaddr, SIO_REG_SMBA + 1);
@@ -597,11 +575,6 @@ index 000000000000..0462f0952043
 +		superio_exit(sioaddr);
 +		return -ENODEV;
 +	}
-+
-+	//if (sio_data->kind == nct6791 || sio_data->kind == nct6792 ||
-+	//    sio_data->kind == nct6793 || sio_data->kind == nct6795 ||
-+	//    sio_data->kind == nct6796)
-+	//	nct6791_enable_io_mapping(sioaddr);
 +
 +	superio_exit(sioaddr);
 +	pr_info("Found %s or compatible chip at %#x:%#x\n",
@@ -624,13 +597,6 @@ index 000000000000..0462f0952043
 +	if (err)
 +		return err;
 +
-+	/*
-+	 * initialize sio_data->kind and sio_data->sioreg.
-+	 *
-+	 * when Super-I/O functions move to a separate file, the Super-I/O
-+	 * driver will probe 0x2e and 0x4e and auto-detect the presence of a
-+	 * nct6775 hardware monitor, and call probe()
-+	 */
 +	for (i = 0; i < ARRAY_SIZE(pdev); i++) {
 +		address = nct6775_find(sioaddr[i], &sio_data);
 +		if (address <= 0)
@@ -666,7 +632,6 @@ index 000000000000..0462f0952043
 +		if (err)
 +			goto exit_device_put;
 +
-+		/* platform_device_add calls probe() */
 +		err = platform_device_add(pdev[i]);
 +		if (err)
 +			goto exit_device_put;
@@ -696,21 +661,3 @@ index 000000000000..0462f0952043
 +
 +module_init(i2c_nct6775_init);
 +module_exit(i2c_nct6775_exit);
-diff --git a/drivers/i2c/busses/i2c-piix4.c b/drivers/i2c/busses/i2c-piix4.c
-index 30ded6422e7b..e25ce84c26af 100644
---- a/drivers/i2c/busses/i2c-piix4.c
-+++ b/drivers/i2c/busses/i2c-piix4.c
-@@ -467,11 +467,11 @@ static int piix4_transaction(struct i2c_adapter *piix4_adapter)
- 	if (srvrworks_csb5_delay) /* Extra delay for SERVERWORKS_CSB5 */
- 		usleep_range(2000, 2100);
- 	else
--		usleep_range(250, 500);
-+		usleep_range(25, 50);
-
- 	while ((++timeout < MAX_TIMEOUT) &&
- 	       ((temp = inb_p(SMBHSTSTS)) & 0x01))
--		usleep_range(250, 500);
-+		usleep_range(25, 50);
-
- 	/* If the SMBus is still busy, we give up */
- 	if (timeout == MAX_TIMEOUT) {

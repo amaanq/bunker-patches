@@ -130,9 +130,11 @@ let
       "cachyos/0015"
       "cachyos/0018"
       "bunker/0002"
-      "bunker/0009" # i2c-nct6775: OpenRGB SMBus for gaming motherboard RGB
       "bunker/0010" # rust: backlight device abstraction
       "clear/0012" # PCI PME interval
+    ];
+    openrgbSmbus = [
+      "bunker/0009" # i2c-nct6775: OpenRGB SMBus for gaming motherboard RGB
     ];
     extras = [
       "cachyos/0004"
@@ -211,7 +213,8 @@ let
   ++ lib.optional cfg.hardened "hardened"
   ++ lib.optional cfg.networking "networking"
   ++ lib.optional cfg.drivers "drivers"
-  ++ lib.optional cfg.extras "extras";
+  ++ lib.optional cfg.extras "extras"
+  ++ lib.optional cfg.openrgbSmbus "openrgbSmbus";
 
   enabledNumbers = concatMap (g: patchGroups.${g}) enabledGroups;
 
@@ -934,6 +937,11 @@ let
     R8125 = module;
   };
 
+  openrgbSmbusConfig = optionalAttrs cfg.openrgbSmbus {
+    # bunker/0009 defines the symbol but gives it no Kconfig default.
+    I2C_NCT6775 = module;
+  };
+
   rustLtoConfig = optionalAttrs (cfg.rust && cfg.lto != "none") (forceAll {
     DEBUG_INFO_BTF = option no;
     NOVA_CORE = option no;
@@ -1006,6 +1014,7 @@ let
       // frameworkConfig
       // networkingConfig
       // driversConfig
+      // openrgbSmbusConfig
       // rustLtoConfig
       // ltoConfig
       // cpuArchConfig
@@ -1182,6 +1191,20 @@ in
       type = types.bool;
       default = false;
       description = "Enable CrOS EC base drivers for Framework laptops (used by framework-laptop-kmod).";
+    };
+
+    openrgbSmbus = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Enable the i2c-nct6775 SMBus adapter (bunker/0009), used by OpenRGB on
+        Asus/MSI gaming motherboards with NCT6791/2/3/5/6/8 super-I/O chips.
+
+        Off by default. This is a niche out-of-tree SMBus driver that bangs
+        super-I/O ports directly to drive motherboard RGB lighting; opt in
+        only on systems that actually run OpenRGB. Setting this option also
+        selects I2C_NCT6775=m, so the i2c-nct6775 module gets built.
+      '';
     };
 
     signedModules = mkOption {
