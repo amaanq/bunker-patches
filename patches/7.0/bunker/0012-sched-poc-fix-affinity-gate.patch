@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Fri, 25 Apr 2026 00:00:00 +0000
+Subject: [PATCH] sched/fair: tighten POC fast-path affinity gate
+
+cachyos/0012 gates the Piece-Of-Cake fast path in select_idle_cpu() on
+`p->nr_cpus_allowed >= sd->span_weight`. The check is a count, not a
+membership test: a task pinned to N CPUs in a different LLC passes the
+gate (N == sd->span_weight) but its cpus_ptr does not intersect the
+sched_domain span at all. select_idle_cpu_poc then returns a CPU from
+the local LLC's idle bitmap, which is unmasked against p->cpus_ptr,
+and select_idle_cpu's caller migrates the task there.
+
+That breaks cgroup cpuset / container CPU pinning and SCHED_DEADLINE
+admission, and trips the WARN_ON(!cpumask_test_cpu(new_cpu,
+&p->cpus_mask)) in set_task_cpu when the chosen CPU is illegal.
+
+Replace the count with `cpumask_subset(sched_domain_span(sd),
+p->cpus_ptr)` — true only when the entire LLC domain is legal for the
+task. Slightly more conservative (the fast path is skipped when even
+one CPU in the domain is forbidden) but a per-call cpumask_subset on
+typical LLC sizes is cheap, and the original check was incorrect by
+construction. The masking-inside-POC alternative is a follow-up.
+
+---
+ kernel/sched/fair.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
+--- a/kernel/sched/fair.c
++++ b/kernel/sched/fair.c
+@@ -7659,7 +7659,7 @@ static int select_idle_cpu(struct task_struct *p, struct sched_domain *sd, bool
+ #ifdef CONFIG_SCHED_POC_SELECTOR
+ 		if (static_branch_likely(&sched_poc_enabled) &&
+ 				!sched_asym_cpucap_active() &&
+-				likely(p->nr_cpus_allowed >= sd->span_weight) &&
++				likely(cpumask_subset(sched_domain_span(sd), p->cpus_ptr)) &&
+ 				likely(sd_share->poc_fast_eligible)) {
+ 			int poc_cpu = select_idle_cpu_poc(has_idle_core, target, sd_share);
+ 			if (poc_cpu >= 0) {
+--
+2.52.0

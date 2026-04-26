@@ -72,6 +72,7 @@ let
       "cachyos/0009"
       "cachyos/0010"
       "cachyos/0012"
+      "bunker/0012" # POC: tighten affinity gate (must follow cachyos/0012)
       "cachyos/0013"
       "cachyos/0019"
       # xanmod: sched latency, yield, block/mq-deadline, vfs, rwsem, accept LIFO, dm-crypt
@@ -100,6 +101,7 @@ let
       ++ (lib.genList (i: "grapheneos/${lib.fixedWidthString 4 "0" (toString (i + 1))}") 5)
       ++ [
         "cachyos/0014" # VMSCAPE/BHB clear mitigation
+        "bunker/0011" # VMSCAPE: barrier_nospec after static call (must follow cachyos/0014)
         "bunker/0003" # rust: allow clang native randstruct
         "bunker/0004" # enable RANDSTRUCT_FULL by default
         "bunker/0006" # enable KSTACK_ERASE by default
