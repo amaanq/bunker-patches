@@ -1075,6 +1075,13 @@ let
                       # Keep whole scripts dir''
         ]
         (old.postInstall or "");
+
+    # Host GNU strip may not understand the target ELF in cross builds.
+    preFixup = ''
+      if [ -z "''${dontStrip-}" -a -e $out/vmlinux ]; then
+        ${pkgsKernel.pkgsBuildBuild.llvmPackages.bintools-unwrapped}/bin/llvm-strip -S $out/vmlinux
+      fi
+    '';
   });
 
   # Out-of-tree kernel modules embed KBUILD_OUTPUT (kernel.dev store path)
