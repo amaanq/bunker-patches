@@ -297,6 +297,14 @@ let
   // optionalAttrs isX86 {
     MICROCODE = yes;
   }
+  // optionalAttrs isAarch64 (forceAll {
+    ARM64_64K_PAGES = yes; # 64K pages — 10-15% compilation speedup from TLB coverage
+    ARM64_4K_PAGES = no;
+  })
+  // optionalAttrs isPpc64 (forceAll {
+    PPC_64K_PAGES = yes; # 64K pages — native PPC64 page size
+    PPC_4K_PAGES = no;
+  })
   // forceAll {
     MODULE_COMPRESS_ZSTD = option yes;
     MODULE_COMPRESS_XZ = option no;
@@ -336,14 +344,6 @@ let
       X86_FRED = yes; # Flexible Return and Event Delivery (Zen 5+ / Arrow Lake+)
       PERF_EVENTS_AMD_POWER = yes; # AMD power events for perf profiling
     }
-    // optionalAttrs isAarch64 {
-      ARM64_64K_PAGES = yes; # 64K pages — 10-15% compilation speedup from TLB coverage
-      ARM64_4K_PAGES = no;
-    }
-    // optionalAttrs isPpc64 {
-      PPC_64K_PAGES = yes; # 64K pages — native PPC64 page size
-      PPC_4K_PAGES = no;
-    }
     // mapAttrs (_: mkOverride 90) {
       PREEMPT = yes;
       PREEMPT_LAZY = option no;
@@ -363,9 +363,12 @@ let
   hardenedConfig = optionalAttrs cfg.hardened (
     {
       # --- Security features ---
-      # CFI requires Clang — only available when using llvmStdenv
-      CFI = if pkgs.stdenv.cc.isClang then yes else option no;
-      CFI_PERMISSIVE = if pkgs.stdenv.cc.isClang then no else option no;
+      # The kernel always builds with llvmStdenv (see `bunkernel` derivation
+      # below), so CFI is always available regardless of the consumer's
+      # pkgs.stdenv. Keying off pkgs.stdenv.cc.isClang silently disabled CFI
+      # on every standard nixpkgs (GCC stdenv).
+      CFI = yes;
+      CFI_PERMISSIVE = no;
       ZERO_CALL_USED_REGS = yes;
       SLAB_BUCKETS = yes; # dedicated slab buckets — prevents cross-cache attacks (KSPP)
       SECURITY_SAFESETID = yes;
@@ -926,6 +929,11 @@ let
     DEFAULT_FQ_CODEL = option yes;
   };
 
+  driversConfig = optionalAttrs cfg.drivers {
+    # r8169 loses these IDs when the vendor driver patch is enabled.
+    R8125 = module;
+  };
+
   rustLtoConfig = optionalAttrs (cfg.rust && cfg.lto != "none") (forceAll {
     DEBUG_INFO_BTF = option no;
     NOVA_CORE = option no;
@@ -997,6 +1005,7 @@ let
       // trimmedConfig
       // frameworkConfig
       // networkingConfig
+      // driversConfig
       // rustLtoConfig
       // ltoConfig
       // cpuArchConfig
@@ -1066,7 +1075,21 @@ let
   kernelPackage = (pkgs.linuxKernel.packagesFor bunkernel').extend (
     _: prev:
     lib.optionalAttrs (prev ? bcachefs-tools) {
+      # bch_bindgen sets `.layout_tests(true)`, which emits static assertions
+      # like `align_of::<bch_replicas_padded__bindgen_ty_N>() - 4`. Cross-
+      # compiling on x86_64 → aarch64, libclang reports packed-bitfield inner
+      # types with align=1 against the aarch64 sysroot, but bindgen bakes in
+      # an expected align of 4 — the assertion underflows at const-eval
+      # (`1 - 4`). Native aarch64 builds don't hit this because libclang
+      # picks the right alignment when host==target. Disable layout tests;
+      # field offsets are still correct, only the debug-only static asserts
+      # are dropped. Has to be a real `patches +=` — buildRustPackage's
+      # cargoSetupPostPatchHook silently swallows overrideAttrs `postPatch`,
+      # so substituteInPlace never runs.
       bcachefs-tools = prev.bcachefs-tools.overrideAttrs (old: {
+        patches = (old.patches or [ ]) ++ [
+          ./patches/userspace/bcachefs-tools-disable-layout-tests.patch
+        ];
         unsafeDiscardReferences = (old.unsafeDiscardReferences or { }) // {
           out = true;
         };
