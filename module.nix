@@ -33,9 +33,7 @@ let
   isAarch64 = pkgs.stdenv.hostPlatform.isAarch64;
   isPpc64 = pkgs.stdenv.hostPlatform.isPower64;
 
-  # Map user-facing major.minor → latest stable point release
   stableRelease = {
-    "6.18" = "6.18.10";
     "6.19" = "6.19.12";
     "7.0" = "7.0";
   };
@@ -43,31 +41,15 @@ let
   resolvedVersion =
     stableRelease.${cfg.version} or (throw "bunker: unsupported kernel version ${cfg.version}");
 
-  # "6.18.10" → "6.18", "6.19" → "6.19"
   majorMinor = cfg.version;
 
-  # "6.18" → "6.18.10", "6.19" → "6.19.0"
   fullVersion =
     let
       parts = lib.splitString "." resolvedVersion;
     in
     if builtins.length parts >= 3 then resolvedVersion else "${resolvedVersion}.0";
 
-  # Application order for per-upstream subdir layout.
-  # Each subdir is applied in this index order; within a subdir, local prefix order.
-  subdirIndices = {
-    bunker = 0; # must be first: bunker/0001 adds config BUNKER referenced by zen/cachyos/etc.
-    zen = 1;
-    xanmod = 2;
-    cachyos = 3;
-    clear = 4;
-    grapheneos = 5;
-    hardened = 6;
-    upstream = 7;
-  };
-
-  # Shared patch group entries (stable numbering across all kernel versions).
-  # upstream/ has version-specific numbering (different backport sets per release).
+  # Shared keys are stable; upstream/ numbering is version-specific.
   sharedGroups = {
     base = [ "bunker/0001" ];
     interactive = [
@@ -167,39 +149,6 @@ let
   # Per-version upstream/ entries + any version-specific group overrides.
   # upstream/ numbering differs because each release has different backport sets.
   versionGroups = {
-    "6.18" = {
-      interactive = [
-        "upstream/0005"
-        "upstream/0006"
-        "upstream/0019"
-      ];
-      hardened = [
-        "upstream/0017"
-        "upstream/0018"
-      ];
-      networking = [
-        "upstream/0002"
-        "upstream/0003"
-        "upstream/0004"
-        "upstream/0007"
-        "upstream/0008"
-        "upstream/0009"
-        "upstream/0010"
-        "upstream/0011"
-        "upstream/0012"
-        "upstream/0013"
-      ];
-      drivers = [
-        "upstream/0001" # drm/amdgpu SI tlb fence fix
-        "upstream/0014" # drm/amdgpu: GFP_ATOMIC fix (6.18-only backport)
-        "cachyos/0025" # amd-pstate (6.18-only)
-      ];
-      extras = [
-        "upstream/0015"
-        "upstream/0016"
-        "cachyos/0024" # crypto (6.18-only)
-      ];
-    };
     "6.19" = {
       interactive = [
         "upstream/0002"
@@ -241,7 +190,7 @@ let
         "upstream/0018"
         "upstream/0019"
       ];
-      drivers = [ "upstream/0001" ];
+      drivers = [ ];
       extras = [
         "upstream/0020"
         "upstream/0021"
@@ -250,7 +199,6 @@ let
     "7.0" = { };
   };
 
-  # Merge shared + version-specific.
   vg = versionGroups.${majorMinor};
   patchGroups = lib.mapAttrs (group: shared: shared ++ (vg.${group} or [ ])) sharedGroups;
 
@@ -264,12 +212,10 @@ let
   ++ lib.optional cfg.extras "extras";
 
   enabledNumbers = concatMap (g: patchGroups.${g}) enabledGroups;
-  enabledSet = lib.genAttrs enabledNumbers (_: true);
 
   patchDir = "${flake}/patches/${majorMinor}";
 
-  # Collect all .patch files, tracking subdir and local prefix.
-  # All versions use subdir layout: key = "zen/NNNN", "hardened/NNNN", etc.
+  # Patch keys are "subdir/NNNN", derived from the filename prefix.
   collectPatches =
     dir: subdir:
     let
@@ -281,23 +227,25 @@ let
         name = n;
         patch = "${dir}/${n}";
         key = if subdir == "" then localPrefix n else "${subdir}/${localPrefix n}";
-        sortSubdir = subdir;
-        sortLocal = localPrefix n;
       }) (lib.attrNames patches);
       subPatches = lib.concatMap (d: collectPatches "${dir}/${d}" d) (lib.attrNames subdirs);
     in
     patchEntries ++ subPatches;
 
-  allPatchEntries = lib.sort (
-    a: b:
-    let
-      ai = subdirIndices.${a.sortSubdir} or 99;
-      bi = subdirIndices.${b.sortSubdir} or 99;
-    in
-    if ai != bi then ai < bi else a.sortLocal < b.sortLocal
-  ) (collectPatches patchDir "");
+  patchByKey = lib.listToAttrs (
+    map (e: { name = e.key; value = e; }) (collectPatches patchDir "")
+  );
 
-  selectedPatches = builtins.filter (e: enabledSet ? ${e.key}) allPatchEntries;
+  # Listed group order is authoritative; missing keys fail loud.
+  missingKeys = lib.filter (k: !(patchByKey ? ${k})) enabledNumbers;
+
+  selectedPatches =
+    if missingKeys != [ ] then
+      throw "bunker: enabled patches missing from patches/${majorMinor}/: ${
+        lib.concatStringsSep ", " missingKeys
+      }"
+    else
+      map (k: patchByKey.${k}) enabledNumbers;
 
   kernelPatches = map (e: { inherit (e) name patch; }) selectedPatches;
 
@@ -317,7 +265,6 @@ let
 
   sourceHash =
     {
-      "6.18.10" = "sha256-1tN3FhdBraL6so7taRQyd2NKKuteOIPlDAMViO3kjt4=";
       "6.19.12" = "sha256-zlxPEgX5cpKGtWmwN2SVkVVfMcoeA8xQS9O3C45YqNU=";
       "7.0" = "sha256-u39tgLOHx1e30Uu5MCj8uQ95PFwNNnc27oFaEAs4kfA=";
     }
@@ -1163,7 +1110,6 @@ in
 
     version = mkOption {
       type = types.enum [
-        "6.18"
         "6.19"
         "7.0"
       ];
