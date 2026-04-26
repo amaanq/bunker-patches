@@ -1,0 +1,78 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Sat, 26 Apr 2026 00:00:00 +0000
+Subject: [PATCH] block/adios: guard clzll(0), namespace per-queue slab caches
+
+Two latent defects in cachyos/0006:
+
+1. The seek-distance heuristic computes
+     weight = 65 - __builtin_clzll(seek_distance);
+   without a zero check. On rotational sequential I/O current_pos ==
+   last_completed_pos, so seek_distance is 0 and __builtin_clzll(0) is
+   undefined per the GCC docs (BSR with input 0 leaves the destination
+   undefined on x86). Wrap the call in a ternary to fall back to weight
+   = 1 — same value the rest of the function uses when no last position
+   exists.
+
+2. kmem_cache_create("rq_data_pool", …) and kmem_cache_create(
+   "dl_group_pool", …) collide on systems with more than one device
+   using ADIOS: SLUB merging is disabled by linux-hardened, so the
+   second creation either renames with a suffix or fails outright, and
+   slabinfo accounting becomes ambiguous. Build per-queue names of the
+   form "adios_rq_data_q<id>" / "adios_dl_group_q<id>" using q->id
+   (request_queue's globally-unique ida). Storage is two fixed-size
+   char arrays inside adios_data so no extra allocation/cleanup is
+   needed.
+
+---
+ block/adios.c | 13 +++++++++++--
+ 1 file changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/block/adios.c b/block/adios.c
+--- a/block/adios.c
++++ b/block/adios.c
+@@ -310,6 +310,9 @@ struct adios_data {
+ 	struct kmem_cache *rq_data_pool;
+ 	struct kmem_cache *dl_group_pool;
+
++	char rq_data_pool_name[32];
++	char dl_group_pool_name[32];
++
+ 	struct request_queue *queue;
+ };
+
+@@ -1500,7 +1503,7 @@ static void adios_record_completion(struct adios_data *ad, struct request *rq, u
+ 		if (ad->last_completed_pos > 0) {
+ 			u64 seek_distance = abs(
+ 				(s64)current_pos - (s64)ad->last_completed_pos);
+-			weight = 65 - __builtin_clzll(seek_distance);
++			weight = seek_distance ? 65 - __builtin_clzll(seek_distance) : 1;
+ 		}
+ 		// Update (or re-synchronize) our knowledge of the head position.
+ 		ad->last_completed_pos = current_pos + blk_rq_sectors(rq);
+@@ -1547,7 +1550,10 @@ static int adios_init_sched(struct request_queue *q, struct elevator_queue *eq)
+ 	eq->elevator_data = ad;
+
+ 	// Create a memory pool for adios_rq_data
+-	ad->rq_data_pool = kmem_cache_create("rq_data_pool",
++	snprintf(ad->rq_data_pool_name, sizeof(ad->rq_data_pool_name),
++		"adios_rq_data_q%u", q->id);
++	ad->rq_data_pool = kmem_cache_create(
++						ad->rq_data_pool_name,
+ 						sizeof(struct adios_rq_data),
+ 						0, SLAB_HWCACHE_ALIGN, NULL);
+ 	if (!ad->rq_data_pool) {
+@@ -1556,7 +1562,10 @@ static int adios_init_sched(struct request_queue *q, struct elevator_queue *eq)
+ 	}
+
+ 	/* Create a memory pool for dl_group */
+-	ad->dl_group_pool = kmem_cache_create("dl_group_pool",
++	snprintf(ad->dl_group_pool_name, sizeof(ad->dl_group_pool_name),
++		"adios_dl_group_q%u", q->id);
++	ad->dl_group_pool = kmem_cache_create(
++						ad->dl_group_pool_name,
+ 						sizeof(struct dl_group),
+ 						0, SLAB_HWCACHE_ALIGN, NULL);
+ 	if (!ad->dl_group_pool) {
+--
+2.52.0

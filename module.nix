@@ -68,6 +68,7 @@ let
       # cachyos: inline sched/mm/tick/vtime fixes, ADIOS, le9, compaction, BFQ lock, POCC
       "cachyos/0002" # fixes: __always_inline sched/mm/tick/vtime, RCU QS, NUMA, quirks
       "cachyos/0006"
+      "bunker/0014" # ADIOS: clzll(0) guard + per-queue slab cache names (must follow cachyos/0006)
       "cachyos/0007"
       "cachyos/0009"
       "cachyos/0010"
