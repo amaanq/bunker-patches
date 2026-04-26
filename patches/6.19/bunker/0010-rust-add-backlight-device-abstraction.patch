@@ -5,9 +5,9 @@ Subject: [PATCH] rust: add backlight device abstraction
 
 ---
  rust/bindings/bindings_helper.h |   1 +
- rust/kernel/backlight.rs        | 300 ++++++++++++++++++++++++++++++++
+ rust/kernel/backlight.rs        | 341 ++++++++++++++++++++++++++++++++
  rust/kernel/lib.rs              |   2 +
- 3 files changed, 303 insertions(+)
+ 3 files changed, 344 insertions(+)
  create mode 100644 rust/kernel/backlight.rs
 
 diff --git a/rust/bindings/bindings_helper.h b/rust/bindings/bindings_helper.h
@@ -31,7 +31,7 @@ new file mode 100644
 index 0000000000000..d421896c5eb75
 --- /dev/null
 +++ b/rust/kernel/backlight.rs
-@@ -0,0 +1,300 @@
+@@ -0,0 +1,341 @@
 +// SPDX-License-Identifier: GPL-2.0
 +
 +//! Backlight device abstraction.
@@ -235,7 +235,8 @@ index 0000000000000..d421896c5eb75
 +        unsafe {
 +            let props = &(*self.as_raw()).props;
 +            props.power != BACKLIGHT_POWER_ON
-+                || props.state & (BL_CORE_SUSPENDED | BL_CORE_FBBLANK) != 0
++                || StateFlags::from_raw(props.state)
++                    .intersects(BL_CORE_SUSPENDED | BL_CORE_FBBLANK)
 +        }
 +    }
 +
@@ -309,14 +310,54 @@ index 0000000000000..d421896c5eb75
 +/// Power state: full off.
 +pub const BACKLIGHT_POWER_OFF: i32 = 4;
 +
++/// Bitflags reported by the backlight core in `backlight_properties::state`.
++///
++/// Distinct from [`OptionFlags`] so that `BL_CORE_SUSPENDED` (state, bit 0)
++/// and `BL_CORE_SUSPENDRESUME` (option, bit 0) cannot be silently swapped
++/// at use sites — the flat `u32` representation in C lets them collide.
++#[repr(transparent)]
++#[derive(Copy, Clone, PartialEq, Eq)]
++pub struct StateFlags(u32);
++
++impl StateFlags {
++    /// Wrap a raw `u32` (typically read from `backlight_properties::state`).
++    pub const fn from_raw(value: u32) -> Self { Self(value) }
++    /// Returns the underlying bit pattern.
++    pub const fn into_raw(self) -> u32 { self.0 }
++    /// Returns `true` if any of the bits in `other` are set in `self`.
++    pub const fn intersects(self, other: Self) -> bool { self.0 & other.0 != 0 }
++}
++
++impl core::ops::BitOr for StateFlags {
++    type Output = Self;
++    fn bitor(self, rhs: Self) -> Self { Self(self.0 | rhs.0) }
++}
++
++/// Bitflags driver writes into `backlight_properties::options`. See [`StateFlags`].
++#[repr(transparent)]
++#[derive(Copy, Clone, PartialEq, Eq)]
++pub struct OptionFlags(u32);
++
++impl OptionFlags {
++    /// Wrap a raw `u32` (typically read from `backlight_properties::options`).
++    pub const fn from_raw(value: u32) -> Self { Self(value) }
++    /// Returns the underlying bit pattern.
++    pub const fn into_raw(self) -> u32 { self.0 }
++}
++
++impl core::ops::BitOr for OptionFlags {
++    type Output = Self;
++    fn bitor(self, rhs: Self) -> Self { Self(self.0 | rhs.0) }
++}
++
 +/// State flag: backlight is suspended.
-+pub const BL_CORE_SUSPENDED: u32 = 1 << 0;
++pub const BL_CORE_SUSPENDED: StateFlags = StateFlags(1 << 0);
 +
 +/// State flag: backlight is under a framebuffer blank event.
-+pub const BL_CORE_FBBLANK: u32 = 1 << 1;
++pub const BL_CORE_FBBLANK: StateFlags = StateFlags(1 << 1);
 +
 +/// Option flag: call `update_status` on suspend/resume.
-+pub const BL_CORE_SUSPENDRESUME: u32 = 1 << 0;
++pub const BL_CORE_SUSPENDRESUME: OptionFlags = OptionFlags(1 << 0);
 +
 +/// Backlight scale: unknown.
 +pub const BACKLIGHT_SCALE_UNKNOWN: u32 = 0;
