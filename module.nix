@@ -29,9 +29,22 @@ let
   cfg = config.bunker.kernel;
   forceAll = mapAttrs (_: mkForce);
 
-  isX86 = pkgs.stdenv.hostPlatform.isx86_64;
-  isAarch64 = pkgs.stdenv.hostPlatform.isAarch64;
-  isPpc64 = pkgs.stdenv.hostPlatform.isPower64;
+  # Pin only the kernel build chain; module integration stays consumer-driven.
+  # Forward both buildPlatform and hostPlatform so the pinned nixpkgs keeps
+  # the consumer's cross context — passing `system` alone collapses to a
+  # native pkgs and silently regresses the cross-compile fix. Also forward
+  # the consumer's overlays so any bcachefs-tools / kernel-tooling patches
+  # in the consumer's nixpkgs.overlays land here too.
+  pkgsKernel = import flake.inputs.nixpkgs {
+    localSystem = pkgs.stdenv.buildPlatform;
+    crossSystem = pkgs.stdenv.hostPlatform;
+    overlays = pkgs.overlays or [ ];
+    inherit (pkgs) config;
+  };
+
+  isX86 = pkgsKernel.stdenv.hostPlatform.isx86_64;
+  isAarch64 = pkgsKernel.stdenv.hostPlatform.isAarch64;
+  isPpc64 = pkgsKernel.stdenv.hostPlatform.isPower64;
 
   stableRelease = {
     "6.19" = "6.19.12";
@@ -257,17 +270,10 @@ let
 
   kernelPatches = map (e: { inherit (e) name patch; }) selectedPatches;
 
-  # Full LLVM stdenv with clang + lld + llvm-ar/nm (required for LTO_CLANG / CFI).
-  # Base stdenv comes from `pkgs` (= pkgsHostTarget) so its hostPlatform stays
-  # the kernel's target — buildLinux derives ARCH from stdenv.hostPlatform.linuxArch
-  # and would otherwise build the wrong kernel arch. Only the cc binaries are
-  # swapped: pkgsBuildTarget gives us a buildHost-native (e.g. x86_64) clang/lld
-  # that emit target code, avoiding qemu/binfmt during compile and the
-  # multi-hour LTO_CLANG link. Native builds collapse to pkgs.llvmPackages.clang
-  # since pkgsBuildTarget == pkgs there.
-  llvmStdenv = pkgs.overrideCC pkgs.llvmPackages.stdenv (
-    pkgs.pkgsBuildTarget.llvmPackages.clang.override {
-      bintools = pkgs.pkgsBuildTarget.llvmPackages.bintools;
+  # Keep hostPlatform as the kernel target; swap only build-native LLVM tools.
+  llvmStdenv = pkgsKernel.overrideCC pkgsKernel.llvmPackages.stdenv (
+    pkgsKernel.pkgsBuildTarget.llvmPackages.clang.override {
+      bintools = pkgsKernel.pkgsBuildTarget.llvmPackages.bintools;
     }
   );
 
@@ -282,7 +288,7 @@ let
     builtins.substring 0 1 cfg.version
   }.x/linux-${resolvedVersion}.tar.xz";
 
-  kernelSrc = pkgs.fetchurl {
+  kernelSrc = pkgsKernel.fetchurl {
     url = sourceUrl;
     hash = sourceHash;
   };
@@ -368,11 +374,7 @@ let
 
   hardenedConfig = optionalAttrs cfg.hardened (
     {
-      # --- Security features ---
-      # The kernel always builds with llvmStdenv (see `bunkernel` derivation
-      # below), so CFI is always available regardless of the consumer's
-      # pkgs.stdenv. Keying off pkgs.stdenv.cc.isClang silently disabled CFI
-      # on every standard nixpkgs (GCC stdenv).
+      # CFI follows the pinned LLVM kernel stdenv, not the consumer stdenv.
       CFI = yes;
       CFI_PERMISSIVE = no;
       ZERO_CALL_USED_REGS = yes;
@@ -981,7 +983,7 @@ let
     CROS_EC_LPC = module;
   });
 
-  isBigEndian = pkgs.stdenv.hostPlatform.isBigEndian;
+  isBigEndian = pkgsKernel.stdenv.hostPlatform.isBigEndian;
 
   # Options from nixpkgs common-config.nix that don't exist on arm64 big-endian
   # (EFI is disabled, BPF_JIT unavailable, ACPI absent, x86-only options).
@@ -1001,7 +1003,7 @@ let
     FUNCTION_GRAPH_RETVAL = option no;
   });
 
-  bunkernel = pkgs.linuxKernel.buildLinux {
+  bunkernel = pkgsKernel.linuxKernel.buildLinux {
     pname = "linux-bunker";
     stdenv = llvmStdenv;
     src = kernelSrc;
@@ -1056,7 +1058,7 @@ let
     # raw bindgen output. Compiles fine either way; wire it up so the warnings
     # go away and the embedded source is human-readable when debugging.
     nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [
-      pkgs.buildPackages.rustfmt
+      pkgsKernel.buildPackages.rustfmt
     ];
 
     postInstall =
@@ -1084,7 +1086,7 @@ let
   # compresses them), removing the embedded store paths at the source.
   # The kernel's own modules use the same compiler but are stripped by
   # the in-tree build system; out-of-tree modules skip that step.
-  kernelPackage = (pkgs.linuxKernel.packagesFor bunkernel').extend (
+  kernelPackage = (pkgsKernel.linuxKernel.packagesFor bunkernel').extend (
     _: prev:
     lib.optionalAttrs (prev ? bcachefs-tools) {
       # bch_bindgen sets `.layout_tests(true)`, which emits static assertions
@@ -1115,18 +1117,18 @@ let
     # recompress — keeps checksums intact for depmod/modprobe.
     // lib.optionalAttrs (prev ? bcachefs) {
       bcachefs =
-        pkgs.runCommand "${prev.bcachefs.name}-stripped"
+        pkgsKernel.runCommand "${prev.bcachefs.name}-stripped"
           {
             nativeBuildInputs = [
-              pkgs.nukeReferences
-              pkgs.buildPackages.zstd
-              pkgs.stdenv.cc.bintools
+              pkgsKernel.nukeReferences
+              pkgsKernel.buildPackages.zstd
+              pkgsKernel.stdenv.cc.bintools
             ];
             inherit (prev.bcachefs) meta;
             # `strip` from a cross binutils wrapper is exposed as
             # `${targetPrefix}strip`, not bare `strip`. Plumb the prefix
             # through so the script works under both native and cross.
-            targetPrefix = pkgs.stdenv.cc.targetPrefix;
+            targetPrefix = pkgsKernel.stdenv.cc.targetPrefix;
           }
           ''
             cp -r --no-preserve=mode ${prev.bcachefs} $out

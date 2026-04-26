@@ -1,11 +1,8 @@
 {
   description = "Bunker kernel";
 
-  # Only used by `checks` below; the module itself stays consumer-driven
-  # and pulls pkgs/lib from whichever nixpkgs the importer is using. Pinned
-  # to a specific rev so VM test runs are reproducible without a tracked
-  # flake.lock (.gitignore excludes it).
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/0726a0ecb6d4e08f6adced58726b95db924cef57";
+  # Checks are pinned; consumers still provide nixpkgs to the module.
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/b12141ef619e0a9c1c84dc8c684040326f27cdcc";
 
   outputs =
     { self, nixpkgs, ... }:
