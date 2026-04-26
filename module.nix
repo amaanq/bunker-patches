@@ -1159,6 +1159,48 @@ in
       description = "Enable CrOS EC base drivers for Framework laptops (used by framework-laptop-kmod).";
     };
 
+    signedModules = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Pass `module.sig_enforce=1` so the kernel refuses unsigned modules at load time.
+
+        Off by default because nixpkgs' linux-kernel build autogenerates an ephemeral
+        signing key per build — in-tree modules are signed automatically, but any
+        out-of-tree module the operator adds later (NVIDIA, ZFS, framework-laptop-kmod,
+        VirtualBox, etc.) is rejected unless it was built against the same key. Combined
+        with `bunker.kernel.lockdown != "none"`, the enforcement cannot be turned off
+        at runtime: misconfiguration boots into a system without storage/network/GPU
+        modules and is recoverable only by booting another kernel.
+
+        Enable only after either: (a) confirming the consumer flake has
+        `boot.extraModulePackages = [ ]`, or (b) pinning `MODULE_SIG_KEY` to a
+        non-ephemeral PEM and signing every out-of-tree module against it. Manual
+        `modprobe` from `boot.kernelModules` or service-side loaders is not covered
+        by the warning.
+      '';
+    };
+
+    lockdown = mkOption {
+      type = types.enum [
+        "none"
+        "integrity"
+        "confidentiality"
+      ];
+      default = "none";
+      description = ''
+        Set the kernel lockdown mode via `lockdown=<mode>` boot param. `none` (default)
+        leaves lockdown disabled; `integrity` blocks operations that could let userspace
+        modify the running kernel (kexec into unsigned image, writing /dev/mem,
+        loading unsigned modules); `confidentiality` adds blocking of operations that
+        could exfiltrate kernel memory (reading /dev/mem, /dev/kmem, MSRs, kprobes).
+
+        Lockdown cannot be turned off at runtime once set. Verify your workflow
+        (debuggers, perf, eBPF, kexec-based bootloaders) tolerates the chosen mode
+        before enabling.
+      '';
+    };
+
     cpuArch = mkOption {
       type = types.nullOr (
         types.enum [
@@ -1239,6 +1281,14 @@ in
         }
       ];
 
+      warnings = lib.optional (cfg.signedModules && config.boot.extraModulePackages != [ ]) ''
+        bunker.kernel.signedModules is enabled and config.boot.extraModulePackages is non-empty.
+        Out-of-tree modules built against the kernel's ephemeral signing key will load,
+        but modules built separately (or against a different kernel build) will be rejected
+        at runtime. Confirm every entry in extraModulePackages is built from this kernel's
+        package set, or pin MODULE_SIG_KEY to a non-ephemeral PEM and sign manually.
+      '';
+
       boot.kernelPackages = kernelPackage;
 
       # NixOS's bcachefs module creates its own module instance via
@@ -1294,12 +1344,18 @@ in
       };
 
       boot.kernelParams = [
-        "module.sig_enforce=1"
-        "lockdown=confidentiality"
         "page_alloc.shuffle=1"
         "sysrq_always_enabled=0"
         "kcore=off"
       ];
+    })
+
+    (mkIf cfg.signedModules {
+      boot.kernelParams = [ "module.sig_enforce=1" ];
+    })
+
+    (mkIf (cfg.lockdown != "none") {
+      boot.kernelParams = [ "lockdown=${cfg.lockdown}" ];
     })
 
     (mkIf cfg.interactive {
