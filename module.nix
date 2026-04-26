@@ -129,6 +129,7 @@ let
       "cachyos/0005"
       "cachyos/0015"
       "cachyos/0018"
+      "bunker/0013" # r8125: disable vendor /proc debug files (must follow cachyos/0018)
       "bunker/0002"
       "bunker/0010" # rust: backlight device abstraction
       "clear/0012" # PCI PME interval
