@@ -1073,6 +1073,15 @@ let
       dev = true;
     };
 
+    # Kernel BINDGEN step shells out to `rustfmt` to pretty-print the generated
+    # bindings_generated.rs. Without it on PATH the build logs a warning per
+    # file ("Failed to run rustfmt: No such file or directory") and emits the
+    # raw bindgen output. Compiles fine either way; wire it up so the warnings
+    # go away and the embedded source is human-readable when debugging.
+    nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [
+      pkgs.buildPackages.rustfmt
+    ];
+
     postInstall =
       builtins.replaceStrings
         [ "# Keep whole scripts dir" ]
