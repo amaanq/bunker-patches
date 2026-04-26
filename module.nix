@@ -301,10 +301,17 @@ let
 
   kernelPatches = map (e: { inherit (e) name patch; }) selectedPatches;
 
-  # Full LLVM stdenv with clang + lld + llvm-ar/nm (required for LTO_CLANG / CFI)
+  # Full LLVM stdenv with clang + lld + llvm-ar/nm (required for LTO_CLANG / CFI).
+  # Base stdenv comes from `pkgs` (= pkgsHostTarget) so its hostPlatform stays
+  # the kernel's target — buildLinux derives ARCH from stdenv.hostPlatform.linuxArch
+  # and would otherwise build the wrong kernel arch. Only the cc binaries are
+  # swapped: pkgsBuildTarget gives us a buildHost-native (e.g. x86_64) clang/lld
+  # that emit target code, avoiding qemu/binfmt during compile and the
+  # multi-hour LTO_CLANG link. Native builds collapse to pkgs.llvmPackages.clang
+  # since pkgsBuildTarget == pkgs there.
   llvmStdenv = pkgs.overrideCC pkgs.llvmPackages.stdenv (
-    pkgs.llvmPackages.clang.override {
-      bintools = pkgs.llvmPackages.bintools;
+    pkgs.pkgsBuildTarget.llvmPackages.clang.override {
+      bintools = pkgs.pkgsBuildTarget.llvmPackages.bintools;
     }
   );
 
@@ -1128,17 +1135,21 @@ let
           {
             nativeBuildInputs = [
               pkgs.nukeReferences
-              pkgs.zstd
-              pkgs.binutils
+              pkgs.buildPackages.zstd
+              pkgs.stdenv.cc.bintools
             ];
             inherit (prev.bcachefs) meta;
+            # `strip` from a cross binutils wrapper is exposed as
+            # `${targetPrefix}strip`, not bare `strip`. Plumb the prefix
+            # through so the script works under both native and cross.
+            targetPrefix = pkgs.stdenv.cc.targetPrefix;
           }
           ''
             cp -r --no-preserve=mode ${prev.bcachefs} $out
             find $out -name '*.ko.zst' | while read -r f; do
               zstd -d --rm "$f"
               ko="''${f%.zst}"
-              strip --strip-debug "$ko"
+              "''${targetPrefix}strip" --strip-debug "$ko"
               nuke-refs "$ko"
               zstd --rm -q "$ko"
             done
