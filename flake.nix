@@ -1,8 +1,7 @@
 {
   description = "Bunker kernel";
 
-  # Checks are pinned; consumers still provide nixpkgs to the module.
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/b12141ef619e0a9c1c84dc8c684040326f27cdcc";
+  inputs.nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz";
 
   outputs =
     { self, nixpkgs, ... }:

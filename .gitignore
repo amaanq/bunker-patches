@@ -2,6 +2,7 @@
 
 !.gitignore
 !flake.nix
+!flake.lock
 !module.nix
 
 !patches/
