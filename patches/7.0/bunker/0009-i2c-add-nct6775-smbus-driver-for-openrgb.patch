@@ -10,44 +10,10 @@ chipsets. Carried out-of-tree by zen-kernel, linux-tkg, and CachyOS.
 
 Signed-off-by: Adam Honse <calcprogrammer1@gmail.com>
 ---
-diff --git a/drivers/i2c/busses/Kconfig b/drivers/i2c/busses/Kconfig
-index 2ddca08f8a76..72647850f08e 100644
---- a/drivers/i2c/busses/Kconfig
-+++ b/drivers/i2c/busses/Kconfig
-@@ -217,6 +217,15 @@ config I2C_CHT_WC
- 	  combined with a FUSB302 Type-C port-controller as such it is advised
- 	  to also select CONFIG_TYPEC_FUSB302=m.
-
-+config I2C_NCT6775
-+	tristate "Nuvoton NCT6775 and compatible SMBus controller"
-+	help
-+		If you say yes to this option, support will be included for the
-+		Nuvoton NCT6775 and compatible SMBus controllers.
-+
-+		This driver can also be built as a module.  If so, the module
-+		will be called i2c-nct6775.
-+
- config I2C_NFORCE2
- 	tristate "Nvidia nForce2, nForce3 and nForce4"
- 	depends on PCI
-diff --git a/drivers/i2c/busses/Makefile b/drivers/i2c/busses/Makefile
-index 25d60889713c..3c2a9b237ac6 100644
---- a/drivers/i2c/busses/Makefile
-+++ b/drivers/i2c/busses/Makefile
-@@ -17,6 +17,7 @@ obj-$(CONFIG_I2C_CHT_WC)	+= i2c-cht-wc.o
- obj-$(CONFIG_I2C_I801)		+= i2c-i801.o
- obj-$(CONFIG_I2C_ISCH)		+= i2c-isch.o
- obj-$(CONFIG_I2C_ISMT)		+= i2c-ismt.o
-+obj-$(CONFIG_I2C_NCT6775)   += i2c-nct6775.o
- obj-$(CONFIG_I2C_NFORCE2)	+= i2c-nforce2.o
- obj-$(CONFIG_I2C_NFORCE2_S4985)	+= i2c-nforce2-s4985.o
- obj-$(CONFIG_I2C_NVIDIA_GPU)	+= i2c-nvidia-gpu.o
 diff --git a/drivers/i2c/busses/i2c-nct6775.c b/drivers/i2c/busses/i2c-nct6775.c
-new file mode 100644
-index 000000000000..0462f0952043
---- /dev/null
+--- a/drivers/i2c/busses/i2c-nct6775.c
 +++ b/drivers/i2c/busses/i2c-nct6775.c
-@@ -0,0 +1,665 @@
+@@ -0,0 +1,613 @@
 +/*
 + * i2c-nct6775 - Driver for the SMBus master functionality of
 + *	       Nuvoton NCT677x Super-I/O chips
@@ -661,3 +627,33 @@ index 000000000000..0462f0952043
 +
 +module_init(i2c_nct6775_init);
 +module_exit(i2c_nct6775_exit);
+diff --git a/drivers/i2c/busses/Kconfig b/drivers/i2c/busses/Kconfig
+--- a/drivers/i2c/busses/Kconfig
++++ b/drivers/i2c/busses/Kconfig
+@@ -248,6 +248,15 @@
+ 	  combined with a FUSB302 Type-C port-controller as such it is advised
+ 	  to also select CONFIG_TYPEC_FUSB302=m.
+ 
++config I2C_NCT6775
++	tristate "Nuvoton NCT6775 and compatible SMBus controller"
++	help
++		If you say yes to this option, support will be included for the
++		Nuvoton NCT6775 and compatible SMBus controllers.
++
++		This driver can also be built as a module.  If so, the module
++		will be called i2c-nct6775.
++
+ config I2C_NFORCE2
+ 	tristate "Nvidia nForce2, nForce3 and nForce4"
+ 	depends on PCI && HAS_IOPORT
+diff --git a/drivers/i2c/busses/Makefile b/drivers/i2c/busses/Makefile
+--- a/drivers/i2c/busses/Makefile
++++ b/drivers/i2c/busses/Makefile
+@@ -19,6 +19,7 @@
+ obj-$(CONFIG_I2C_I801)		+= i2c-i801.o
+ obj-$(CONFIG_I2C_ISCH)		+= i2c-isch.o
+ obj-$(CONFIG_I2C_ISMT)		+= i2c-ismt.o
++obj-$(CONFIG_I2C_NCT6775)	+= i2c-nct6775.o
+ obj-$(CONFIG_I2C_NFORCE2)	+= i2c-nforce2.o
+ obj-$(CONFIG_I2C_NVIDIA_GPU)	+= i2c-nvidia-gpu.o
+ obj-$(CONFIG_I2C_PIIX4)		+= i2c-piix4.o

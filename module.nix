@@ -48,7 +48,7 @@ let
 
   stableRelease = {
     "6.19" = "6.19.12";
-    "7.0" = "7.0";
+    "7.0" = "7.0.3";
   };
 
   resolvedVersion =
@@ -280,7 +280,7 @@ let
   sourceHash =
     {
       "6.19.12" = "sha256-zlxPEgX5cpKGtWmwN2SVkVVfMcoeA8xQS9O3C45YqNU=";
-      "7.0" = "sha256-u39tgLOHx1e30Uu5MCj8uQ95PFwNNnc27oFaEAs4kfA=";
+      "7.0.3" = "sha256-C+2tv1eIaT3eu8yRPIk/Gpc0mved3ecUTCqAtAGVnxw=";
     }
     .${resolvedVersion};
 
