@@ -1112,6 +1112,14 @@ let
       bcachefs-tools = prev.bcachefs-tools.overrideAttrs (old: {
         patches = (old.patches or [ ]) ++ [
           ./patches/userspace/bcachefs-tools-disable-layout-tests.patch
+          # Diagnostic: WARN_ONCE on bch2_folio() being called without
+          # PG_private set (folio->private aliases folio->swap), and on
+          # bch2_set_folio_undirty() entered without the folio lock. The
+          # crash signature was a fault dereferencing folio->private at a
+          # kernel-virtual address with no direct-map backing; this patch
+          # is here to localize the offending caller — remove once root
+          # cause is identified.
+          ./patches/userspace/bcachefs-tools-diag-folio-uaf.patch
         ];
         unsafeDiscardReferences = (old.unsafeDiscardReferences or { }) // {
           out = true;

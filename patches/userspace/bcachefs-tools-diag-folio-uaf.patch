@@ -1,0 +1,89 @@
+From: Amaan Qureshi <amaanq@nixos.org>
+Subject: [PATCH] bcachefs: surface bch_folio UAF candidates with WARN_ONCE
+
+Diagnostic patch carried in bunker. A reclaim-path crash was hit on a
+buffered-I/O workload:
+
+  BUG: unable to handle page fault for address: ffff8c4dff8118e0
+  RIP: 0010:_raw_spin_lock+0x17/0x40
+  Call Trace:
+   bch2_set_folio_undirty+0x40/0x180 [bcachefs]
+   bch2_release_folio+0x68/0xc0 [bcachefs]
+   shrink_folio_list+0xdea/0x1800
+   evict_folios+0x15f5/0x1ed0
+   ...
+   kswapd+0xdd0/0x18e0
+
+The fault address has no direct-map backing (PUD entry zero), which is
+consistent with KFENCE having torn down the page after a kfree() of the
+bch_folio. To find the caller hitting bch2_folio() with either:
+
+  (a) folio->private holding a stale/garbage value while PG_private is
+      clear — the field aliases folio->swap in the kernel struct, so a
+      raw read can return either a dangling pointer or a swap-entry bit
+      pattern, or
+
+  (b) bch2_set_folio_undirty() being entered without the folio lock,
+      which is the contract its only caller (bch2_clear_folio_bits)
+      relies on before calling __bch2_folio_release()→kfree(),
+
+instrument the two spots once and dump the call stack on first hit. The
+WARN_ONCE keeps log volume bounded; the stack trace identifies which
+caller is violating the invariant. Once we've localized that, the real
+fix replaces this patch.
+
+Carried in bunker only — do not upstream.
+---
+ libbcachefs/vfs/pagecache.c | 14 +++++++++++++-
+ libbcachefs/vfs/pagecache.h | 17 ++++++++++++++++-
+ 2 files changed, 29 insertions(+), 2 deletions(-)
+
+--- a/libbcachefs/vfs/pagecache.h
++++ b/libbcachefs/vfs/pagecache.h
+@@ -101,7 +101,22 @@
+
+ static inline struct bch_folio *bch2_folio(struct folio *folio)
+ {
+-	return folio_get_private(folio);
++	void *priv = folio_get_private(folio);
++
++	/*
++	 * DIAGNOSTIC (bunker): folio->private is in a union with folio->swap.
++	 * If PG_private isn't set, the field can hold either a stale pointer
++	 * (UAF on a dangling bch_folio) or a swap-entry bit pattern. Either
++	 * way, dereferencing it explodes — flag the caller and return NULL.
++	 */
++	if (unlikely(priv && !folio_test_private(folio))) {
++		WARN_ONCE(1,
++			"bcachefs: bch2_folio: priv=%px on folio %px without PG_private (mapping=%px index=%lu)\n",
++			priv, folio, folio->mapping, folio->index);
++		return NULL;
++	}
++
++	return priv;
+ }
+
+ struct bch_folio *__bch2_folio_create(struct folio *, gfp_t);
+--- a/libbcachefs/vfs/pagecache.c
++++ b/libbcachefs/vfs/pagecache.c
+@@ -524,7 +524,19 @@
+ 			    struct folio *folio,
+ 			    size_t offset, size_t len)
+ {
+-	struct bch_folio *s = bch2_folio(folio);
++	struct bch_folio *s;
++
++	/*
++	 * DIAGNOSTIC (bunker): this function frees nothing on its own, but
++	 * bch2_clear_folio_bits() (its only caller) goes on to kfree the
++	 * bch_folio via __bch2_folio_release(). The folio MUST be locked
++	 * for that to be safe — surface any caller that violates this.
++	 */
++	WARN_ONCE(!folio_test_locked(folio),
++		"bcachefs: bch2_set_folio_undirty: folio %px not locked (mapping=%px index=%lu)\n",
++		folio, folio->mapping, folio->index);
++
++	s = bch2_folio(folio);
+ 	if (!s)
+ 		return;
+
