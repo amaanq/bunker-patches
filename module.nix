@@ -48,7 +48,7 @@ let
 
   stableRelease = {
     "6.19" = "6.19.12";
-    "7.0" = "7.0.3";
+    "7.0" = "7.0.10";
   };
 
   resolvedVersion =
@@ -111,7 +111,7 @@ let
       "bunker/0005"
     ];
     hardened =
-      (lib.genList (i: "hardened/${lib.fixedWidthString 4 "0" (toString (i + 1))}") 101)
+      (lib.genList (i: "hardened/${lib.fixedWidthString 4 "0" (toString (i + 1))}") 100)
       ++ (lib.genList (i: "grapheneos/${lib.fixedWidthString 4 "0" (toString (i + 1))}") 5)
       ++ [
         "cachyos/0014" # VMSCAPE/BHB clear mitigation
@@ -254,7 +254,10 @@ let
     patchEntries ++ subPatches;
 
   patchByKey = lib.listToAttrs (
-    map (e: { name = e.key; value = e; }) (collectPatches patchDir "")
+    map (e: {
+      name = e.key;
+      value = e;
+    }) (collectPatches patchDir "")
   );
 
   # Listed group order is authoritative; missing keys fail loud.
@@ -262,9 +265,7 @@ let
 
   selectedPatches =
     if missingKeys != [ ] then
-      throw "bunker: enabled patches missing from patches/${majorMinor}/: ${
-        lib.concatStringsSep ", " missingKeys
-      }"
+      throw "bunker: enabled patches missing from patches/${majorMinor}/: ${lib.concatStringsSep ", " missingKeys}"
     else
       map (k: patchByKey.${k}) enabledNumbers;
 
@@ -280,7 +281,7 @@ let
   sourceHash =
     {
       "6.19.12" = "sha256-zlxPEgX5cpKGtWmwN2SVkVVfMcoeA8xQS9O3C45YqNU=";
-      "7.0.3" = "sha256-C+2tv1eIaT3eu8yRPIk/Gpc0mved3ecUTCqAtAGVnxw=";
+      "7.0.10" = "sha256-CUl362LCDj0ZOf6BqSlYofmH8zlEblMvqGljsoBOMtw=";
     }
     .${resolvedVersion};
 

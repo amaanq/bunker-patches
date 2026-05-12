@@ -1433,8 +1433,8 @@ diff --git a/net/ipv4/tcp_bbr.c b/net/ipv4/tcp_bbr.c
 -
 -	if (bbr->mode == BBR_STARTUP && bbr_full_bw_reached(sk)) {
 -		bbr->mode = BBR_DRAIN;	/* drain queue we created */
--		tcp_sk(sk)->snd_ssthresh =
--				bbr_inflight(sk, bbr_max_bw(sk), BBR_UNIT);
+-		WRITE_ONCE(tcp_sk(sk)->snd_ssthresh,
+-			   bbr_inflight(sk, bbr_max_bw(sk), BBR_UNIT));
 -	}	/* fall through to check if in-flight is already small: */
 -	if (bbr->mode == BBR_DRAIN &&
 -	    bbr_packets_in_net_at_edt(sk, tcp_packets_in_flight(tcp_sk(sk))) <=
@@ -2671,7 +2671,7 @@ diff --git a/net/ipv4/tcp_bbr.c b/net/ipv4/tcp_bbr.c
 +
 +	bbr->init_cwnd = min(0x7FU, tcp_snd_cwnd(tp));
 +	bbr->prior_cwnd = tp->prior_cwnd;
- 	tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
+ 	WRITE_ONCE(tp->snd_ssthresh, TCP_INFINITE_SSTHRESH);
 -	bbr->rtt_cnt = 0;
  	bbr->next_rtt_delivered = tp->delivered;
  	bbr->prev_ca_state = TCP_CA_Open;
