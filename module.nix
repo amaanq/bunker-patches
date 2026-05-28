@@ -66,8 +66,7 @@ let
   sharedGroups = {
     base = [ "bunker/0001" ];
     interactive = [
-      # zen: O3, mm tuning, preempt, BFQ, EEVDF, swap/watermark/compaction
-      "zen/0003"
+      # zen: mm tuning, preempt, BFQ, EEVDF, swap/watermark/compaction
       "zen/0009"
       "zen/0010"
       "zen/0012"
@@ -162,7 +161,6 @@ let
       "xanmod/0009"
       "xanmod/0010"
       "xanmod/0011"
-      "xanmod/0015"
     ];
   };
 
@@ -171,6 +169,7 @@ let
   versionGroups = {
     "6.19" = {
       interactive = [
+        "zen/0003"
         "upstream/0002"
         "upstream/0003"
         "upstream/0004"
@@ -214,6 +213,7 @@ let
       extras = [
         "upstream/0020"
         "upstream/0021"
+        "xanmod/0015"
       ];
     };
     "7.0" = { };
