@@ -1,0 +1,24 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Sat, 14 Jun 2026 00:00:00 -0400
+Subject: [PATCH 12/14] octeon: load modules into the sign-extended CKSSEG segment
+
+Clang has no -msym32 so modules load into XKSEG, where the module loader's
+HIGHER/HIGHEST relocs mangle their addresses and crash .ko loads. Drop the
+sym32 gate so modules load at CKSSEG instead.
+
+Signed-off-by: Amaan Qureshi <git@amaanq.com>
+---
+diff --git a/arch/mips/include/asm/pgtable-64.h b/arch/mips/include/asm/pgtable-64.h
+--- a/arch/mips/include/asm/pgtable-64.h
++++ b/arch/mips/include/asm/pgtable-64.h
+@@ -144,8 +144,7 @@
+ 	 min(PTRS_PER_PGD * PTRS_PER_PUD * PTRS_PER_PMD * PTRS_PER_PTE * PAGE_SIZE, \
+ 	     (1UL << cpu_vmbits)) - (1UL << 32))
+ 
+-#if defined(CONFIG_MODULES) && defined(KBUILD_64BIT_SYM32) && \
+-	VMALLOC_START != CKSSEG
++#if defined(CONFIG_MODULES) && VMALLOC_START != CKSSEG
+ /* Load modules into 32bit-compatible segment. */
+ #define MODULES_VADDR	CKSSEG
+ #define MODULES_END	(FIXADDR_START-2*PAGE_SIZE)

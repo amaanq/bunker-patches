@@ -45,6 +45,7 @@ let
   isX86 = pkgsKernel.stdenv.hostPlatform.isx86_64;
   isAarch64 = pkgsKernel.stdenv.hostPlatform.isAarch64;
   isPpc64 = pkgsKernel.stdenv.hostPlatform.isPower64;
+  isMips = pkgsKernel.stdenv.hostPlatform.isMips;
 
   stableRelease = {
     "6.19" = "6.19.12";
@@ -162,6 +163,23 @@ let
       "xanmod/0010"
       "xanmod/0011"
     ];
+    # Cavium Octeon III ethernet patches for mips64.
+    octeon = [
+      "octeon/0001"
+      "octeon/0002"
+      "octeon/0003"
+      "octeon/0004"
+      "octeon/0005"
+      "octeon/0006"
+      "octeon/0007"
+      "octeon/0008"
+      "octeon/0009"
+      "octeon/0010"
+      "octeon/0011"
+      "octeon/0012"
+      "octeon/0013"
+      "octeon/0014"
+    ];
   };
 
   # Per-version upstream/ entries + any version-specific group overrides.
@@ -230,7 +248,8 @@ let
   ++ lib.optional cfg.networking "networking"
   ++ lib.optional cfg.drivers "drivers"
   ++ lib.optional cfg.extras "extras"
-  ++ lib.optional cfg.openrgbSmbus "openrgbSmbus";
+  ++ lib.optional cfg.openrgbSmbus "openrgbSmbus"
+  ++ lib.optional cfg.octeon "octeon";
 
   enabledNumbers = concatMap (g: patchGroups.${g}) enabledGroups;
 
@@ -1006,33 +1025,127 @@ let
     FUNCTION_GRAPH_RETVAL = option no;
   });
 
-  bunkernel = pkgsKernel.linuxKernel.buildLinux {
-    pname = "linux-bunker";
-    stdenv = llvmStdenv;
-    src = kernelSrc;
-    version = fullVersion;
-    modDirVersion = "${fullVersion}-bunker";
-    inherit kernelPatches;
+  octeonConfig = optionalAttrs cfg.octeon {
+    # Octeon III SoC and the PKO3/BGX ethernet driver. CVMSEG needs at least 3
+    # lines because PKO3 builds its TX command on scratch line 2 and a smaller
+    # scratchpad faults.
+    CAVIUM_OCTEON_CVMSEG_SIZE = mkForce (freeform "3");
+    NR_CPUS = mkForce (freeform "64");
+    OCTEON3_ETHERNET = yes;
+    OCTEON_FPA3 = yes;
+    OCTEON_BGX_PORT = yes;
+    OCTEON_BGX_NEXUS = yes;
+    OCTEON_COMMON_NEXUS = yes;
+    OCTEON_ETHERNET_COMMON = yes;
 
-    structuredExtraConfig =
-      baseConfig
-      // interactiveConfig
-      // hardenedConfig
-      // trimmedConfig
-      // frameworkConfig
-      // networkingConfig
-      // driversConfig
-      // openrgbSmbusConfig
-      // rustLtoConfig
-      // ltoConfig
-      // cpuArchConfig
-      // bigEndianConfig;
+    # The board uses BGX, so the legacy MIX and AGL ethernet drivers stay off.
+    OCTEON_MGMT_ETHERNET = option no;
+    OCTEON_ETHERNET = option no;
 
-    extraMeta = {
-      branch = majorMinor;
-      description = "Bunker kernel";
-    };
+    # eth8's RJ45 PHY is an Atheros AR8033, driven by at803x under the Qualcomm
+    # phylib. Built in so it binds at probe instead of the Generic PHY.
+    QCOM_NET_PHYLIB = yes;
+    AT803X_PHY = yes;
+
+    # CN63XXP1 is an errata workaround for an old chip revision. It is irrelevant
+    # on later chips, and emits a GNU assembler flag clang rejects.
+    CAVIUM_CN63XXP1 = no;
+
+    # bcachefs root dependency stack. 7.0 has no in-tree bcachefs to select these,
+    # so they are listed by hand, and they are built in rather than modules
+    # because the clang/LLD mips64 module loader mis-relocates 64-bit addresses
+    # and the initrd needs the crypto to unlock the root before any module loads.
+    # CRYPTO_POLY1305 is gone in 7.0, so the chacha20-poly1305 AEAD is what pulls
+    # the poly1305 library in.
+    CRYPTO_CHACHA20 = mkForce yes;
+    CRYPTO_CHACHA20POLY1305 = mkForce yes;
+    CRYPTO_LIB_CHACHA = mkForce yes;
+    CRYPTO_LIB_POLY1305 = mkForce yes;
+    LZ4_COMPRESS = mkForce yes;
+    LZ4HC_COMPRESS = mkForce yes;
+    XOR_BLOCKS = mkForce yes;
+    BLK_DEV_MD = mkForce module;
+    MD_RAID456 = mkForce module;
+    # raid6_select_algo calls through a function pointer the module loader leaves
+    # with garbage top bits, so build raid6 in and skip the boot-time benchmark.
+    RAID6_PQ = mkForce yes;
+    RAID6_PQ_BENCHMARK = mkForce no;
+
+    # The same module fault hits ftrace. recordmcount fails to NOP the -pg/_mcount
+    # hooks out of modules, so bcachefs.ko jumps into a stale _mcount. Keep ftrace
+    # off to keep -pg out of modules entirely.
+    FTRACE = mkForce no;
+    FUNCTION_TRACER = mkForce no;
+
+    # 16K pages by default. THP must be off because 16K pushes HPAGE_PMD_ORDER past
+    # MAX_PAGE_ORDER on MIPS and that is a build BUG.
+    PAGE_SIZE_4KB = mkForce no;
+    PAGE_SIZE_16KB = mkForce yes;
+    TRANSPARENT_HUGEPAGE = mkForce no;
+
+    # The DWC3 has no ID pin, so dual-role parks in OTG and never powers
+    # the port. Force host-only so the USB rootfs stick enumerates.
+    USB_DWC3_HOST = mkForce yes;
+    USB_DWC3_DUAL_ROLE = mkForce no;
+    USB_DWC3_GADGET = mkForce no;
+
+    # ttyS0 needs the OF platform binding and the DesignWare 8250 quirk for the
+    # right baud, otherwise the console is garbage.
+    SERIAL_OF_PLATFORM = mkForce yes;
+    SERIAL_8250_DW = mkForce yes;
+
+    # The cavium defconfig ships only the bare netfilter core, too little for the
+    # NixOS firewall or tailscale. Pull in nftables with the xtables compat the
+    # firewall uses, conntrack, NAT and masquerade for routing, and TUN for
+    # tailscale's device.
+    TUN = yes;
+    NF_CONNTRACK = yes;
+    NF_NAT = yes;
+    NETFILTER_XTABLES = yes;
+    NF_TABLES = yes;
+    NF_TABLES_INET = yes;
+    NFT_COMPAT = yes;
+    NFT_CT = yes;
+    NFT_NAT = yes;
+    NFT_MASQ = yes;
+    IP_NF_IPTABLES = yes;
+    IP_NF_FILTER = yes;
+    IP_NF_NAT = yes;
+    IP6_NF_IPTABLES = yes;
   };
+
+  bunkernel = pkgsKernel.linuxKernel.buildLinux (
+    {
+      pname = "linux-bunker";
+      stdenv = llvmStdenv;
+      src = kernelSrc;
+      version = fullVersion;
+      modDirVersion = "${fullVersion}-bunker";
+      inherit kernelPatches;
+      autoModules = !isMips;
+
+      structuredExtraConfig =
+        baseConfig
+        // interactiveConfig
+        // hardenedConfig
+        // trimmedConfig
+        // frameworkConfig
+        // networkingConfig
+        // driversConfig
+        // openrgbSmbusConfig
+        // rustLtoConfig
+        // ltoConfig
+        // cpuArchConfig
+        // bigEndianConfig
+        // octeonConfig;
+
+      extraMeta = {
+        branch = majorMinor;
+        description = "Bunker kernel";
+      };
+    }
+    // optionalAttrs isMips { defconfig = "cavium_octeon_defconfig"; }
+  );
 
   bunkernel' = bunkernel.overrideAttrs (old: {
     # The Clang+LTO+Rust kernel embeds build tool store paths (CC, LD,
@@ -1211,6 +1324,15 @@ in
       type = types.bool;
       default = true;
       description = "Enable extra patches (sched_ext, v4l2loopback, Clang Polly, micro-arch targets, etc.).";
+    };
+
+    octeon = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Cavium Octeon III support. This adds the PKO3 and BGX octeon3-ethernet
+        driver, the cvmx SDK headers and executive, and the AR8033 RJ45 PHY.
+      '';
     };
 
     framework = mkOption {

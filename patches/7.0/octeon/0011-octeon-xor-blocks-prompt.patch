@@ -1,0 +1,23 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Sat, 14 Jun 2026 00:00:00 -0400
+Subject: [PATCH 11/14] octeon: give XOR_BLOCKS a prompt so it can be forced built-in
+
+XOR_BLOCKS is a non-prompt symbol so a config fragment cannot pin it built-in,
+and as a module it dies on a mis-applied reloc at load. Give it a prompt so the
+octeon config can force it built-in.
+
+Signed-off-by: Amaan Qureshi <git@amaanq.com>
+---
+diff --git a/crypto/Kconfig b/crypto/Kconfig
+--- a/crypto/Kconfig
++++ b/crypto/Kconfig
+@@ -3,7 +3,7 @@
+ # Generic algorithms support
+ #
+ config XOR_BLOCKS
+-	tristate
++	tristate "XOR blocks algorithm"
+ 
+ #
+ # async_tx api: hardware offloaded memory transfer/transform support

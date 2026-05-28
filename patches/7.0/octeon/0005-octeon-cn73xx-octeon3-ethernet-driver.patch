@@ -1,0 +1,5780 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Fri, 12 Jun 2026 00:00:00 -0400
+Subject: [PATCH 5/14] octeon: add the octeon3 ethernet PKO3 and BGX driver
+
+The Cavium octeon3-ethernet driver plus the BGX port and nexus platform glue,
+forward-ported from the OCTEON SDK to current mainline net and platform APIs.
+
+Signed-off-by: Amaan Qureshi <git@amaanq.com>
+---
+ drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c    |  3181 ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ drivers/net/ethernet/cavium/octeon/octeon-bgx-port.c     |   885 ++++++++++++++
+ drivers/net/ethernet/cavium/octeon/octeon-bgx-nexus.c    |   736 ++++++++++++
+ drivers/net/ethernet/cavium/octeon/octeon-common-nexus.c |    76 +
+ drivers/net/ethernet/cavium/octeon/octeon_common.c       |   227 +++
+ drivers/net/ethernet/cavium/octeon/octeon-bgx.h          |    66 +
+ drivers/net/ethernet/cavium/octeon/octeon-common-nexus.h |    53 
+ drivers/net/ethernet/cavium/octeon/octeon_common.h       |    46 
+ drivers/net/ethernet/cavium/octeon/octeon-ethernet.h     |   230 +++
+ drivers/net/ethernet/cavium/octeon/Makefile              |    10 
+ drivers/net/ethernet/cavium/Kconfig                      |    35 
+ 11 files changed, 5544 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c b/drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c
+@@ -0,0 +1,3301 @@
++/**********************************************************************
++ * Author: Cavium, Inc.
++ *
++ * Contact: support@cavium.com
++ * This file is part of the OCTEON SDK
++ *
++ * Copyright (c) 2014-2015 Cavium, Inc.
++ * Copyright (C) 2026 Amaan Qureshi <git@amaanq.com>
++ *
++ * This file is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License, Version 2, as
++ * published by the Free Software Foundation.
++ *
++ * This file is distributed in the hope that it will be useful, but
++ * AS-IS and WITHOUT ANY WARRANTY; without even the implied warranty
++ * of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE, TITLE, or
++ * NONINFRINGEMENT.  See the GNU General Public License for more
++ * details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this file; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
++ * or visit http://www.gnu.org/licenses/.
++ *
++ * This file may also be available under a different license from Cavium.
++ * Contact Cavium, Inc. for more information
++ **********************************************************************/
++#include <linux/module.h>
++#include <linux/wait.h>
++#include <linux/rculist.h>
++#include <linux/atomic.h>
++#include <linux/kthread.h>
++#include <linux/interrupt.h>
++#include <linux/irqdomain.h>		/* irq_create_mapping / irq_dispose_mapping */
++#include <linux/netdevice.h>
++#include <linux/etherdevice.h>
++#include <linux/platform_device.h>
++#include <linux/ip.h>
++#include <linux/ipv6.h>
++#include <linux/if_vlan.h>
++#include <linux/rio_drv.h>
++#include <linux/rio_ids.h>
++
++#include <asm/octeon/octeon.h>
++#include <asm/octeon/cvmx-helper-cfg.h>
++#include <asm/octeon/cvmx-helper-pko3.h>
++#include <asm/octeon/cvmx-helper-pki.h>
++#include <asm/octeon/cvmx-pow.h>
++#include <asm/octeon/cvmx-pko3.h>
++#include <asm/octeon/cvmx-fpa3.h>
++#include <asm/octeon/cvmx-srio.h>
++#include <asm/octeon/cvmx-app-config.h>
++
++#include <asm/octeon/cvmx-fpa-defs.h>
++#include <asm/octeon/cvmx-sso-defs.h>
++#include <asm/octeon/cvmx-sriox-defs.h>
++#include <asm/octeon/cvmx-sriomaintx-defs.h>
++#include <asm/octeon/octeon-ethernet-user.h>
++
++#include "octeon-bgx.h"
++#include "octeon-common-nexus.h"
++
++
++/*
++
++ First buffer:
++
++                              +---SKB---------+
++                              |               |
++                              |               |
++                           +--+--*data        |
++                           |  |               |
++                           |  |               |
++                           |  +---------------+
++                           |       /|\
++                           |        |
++                           |        |
++                          \|/       |
++  WQE - 128 --+-----> +-------------+-------+     -+-
++              |       |    *skb ----+       |      |
++              |       |                     |      |
++              |       |                     |      |
++    WQE_SKIP = 128    |                     |      |
++              |       |                     |      |
++              |       |                     |      |
++              |       |                     |      |
++              |       |                     |      First Skip
++  WQE    -----+-----> +---------------------+      |
++                      |   word 0            |      |
++                      |   word 1            |      |
++                      |   word 2            |      |
++                      |   word 3            |      |
++                      |   word 4            |      |
++                      +---------------------+     -+-
++                 +----+- packet link        |
++                 |    |  packet data        |
++                 |    |                     |
++                 |    |                     |
++                 |    |         .           |
++                 |    |         .           |
++                 |    |         .           |
++                 |    +---------------------+
++                 |
++                 |
++ Later buffers:  |
++                 |
++                 |
++                 |
++                 |
++                 |
++                 |            +---SKB---------+
++                 |            |               |
++                 |            |               |
++                 |         +--+--*data        |
++                 |         |  |               |
++                 |         |  |               |
++                 |         |  +---------------+
++                 |         |       /|\
++                 |         |        |
++                 |         |        |
++                 |        \|/       |
++  WQE - 128 -----+--> +-------------+-------+     -+-
++                 |    |    *skb ----+       |      |
++                 |    |                     |      |
++                 |    |                     |      |
++                 |    |                     |      |
++                 |    |                     |      LATER_SKIP = 128
++                 |    |                     |      |
++                 |    |                     |      |
++                 |    |                     |      |
++                 |    +---------------------+     -+-
++                 |    |  packet link        |
++                 +--> |  packet data        |
++                      |                     |
++                      |                     |
++                      |         .           |
++                      |         .           |
++                      |         .           |
++                      +---------------------+
++ */
++
++#define MAX_TX_QUEUE_DEPTH 512
++#define SSO_INTSN_EXE 0x61
++#define MAX_RX_CONTEXTS 32
++
++#define SKB_PTR_OFFSET		0
++#define SKB_AURA_OFFSET		1
++#define SKB_AURA_MAGIC		0xbadc0ffee4dad000UL
++
++#define USE_ASYNC_IOBDMA	1
++#define CVMX_SCR_SCRATCH	0
++
++#define SRIO_PAD                8
++
++
++/*  octeon3_napi_wrapper:	Structure containing the napi structure. This
++ *				structure is added to receive contexts to
++ *				increase the number of threads (napis) receiving
++ *				packets.
++ *
++ *  napi:			Used by the kernel napi core.
++ *  available:			0 = This napi instance is in use.
++ *				1 = This napi instance is available.
++ *  idx:			Napi index per context.
++ *  cpu:			CPU this napi should run on.
++ *  ctx:			Receive context this napi belongs to.
++ */
++struct octeon3_napi_wrapper {
++	struct napi_struct	napi;
++	int			available;
++	int			idx;
++	int			cpu;
++	struct octeon3_rx	*cxt;
++} ____cacheline_aligned_in_smp;
++
++/* Up to 2 napis per core are supported */
++#define MAX_NAPI_PER_CPU	2
++#define MAX_NAPIS_PER_NODE	(CVMX_MAX_CORES * MAX_NAPI_PER_CPU)
++
++static struct octeon3_napi_wrapper
++napi_wrapper[MAX_NODES][MAX_NAPIS_PER_NODE]
++__cacheline_aligned_in_smp;
++
++struct octeon3_ethernet;
++
++struct octeon3_rx {
++	struct octeon3_napi_wrapper *napiw;
++	DECLARE_BITMAP(napi_idx_bitmap, CVMX_MAX_CORES);
++	spinlock_t napi_idx_lock;
++	struct octeon3_ethernet *parent;
++	int rx_grp;
++	int rx_irq;
++	cpumask_t rx_affinity_hint;
++};
++
++#if defined(CONFIG_CAVIUM_NET_PACKET_FWD_OFFLOAD)
++struct octeon3_tx_cpustats {
++	long tx_packets;
++	long tx_octets;
++	long tx_dropped;
++	long tx_backlog_cache;
++};
++#endif
++
++struct octeon3_ethernet {
++	struct bgx_port_netdev_priv bgx_priv; /* Must be first element. */
++	struct list_head list;
++	struct list_head srio_bcast;
++	struct net_device *netdev;
++	enum octeon3_mac_type mac_type;
++	struct octeon3_rx rx_cxt[MAX_RX_CONTEXTS];
++	int num_rx_cxt;
++	int pki_laura;
++	int pki_pkind;
++	int pko_queue;
++	int numa_node;
++	int xiface;
++	int port_index;
++	int rx_buf_count;
++	int tx_complete_grp;
++	spinlock_t stat_lock;
++	cvm_oct_callback_t intercept_cb;
++	u64 srio_tx_header;
++	u64 last_packets;
++	u64 last_octets;
++	u64 last_dropped;
++	atomic64_t rx_packets;
++	atomic64_t rx_octets;
++	atomic64_t rx_dropped;
++	atomic64_t rx_errors;
++	atomic64_t rx_length_errors;
++	atomic64_t rx_crc_errors;
++#if defined(CONFIG_CAVIUM_NET_PACKET_FWD_OFFLOAD)
++	struct octeon3_tx_cpustats __percpu *tx_stats;
++#else
++	atomic64_t tx_packets;
++	atomic64_t tx_octets;
++	atomic64_t tx_dropped;
++#endif
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++	int intf_index;
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020*/
++	/*
++	 * The following two fields need to be on a different cache line as
++	 * they are updated by pko which invalidates the cache every time it
++	 * updates them. The idea is to prevent other fields from being
++	 * invalidated unnecessarily.
++	 */
++	char cacheline_pad1[CVMX_CACHE_LINE_SIZE];
++	atomic64_t buffers_needed;
++	atomic64_t tx_backlog;
++	char cacheline_pad2[CVMX_CACHE_LINE_SIZE];
++};
++
++static DEFINE_MUTEX(octeon3_eth_init_mutex);
++
++struct octeon3_ethernet_node;
++
++struct octeon3_ethernet_worker {
++	wait_queue_head_t queue;
++	struct task_struct *task;
++	struct octeon3_ethernet_node *oen;
++	atomic_t kick;;
++	int order;
++};
++
++struct octeon3_ethernet_node {
++	bool init_done;
++	bool napi_init_done;
++	int next_cpu_irq_affinity;
++	int numa_node;
++	cvmx_fpa3_pool_t  pki_packet_pool;
++	cvmx_fpa3_pool_t sso_pool;
++	cvmx_fpa3_pool_t pko_pool;
++	void *sso_pool_stack;
++	void *pko_pool_stack;
++	void *pki_packet_pool_stack;
++	cvmx_fpa3_gaura_t sso_aura;
++	cvmx_fpa3_gaura_t pko_aura;
++	int tx_complete_grp;
++	int tx_irq;
++	cpumask_t tx_affinity_hint;
++	struct octeon3_ethernet_worker workers[8];
++	struct mutex device_list_lock;
++	struct list_head device_list;
++	spinlock_t napi_alloc_lock;
++};
++
++struct octeon3_srio_bcast_target {
++	struct list_head	list;
++	u16			destid;
++};
++
++/* This array keeps track of the number of napis running on each cpu */
++static u8 octeon3_cpu_napi_cnt[NR_CPUS] __cacheline_aligned_in_smp;
++
++static int recycle_skbs = 1;
++module_param(recycle_skbs, int, 0644);
++MODULE_PARM_DESC(recycle_skbs, "Allow recycling skbs back to fpa auras.");
++
++static int use_tx_queues;
++module_param(use_tx_queues, int, 0644);
++MODULE_PARM_DESC(use_tx_queues, "Use network layer transmit queues.");
++
++static int wait_pko_response;
++module_param(wait_pko_response, int, 0644);
++MODULE_PARM_DESC(use_tx_queues, "Wait for response after each pko command.");
++
++// Per Cavium, any number above 512 will cause "nosedive" issue!!!
++static int num_packet_buffers = 512;
++module_param(num_packet_buffers, int, S_IRUGO);
++MODULE_PARM_DESC(num_packet_buffers, "Number of packet buffers to allocate per port.");
++
++static int packet_buffer_size = 2048;
++module_param(packet_buffer_size, int, S_IRUGO);
++MODULE_PARM_DESC(packet_buffer_size, "Size of each RX packet buffer.");
++
++static int rx_contexts = 1;
++module_param(rx_contexts, int, S_IRUGO);
++MODULE_PARM_DESC(rx_contexts, "Number of RX threads per port.");
++
++static struct octeon3_ethernet_node octeon3_eth_node[MAX_NODES];
++static struct kmem_cache *octeon3_eth_sso_pko_cache;
++
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++#define USE_NET_DEVICE 
++#ifdef USE_NET_DEVICE 
++#define MAX_NETDEV_NUM 9
++struct net_device *netdev_list[MAX_NETDEV_NUM] = {NULL};
++EXPORT_SYMBOL(netdev_list);
++int (*sfp_status_update)(int intf_index, uint32_t event, uint32_t speed, uint32_t duplex) = NULL;
++EXPORT_SYMBOL(sfp_status_update);
++static int gindex = 0;
++static char *intf_remap[MAX_NETDEV_NUM] = {"eth1", "eth2", "eth3", "eth4", "eth5", "eth6", "eth7", "eth8", "eth0"};
++int octeon_sfp_update(struct net_device *netdev, uint32_t event, uint32_t speed, uint32_t duplex) {
++	struct octeon3_ethernet *priv = netdev_priv(netdev);
++	if (sfp_status_update)
++		sfp_status_update(priv->intf_index, event, speed, duplex);
++	return 0;
++}
++#endif
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020*/
++
++/**
++ * octeon3_register_callback:	Register a intercept callback for the named
++ *				device.
++ *
++ * It returns the net_device structure for the ethernet port. Usign a
++ * callback of NULL will remove the callback. Note that this callback
++ * must not disturb scratch. It will be called with SYNCIOBDMAs in
++ * progress and userspace may be using scratch. It also must not
++ * disturb the group mask.
++ *
++ * @device_name: Device name to register for. (Example: "eth0")
++ * @callback: Intercept callback to set.
++ *
++ * Returns the net_device structure for the ethernet port or NULL on failure.
++ */
++struct net_device *octeon3_register_callback(const char		*device_name,
++					     cvm_oct_callback_t	callback)
++{
++	struct octeon3_ethernet	*priv;
++	int			node;
++
++	rcu_read_lock();
++	for (node = 0; node < MAX_NODES; node++) {
++#if defined(CONFIG_CAVIUM_NET_PACKET_FWD_OFFLOAD)
++		if (!octeon3_eth_node[node].init_done) {
++			/* Node not inited */
++			continue;
++		}
++#endif
++		list_for_each_entry_rcu(priv,
++					&octeon3_eth_node[node].device_list,
++					list) {
++			if (strcmp(device_name, priv->netdev->name) == 0) {
++				priv->intercept_cb = callback;
++				rcu_read_unlock();
++				return priv->netdev;
++			}
++		}
++	}
++
++	rcu_read_unlock();
++	return NULL;
++}
++EXPORT_SYMBOL(octeon3_register_callback);
++
++#if defined(CONFIG_CAVIUM_NET_PACKET_FWD_OFFLOAD)
++/* Comment: Register a intercept callback
++ * for the named device.
++ * It returns the net_device structure
++ * for the ethernet port.
++ */
++struct net_device *octeon3_is_oct_dev(const char *device_name)
++{
++	struct octeon3_ethernet	*priv;
++	int			node;
++
++	for (node = 0; node < MAX_NODES; node++) {
++		if (!octeon3_eth_node[node].init_done) {
++			/* Node not inited */
++			continue;
++		}
++		list_for_each_entry_rcu(priv,
++					&octeon3_eth_node[node].device_list,
++					list) {
++			if (strcmp(device_name, priv->netdev->name) == 0)
++				return priv->netdev;
++		}
++	}
++
++	return NULL;
++}
++EXPORT_SYMBOL(octeon3_is_oct_dev);
++#endif
++
++/* octeon3_eth_sso_pass1_limit:	Near full TAQ can cause hang. When the TAQ
++ *				(Transitory Admission Queue) is near-full, it is
++ *				possible for SSO to hang.
++ *				Workaround: Ensure that the sum of
++ *				SSO_GRP(0..255)_TAQ_THR[MAX_THR] of all used
++ *				groups is <= 1264. This may reduce single-group
++ *				performance when many groups are used.
++ *
++ *  node:			Node to update.
++ *  grp:			SSO group to update.
++ */
++static void octeon3_eth_sso_pass1_limit(int node, int	grp)
++{
++	cvmx_sso_grpx_taq_thr_t	taq_thr;
++	cvmx_sso_taq_add_t	taq_add;
++	int			max_thr;
++	int			rsvd_thr;
++
++	/* Ideally, we would like to divide the maximum number of TAQ buffers
++	 * (1264) among the sso groups in use. However, since we don't know how
++	 * many sso groups are used by code outside this driver we take the
++	 * worst case approach and assume all 256 sso groups must be supported.
++	 */
++	max_thr = 1264 / cvmx_sso_num_xgrp();
++	if (max_thr < 4)
++		max_thr = 4;
++	rsvd_thr = max_thr - 1;
++
++	/* Changes to CVMX_SSO_GRPX_TAQ_THR[rsvd_thr] must also update
++	 * SSO_TAQ_ADD[RSVD_FREE].
++	 */
++	taq_thr.u64 = cvmx_read_csr_node(node, CVMX_SSO_GRPX_TAQ_THR(grp));
++	taq_add.u64 = 0;
++	taq_add.s.rsvd_free = rsvd_thr - taq_thr.s.rsvd_thr;
++
++	taq_thr.s.max_thr = max_thr;
++	taq_thr.s.rsvd_thr = rsvd_thr;
++
++	cvmx_write_csr_node(node, CVMX_SSO_GRPX_TAQ_THR(grp), taq_thr.u64);
++	cvmx_write_csr_node(node, CVMX_SSO_TAQ_ADD, taq_add.u64);
++}
++
++/*
++ * Map auras to the field priv->buffers_needed. Used to speed up packet
++ * transmission.
++ */
++static void *aura2bufs_needed[MAX_NODES][CVMX_FPA3_NUM_AURAS];
++
++static int octeon3_eth_lgrp_to_ggrp(int node, int grp)
++{
++	return (node << 8) | grp;
++}
++
++static void octeon3_eth_gen_affinity(int node, cpumask_t *mask)
++{
++	int cpu;
++
++	do {
++		cpu = cpumask_next(octeon3_eth_node[node].next_cpu_irq_affinity,
++				   cpu_online_mask);
++		octeon3_eth_node[node].next_cpu_irq_affinity++;
++		if (cpu >= nr_cpu_ids) {
++			octeon3_eth_node[node].next_cpu_irq_affinity = -1;
++			continue;
++		}
++	} while (false);
++	cpumask_clear(mask);
++	cpumask_set_cpu(cpu, mask);
++}
++
++static int octeon3_eth_sso_init(unsigned int node, int aura)
++{
++	union cvmx_sso_aw_cfg cfg;
++	union cvmx_sso_xaq_aura xaq_aura;
++	union cvmx_sso_err0 err0;
++	union cvmx_sso_grpx_pri grp_pri;
++	int max_grps;
++	int i;
++	int rv = 0;
++
++	grp_pri.u64 = 0;
++	grp_pri.s.weight = 0x3f;
++
++	cfg.u64 = 0;
++	cfg.s.stt = 1;
++	cfg.s.ldt = 1;
++	cfg.s.ldwb = 1;
++	cvmx_write_csr_node(node, CVMX_SSO_AW_CFG, cfg.u64);
++
++	xaq_aura.u64 = 0;
++	xaq_aura.s.laura = aura;
++	xaq_aura.s.node = node;
++	cvmx_write_csr_node(node, CVMX_SSO_XAQ_AURA, xaq_aura.u64);
++
++	max_grps = cvmx_sso_num_xgrp();
++	for (i = 0; i < max_grps; i++) {
++		u64 phys;
++		void *mem = cvmx_fpa3_alloc(__cvmx_fpa3_gaura(node, aura));
++		if (!mem) {
++			rv = -ENOMEM;
++			goto err;
++		}
++		phys = virt_to_phys(mem);
++		cvmx_write_csr_node(node, CVMX_SSO_XAQX_HEAD_PTR(i), phys);
++		cvmx_write_csr_node(node, CVMX_SSO_XAQX_HEAD_NEXT(i), phys);
++		cvmx_write_csr_node(node, CVMX_SSO_XAQX_TAIL_PTR(i), phys);
++		cvmx_write_csr_node(node, CVMX_SSO_XAQX_TAIL_NEXT(i), phys);
++		/* SSO-18678 */
++		cvmx_write_csr_node(node, CVMX_SSO_GRPX_PRI(i), grp_pri.u64);
++	}
++	err0.u64 = 0;
++	err0.s.fpe = 1;
++	cvmx_write_csr_node(node, CVMX_SSO_ERR0, err0.u64);
++
++	cfg.s.rwen = 1;
++	cvmx_write_csr_node(node, CVMX_SSO_AW_CFG, cfg.u64);
++
++err:
++	return rv;
++}
++
++/* octeon3_eth_sso_shutdown:		Shutdown the sso. It undoes what
++ *					octeon3_eth_sso_init() did.
++ *
++ *  node:				Node where sso to disable is.
++ */
++static void octeon3_eth_sso_shutdown(unsigned int node)
++{
++	struct octeon3_ethernet_node	*oen;
++	union cvmx_sso_aw_cfg		aw_cfg;
++	cvmx_sso_grpx_aq_cnt_t		aq_cnt;
++	cvmx_sso_aw_status_t		aw_status;
++	int				max_grps;
++	int				i;
++
++	oen = octeon3_eth_node + node;
++
++	/* Disable sso */
++	aw_cfg.u64 = cvmx_read_csr_node(node, CVMX_SSO_AW_CFG);
++	aw_cfg.s.xaq_byp_dis = 1;
++	aw_cfg.s.xaq_alloc_dis = 1;
++	aw_cfg.s.rwen = 0;
++	cvmx_write_csr_node(node, CVMX_SSO_AW_CFG, aw_cfg.u64);
++
++	/* Extract the fpa buffers */
++	max_grps = cvmx_sso_num_xgrp();
++	for (i = 0; i < max_grps; i++) {
++		cvmx_sso_xaqx_head_ptr_t	head;
++		cvmx_sso_xaqx_tail_ptr_t	tail;
++		u64				addr;
++		void				*ptr;
++
++		head.u64 = cvmx_read_csr_node(node, CVMX_SSO_XAQX_HEAD_PTR(i));
++		tail.u64 = cvmx_read_csr_node(node, CVMX_SSO_XAQX_TAIL_PTR(i));
++		aq_cnt.u64 = cvmx_read_csr_node(node, CVMX_SSO_GRPX_AQ_CNT(i));
++
++		/* Verify pointers */
++		if (head.s.ptr != tail.s.ptr) {
++			pr_err("WARNING: octeon3_eth_sso_shutdown bad ptr\n");
++			continue;
++		}
++
++		/* This sso group should have no pending entries */
++		if (aq_cnt.s.aq_cnt != 0)
++			pr_err("WARNING: octeon3_eth_sso_shutdown not empty\n");
++
++		addr = head.s.ptr;
++		addr <<= 7;
++		ptr = phys_to_virt(addr);
++		cvmx_fpa3_free(ptr, oen->sso_aura, 0);
++
++		/* Clear pointers */
++		cvmx_write_csr_node(node, CVMX_SSO_XAQX_HEAD_PTR(i), 0);
++		cvmx_write_csr_node(node, CVMX_SSO_XAQX_HEAD_NEXT(i), 0);
++		cvmx_write_csr_node(node, CVMX_SSO_XAQX_TAIL_PTR(i), 0);
++		cvmx_write_csr_node(node, CVMX_SSO_XAQX_TAIL_NEXT(i), 0);
++	}
++
++	/* Make sure all buffers drained */
++	do
++		aw_status.u64 = cvmx_read_csr_node(node, CVMX_SSO_AW_STATUS);
++	while (aw_status.s.xaq_buf_cached);
++}
++
++static void octeon3_eth_sso_irq_set_armed(int node, int grp, bool v)
++{
++	union cvmx_sso_grpx_int_thr grp_int_thr;
++	union cvmx_sso_grpx_int grp_int;
++
++	/* Disarm/Rearm the irq. */
++	grp_int_thr.u64 = 0;
++	grp_int_thr.s.iaq_thr = v ? 1 : 0;
++	cvmx_write_csr_node(node, CVMX_SSO_GRPX_INT_THR(grp), grp_int_thr.u64);
++
++	grp_int.u64 = 0;
++	grp_int.s.exe_int = 1;
++	cvmx_write_csr_node(node, CVMX_SSO_GRPX_INT(grp), grp_int.u64);
++}
++
++struct wr_ret {
++	void *work;
++	u16 grp;
++};
++
++static inline struct wr_ret octeon3_eth_work_request_grp_sync(unsigned int lgrp, cvmx_pow_wait_t wait)
++{
++	cvmx_pow_load_addr_t ptr;
++	cvmx_pow_tag_load_resp_t result;
++	struct wr_ret r;
++	unsigned int node = cvmx_get_node_num() & 3;
++
++	ptr.u64 = 0;
++
++	ptr.swork_78xx.mem_region = CVMX_IO_SEG;
++	ptr.swork_78xx.is_io = 1;
++	ptr.swork_78xx.did = CVMX_OCT_DID_TAG_SWTAG;
++	ptr.swork_78xx.node = node;
++	ptr.swork_78xx.rtngrp = 1;
++	ptr.swork_78xx.grouped = 1;
++	ptr.swork_78xx.index = (lgrp & 0xff) | node << 8;
++	ptr.swork_78xx.wait = wait;
++
++	result.u64 = cvmx_read_csr(ptr.u64);
++	r.grp = result.s_work.grp;
++	if (result.s_work.no_work)
++		r.work = NULL;
++	else
++		r.work = cvmx_phys_to_ptr(result.s_work.addr);
++	return r;
++}
++
++/* octeon3_eth_get_work_async:	Request work via a iobdma command. Doesn't wait
++ *				for the response.
++ *
++ *  lgrp:			Group to request work for.
++ */
++static inline void octeon3_eth_get_work_async(unsigned int lgrp)
++{
++	cvmx_pow_iobdma_store_t	data;
++	int			node = cvmx_get_node_num();
++
++	data.u64 = 0;
++	data.s_cn78xx.scraddr = CVMX_SCR_SCRATCH;
++	data.s_cn78xx.len = 1;
++	data.s_cn78xx.did = CVMX_OCT_DID_TAG_SWTAG;
++	data.s_cn78xx.node = node;
++	data.s_cn78xx.grouped = 1;
++	data.s_cn78xx.rtngrp = 1;
++	data.s_cn78xx.index_grp_mask = (lgrp & 0xff) | node << 8;
++	data.s_cn78xx.wait = CVMX_POW_NO_WAIT;
++
++	cvmx_send_single(data.u64);
++}
++
++/* octeon3_eth_get_work_response_async:	Read the request work response. Must
++ *					be called after calling
++ *					octeon3_eth_get_work_async().
++ *
++ *  Returns:				Work queue entry.
++ */
++static inline struct wr_ret octeon3_eth_get_work_response_async(void)
++{
++	cvmx_pow_tag_load_resp_t	result;
++	struct wr_ret			r;
++
++	CVMX_SYNCIOBDMA;
++	result.u64 = cvmx_scratch_read64(CVMX_SCR_SCRATCH);
++
++	r.grp = result.s_work.grp;
++	if (result.s_work.no_work)
++		r.work = NULL;
++	else
++		r.work = cvmx_phys_to_ptr(result.s_work.addr);
++	return r;
++}
++
++static void octeon3_eth_replenish_rx(struct octeon3_ethernet *priv, int count)
++{
++	struct sk_buff *skb;
++	int i;
++
++	for (i = 0; i < count; i++) {
++		void **buf;
++		skb = __alloc_skb(packet_buffer_size, GFP_ATOMIC, 0, priv->numa_node);
++		if (!skb) {
++			pr_err("WARNING: octeon3_eth_replenish_rx out of memory\n");
++			break;
++		}
++		buf = (void **)PTR_ALIGN(skb->head, 128);
++#ifdef CAVIUM_NET_PACKET_FWD_OFFLOAD
++		skb->data = skb->head + NET_SKB_PAD;
++#endif
++		buf[SKB_PTR_OFFSET] = skb;
++		cvmx_fpa3_free(buf,
++			__cvmx_fpa3_gaura(priv->numa_node, priv->pki_laura),
++			0);
++	}
++}
++
++static bool octeon3_eth_tx_complete_runnable(struct octeon3_ethernet_worker *worker)
++{
++	return atomic_read(&worker->kick) != 0 || kthread_should_stop();
++}
++
++static int octeon3_eth_replenish_all(struct octeon3_ethernet_node *oen)
++{
++	int pending = 0;
++	int batch_size = 32;
++	struct octeon3_ethernet *priv;
++
++	rcu_read_lock();
++	list_for_each_entry_rcu(priv, &oen->device_list, list) {
++		/* Mainline 6.18 only exposes atomic64_dec_if_positive() at the
++		 * generic API level; the multi-step variant is the MIPS-only
++		 * arch_atomic64_sub_if_positive(). */
++		int amount = arch_atomic64_sub_if_positive(batch_size,
++							   &priv->buffers_needed);
++		if (amount >= 0) {
++			octeon3_eth_replenish_rx(priv, batch_size);
++			pending += amount;
++		}
++	}
++	rcu_read_unlock();
++	return pending;
++}
++
++static int octeon3_eth_tx_complete_worker(void *data)
++{
++	union cvmx_sso_grpx_aq_cnt aq_cnt;
++	struct octeon3_ethernet_worker *worker = data;
++	struct octeon3_ethernet_node *oen = worker->oen;
++	int backlog;
++	int order = worker->order;
++	int tx_complete_stop_thresh = order * 100;
++	int backlog_stop_thresh = order == 0 ? 31 : order * 80;
++	int i;
++
++	while (!kthread_should_stop()) {
++		/*
++		 * replaced by wait_event to avoid warnings like
++		 * "task oct3_eth/0:2:1250 blocked for more than 120 seconds."
++		 */
++		wait_event_interruptible(worker->queue, octeon3_eth_tx_complete_runnable(worker));
++		atomic_dec_if_positive(&worker->kick); /* clear the flag */
++
++		do {
++			backlog = octeon3_eth_replenish_all(oen);
++			for (i = 0; i < 100; i++) {
++				void **work;
++				struct net_device *tx_netdev;
++				struct octeon3_ethernet *tx_priv;
++				struct sk_buff *skb;
++				struct wr_ret r;
++
++				r = octeon3_eth_work_request_grp_sync(oen->tx_complete_grp, CVMX_POW_NO_WAIT);
++				work = r.work;
++				if (work == NULL)
++					break;
++				tx_netdev = work[0];
++				tx_priv = netdev_priv(tx_netdev);
++				if (unlikely(netif_queue_stopped(tx_netdev)) &&
++				    atomic64_read(&tx_priv->tx_backlog) < MAX_TX_QUEUE_DEPTH)
++					netif_wake_queue(tx_netdev);
++				skb = container_of((void *)work, struct sk_buff, cb);
++				dev_kfree_skb(skb);
++			}
++
++			aq_cnt.u64 = cvmx_read_csr_node(oen->numa_node,
++				    CVMX_SSO_GRPX_AQ_CNT(oen->tx_complete_grp));
++			if ((backlog > backlog_stop_thresh ||
++			     aq_cnt.s.aq_cnt > tx_complete_stop_thresh) &&
++			    order < ARRAY_SIZE(oen->workers) - 1) {
++				atomic_set(&oen->workers[order + 1].kick, 1);
++				wake_up(&oen->workers[order + 1].queue);
++			}
++		} while (!need_resched() &&
++			 (backlog > backlog_stop_thresh ||
++			  aq_cnt.s.aq_cnt > tx_complete_stop_thresh));
++
++		cond_resched();
++
++		if (!octeon3_eth_tx_complete_runnable(worker))
++			octeon3_eth_sso_irq_set_armed(oen->numa_node, oen->tx_complete_grp, true);
++	}
++
++	return 0;
++}
++
++static irqreturn_t octeon3_eth_tx_handler(int irq, void *info)
++{
++	struct octeon3_ethernet_node *oen = info;
++	/* Disarm the irq. */
++	octeon3_eth_sso_irq_set_armed(oen->numa_node, oen->tx_complete_grp, false);
++	atomic_set(&oen->workers[0].kick, 1);
++	wake_up(&oen->workers[0].queue);
++	return IRQ_HANDLED;
++}
++
++static int octeon3_eth_global_init(unsigned int node)
++{
++	int i;
++	int rv = 0;
++	struct irq_domain *d;
++	unsigned int sso_intsn;
++	struct octeon3_ethernet_node *oen;
++	int workers_started = 0;
++	bool module_ref = false;
++	bool sso_pool_ready = false;
++	bool pko_pool_ready = false;
++	bool pki_packet_pool_ready = false;
++	bool sso_aura_ready = false;
++	bool pko_aura_ready = false;
++	bool sso_inited = false;
++	bool pko_inited = false;
++	bool pki_enabled = false;
++	bool tx_grp_alloc = false;
++	bool tx_irq_requested = false;
++
++	mutex_lock(&octeon3_eth_init_mutex);
++
++	oen = octeon3_eth_node + node;
++
++	if (oen->init_done)
++		goto done;
++
++	/* CN78XX-P1.0 cannot un-initialize PKO, so get a module
++	 * reference to prevent it from being unloaded.
++	 */
++	if (OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_0))
++		if (try_module_get(THIS_MODULE))
++			module_ref = true;
++		else
++			pr_err("ERROR: Could not obtain module reference for CN78XX-P1.0\n");
++
++	__cvmx_export_app_config_to_named_block(CVMX_APP_CONFIG);
++
++	INIT_LIST_HEAD(&oen->device_list);
++	mutex_init(&oen->device_list_lock);
++	spin_lock_init(&oen->napi_alloc_lock);
++
++	oen->numa_node = node;
++	oen->tx_irq = 0;
++	oen->tx_complete_grp = -1;
++
++	octeon_fpa3_init(node);
++	rv = octeon_fpa3_pool_init(node, -1, &oen->sso_pool,
++				   &oen->sso_pool_stack, 40960);
++	if (rv)
++		goto done;
++	sso_pool_ready = true;
++
++	rv = octeon_fpa3_pool_init(node, -1, &oen->pko_pool,
++				   &oen->pko_pool_stack, 40960);
++	if (rv)
++		goto done;
++	pko_pool_ready = true;
++
++	rv = octeon_fpa3_pool_init(node, -1, &oen->pki_packet_pool,
++				   &oen->pki_packet_pool_stack,
++				   64 * num_packet_buffers);
++	if (rv)
++		goto done;
++	pki_packet_pool_ready = true;
++
++	rv = octeon_fpa3_aura_init(oen->sso_pool, -1, &oen->sso_aura,
++				   num_packet_buffers, 20480);
++	if (rv)
++		goto done;
++	sso_aura_ready = true;
++
++	rv = octeon_fpa3_aura_init(oen->pko_pool, -1, &oen->pko_aura,
++				   num_packet_buffers, 20480);
++	if (rv)
++		goto done;
++	pko_aura_ready = true;
++
++	pr_err("octeon3_eth_global_init  SSO:%d:%d, PKO:%d:%d\n",
++	       oen->sso_pool.lpool, oen->sso_aura.laura,
++	       oen->pko_pool.lpool, oen->pko_aura.laura);
++
++	if (!octeon3_eth_sso_pko_cache) {
++		octeon3_eth_sso_pko_cache = kmem_cache_create("sso_pko", 4096, 128, 0, NULL);
++		if (!octeon3_eth_sso_pko_cache) {
++			rv = -ENOMEM;
++			goto done;
++		}
++	}
++
++	rv = octeon_mem_fill_fpa3(node, octeon3_eth_sso_pko_cache,
++				  oen->sso_aura, 1024);
++	if (rv)
++		goto done;
++
++#if defined(CONFIG_CAVIUM_NET_PACKET_FWD_OFFLOAD)
++	/* Comment: Since each linux interface
++	 * is equivalent to a logical mac, and
++	 * MAX_TX_QUEUE_DEPTH is a per linux
++	 * interface limit, we need to fill pko_aura
++	 * with buffers sufficient for all
++	 * logical mac's i.e say
++	 * cvmx_helper_get_number_of_interfaces() *
++	 * 4 * MAX_TX_QUEUE_DEPTH. Since pko might
++	 * not need one pko_aura buffer per packet
++	 * enqueued, we are filling it a bit less.
++	 * Also in octeon3_transmit_qos() worst
++	 * case scenario, it would have already
++	 * enqueued MAX_TX_QUEUE_DEPTH * 2 packets.
++	 */
++	rv = octeon_mem_fill_fpa3(node, octeon3_eth_sso_pko_cache,
++				   oen->pko_aura,
++				   cvmx_helper_get_number_of_interfaces() *
++				   MAX_TX_QUEUE_DEPTH);
++#else
++	rv = octeon_mem_fill_fpa3(node, octeon3_eth_sso_pko_cache,
++				   oen->pko_aura, 1024);
++#endif
++	if (rv)
++		goto done;
++
++	BUG_ON(node != oen->sso_aura.node);
++	rv = octeon3_eth_sso_init(node, oen->sso_aura.laura);
++	if (rv)
++		goto done;
++	sso_inited = true;
++
++	oen->tx_complete_grp = cvmx_sso_allocate_group(node);
++	if (oen->tx_complete_grp < 0) {
++		pr_err("octeon3_eth: failed to allocate SSO group\n");
++		rv = -ENODEV;
++		goto done;
++	}
++	tx_grp_alloc = true;
++	d = octeon_irq_get_block_domain(oen->numa_node, SSO_INTSN_EXE);
++	if (!d) {
++		pr_err("octeon3_eth: no SSO IRQ domain on node %u\n", node);
++		rv = -ENODEV;
++		goto done;
++	}
++	sso_intsn = SSO_INTSN_EXE << 12 | oen->tx_complete_grp;
++	oen->tx_irq = irq_create_mapping(d, sso_intsn);
++	if (!oen->tx_irq) {
++		rv = -ENODEV;
++		goto done;
++	}
++	/* irq_get_irq_data() can return NULL — order the trigger-type set
++	 * AFTER the !tx_irq sanity check, and guard against NULL. */
++	{
++		struct irq_data *id = irq_get_irq_data(oen->tx_irq);
++
++		if (id)
++			irqd_set_trigger_type(id, IRQ_TYPE_EDGE_RISING);
++	}
++
++	rv = __cvmx_helper_pko3_init_global(node, oen->pko_aura.laura | (node << 10));
++	if (rv) {
++		pr_err("cvmx_helper_pko3_init_global failed\n");
++		rv = -ENODEV;
++		goto done;
++	}
++	pko_inited = true;
++
++	__cvmx_helper_pki_install_dflt_vlan(node);
++	cvmx_pki_setup_clusters(node);
++	__cvmx_helper_pki_set_dflt_ltype_map(node);
++	cvmx_pki_enable_backpressure(node);
++	cvmx_pki_parse_enable(node, 0);
++	cvmx_pki_enable(node);
++	pki_enabled = true;
++	/* Statistics per pkind */
++	cvmx_write_csr_node(node, CVMX_PKI_STAT_CTL, 0);
++
++	for (i = 0; i < ARRAY_SIZE(oen->workers); i++) {
++		oen->workers[i].oen = oen;
++		init_waitqueue_head(&oen->workers[i].queue);
++		oen->workers[i].order = i;
++	}
++	for (i = 0; i < ARRAY_SIZE(oen->workers); i++) {
++		oen->workers[i].task = kthread_create_on_node(octeon3_eth_tx_complete_worker,
++							      oen->workers + i, node,
++							      "oct3_eth/%d:%d", node, i);
++		if (IS_ERR(oen->workers[i].task)) {
++			rv = PTR_ERR(oen->workers[i].task);
++			goto done;
++		} else {
++#ifdef CONFIG_NUMA
++			set_cpus_allowed_ptr(oen->workers[i].task, cpumask_of_node(node));
++#endif
++			wake_up_process(oen->workers[i].task);
++			workers_started++;
++		}
++	}
++
++	if (OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_X))
++		octeon3_eth_sso_pass1_limit(node, oen->tx_complete_grp);
++
++	rv = request_irq(oen->tx_irq, octeon3_eth_tx_handler, 0, "oct3_eth_tx_done", oen);
++	if (rv)
++		goto done;
++	tx_irq_requested = true;
++	octeon3_eth_gen_affinity(node, &oen->tx_affinity_hint);
++	irq_set_affinity_hint(oen->tx_irq, &oen->tx_affinity_hint);
++
++	octeon3_eth_sso_irq_set_armed(node, oen->tx_complete_grp, true);
++
++	__cvmx_export_config();
++
++	oen->init_done = true;
++done:
++	if (rv) {
++		void **w;
++
++		if (tx_irq_requested) {
++			irq_set_affinity_hint(oen->tx_irq, NULL);
++			free_irq(oen->tx_irq, oen);
++		}
++		if (oen->tx_irq) {
++			irq_dispose_mapping(oen->tx_irq);
++			oen->tx_irq = 0;
++		}
++		while (workers_started > 0) {
++			workers_started--;
++			kthread_stop(oen->workers[workers_started].task);
++			oen->workers[workers_started].task = NULL;
++		}
++		if (pki_enabled)
++			cvmx_helper_pki_shutdown(node);
++		if (pko_inited)
++			cvmx_helper_pko3_shutdown(node);
++		if (tx_grp_alloc) {
++			cvmx_sso_release_group(node, oen->tx_complete_grp);
++			oen->tx_complete_grp = -1;
++		}
++		if (sso_inited)
++			octeon3_eth_sso_shutdown(node);
++		if (pko_aura_ready) {
++			for (;;) {
++				w = cvmx_fpa3_alloc(oen->pko_aura);
++				if (!w)
++					break;
++				kmem_cache_free(octeon3_eth_sso_pko_cache, w);
++			}
++			cvmx_fpa3_release_aura(oen->pko_aura);
++		}
++		if (pko_pool_ready) {
++			cvmx_fpa3_release_pool(oen->pko_pool);
++			kfree(oen->pko_pool_stack);
++			oen->pko_pool_stack = NULL;
++		}
++		if (sso_aura_ready) {
++			for (;;) {
++				w = cvmx_fpa3_alloc(oen->sso_aura);
++				if (!w)
++					break;
++				kmem_cache_free(octeon3_eth_sso_pko_cache, w);
++			}
++			cvmx_fpa3_release_aura(oen->sso_aura);
++		}
++		if (sso_pool_ready) {
++			cvmx_fpa3_release_pool(oen->sso_pool);
++			kfree(oen->sso_pool_stack);
++			oen->sso_pool_stack = NULL;
++		}
++		if (pki_packet_pool_ready) {
++			cvmx_fpa3_release_pool(oen->pki_packet_pool);
++			kfree(oen->pki_packet_pool_stack);
++			oen->pki_packet_pool_stack = NULL;
++		}
++		if (module_ref)
++			module_put(THIS_MODULE);
++	}
++	mutex_unlock(&octeon3_eth_init_mutex);
++	return rv;
++}
++
++#if defined(CONFIG_CAVIUM_NET_PACKET_FWD_OFFLOAD)
++static inline struct sk_buff *octeon3_eth_work_to_skb(void *w)
++#else
++static struct sk_buff *octeon3_eth_work_to_skb(void *w)
++#endif
++{
++	struct sk_buff *skb;
++	void **f = w;
++	skb = f[-16];
++	return skb;
++}
++
++/* octeon3_napi_alloc_cpu:	Find an available cpu. This function must be
++ *				called with the napi_alloc_lock lock held.
++ *
++ *  node:			Node to allocate cpu from.
++ *  cpu:			Cpu to bind the napi to:
++ *					<  0: use any cpu.
++ *					>= 0: use requested cpu.
++ *
++ *  returns:			cpu number or a negative error code.
++ */
++static int octeon3_napi_alloc_cpu(int	node,
++				  int	cpu)
++{
++	int				min_cnt = MAX_NAPIS_PER_NODE;
++	int				min_cpu = -EBUSY;
++
++	if (cpu >= 0)
++		min_cpu = cpu;
++	else {
++		for_each_cpu(cpu, cpumask_of_node(node)) {
++			if (octeon3_cpu_napi_cnt[cpu] == 0) {
++				min_cpu = cpu;
++				break;
++			} else if (octeon3_cpu_napi_cnt[cpu] < min_cnt) {
++				min_cnt = octeon3_cpu_napi_cnt[cpu];
++				min_cpu = cpu;
++			}
++		}
++	}
++
++	if (min_cpu < 0)
++		return min_cpu;
++
++	octeon3_cpu_napi_cnt[min_cpu]++;
++
++	return min_cpu;
++}
++
++/* octeon3_napi_alloc:		Allocate a napi.
++ *
++ *  cxt:			Receive context the napi will be added to.
++ *  idx:			Napi index within the receive context.
++ *  cpu:			Cpu to bind the napi to:
++ *					<  0: use any cpu.
++ *					>= 0: use requested cpu.
++ *
++ *  Returns:			Pointer to napi wrapper or NULL on error.
++ */
++static struct octeon3_napi_wrapper *octeon3_napi_alloc(struct octeon3_rx *cxt,
++						       int		  idx,
++						       int		  cpu)
++{
++	struct octeon3_ethernet_node	*oen;
++	struct octeon3_ethernet		*priv = cxt->parent;
++	int				node = priv->numa_node;
++	unsigned long			flags;
++	int				i;
++
++	oen = octeon3_eth_node + node;
++	spin_lock_irqsave(&oen->napi_alloc_lock, flags);
++
++	/* Find a free napi wrapper */
++	for (i = 0; i < MAX_NAPIS_PER_NODE; i++) {
++		if (napi_wrapper[node][i].available) {
++			/* Allocate a cpu to use */
++			cpu = octeon3_napi_alloc_cpu(node, cpu);
++			if (cpu < 0)
++				break;
++
++			napi_wrapper[node][i].available = 0;
++			napi_wrapper[node][i].idx = idx;
++			napi_wrapper[node][i].cpu = cpu;
++			napi_wrapper[node][i].cxt = cxt;
++			spin_unlock_irqrestore(&oen->napi_alloc_lock, flags);
++			return &napi_wrapper[node][i];
++		}
++	}
++
++	spin_unlock_irqrestore(&oen->napi_alloc_lock, flags);
++	return NULL;
++}
++
++/* octeon_cpu_napi_sched:	Schedule a napi for execution. The napi will
++ *				start executing on the cpu calling this
++ *				function.
++ *
++ *  info:			Pointer to the napi to schedule for execution.
++ */
++static void octeon_cpu_napi_sched(void	*info)
++{
++	struct napi_struct		*napi = info;
++	napi_schedule(napi);
++}
++
++/* octeon3_rm_napi_from_cxt:	Remove a napi from a receive context.
++ *
++ *  node:			Node napi belongs to.
++ *  napiw:			Pointer to napi to remove.
++ *
++ *  returns:			0 on success, otherwise a negative error code.
++ */
++static int octeon3_rm_napi_from_cxt(int				node,
++				    struct octeon3_napi_wrapper	*napiw)
++{
++	struct octeon3_ethernet_node	*oen;
++	struct octeon3_rx		*cxt;
++	int				idx;
++	unsigned long			flags;
++
++	oen = octeon3_eth_node + node;
++	cxt = napiw->cxt;
++	idx = napiw->idx;
++
++	/* Free the napi block */
++	spin_lock_irqsave(&oen->napi_alloc_lock, flags);
++	octeon3_cpu_napi_cnt[napiw->cpu]--;
++	napiw->available = 1;
++	napiw->idx = -1;
++	napiw->cpu = -1;
++	napiw->cxt = NULL;
++	spin_unlock_irqrestore(&oen->napi_alloc_lock, flags);
++
++	/* Free the napi idx */
++	spin_lock_irqsave(&cxt->napi_idx_lock, flags);
++	bitmap_clear(cxt->napi_idx_bitmap, idx, 1);
++	spin_unlock_irqrestore(&cxt->napi_idx_lock, flags);
++
++	return 0;
++}
++
++/* octeon3_add_napi_to_cxt:	Add a napi to a receive context.
++ *
++ *  cxt:			Pointer to receive context.
++ *
++ *  returns:			0 on success, otherwise a negative error code.
++ */
++static int octeon3_add_napi_to_cxt(struct octeon3_rx *cxt)
++{
++	struct octeon3_napi_wrapper	*napiw;
++	struct octeon3_ethernet		*priv = cxt->parent;
++	int				idx;
++	unsigned long			flags;
++	int				rc;
++
++	/* Get a free napi idx */
++	spin_lock_irqsave(&cxt->napi_idx_lock, flags);
++	idx = find_first_zero_bit(cxt->napi_idx_bitmap, CVMX_MAX_CORES);
++	if (unlikely(idx >= CVMX_MAX_CORES)) {
++		spin_unlock_irqrestore(&cxt->napi_idx_lock, flags);
++		return -ENOMEM;
++	}
++	bitmap_set(cxt->napi_idx_bitmap, idx, 1);
++	spin_unlock_irqrestore(&cxt->napi_idx_lock, flags);
++
++	/* Get a free napi block */
++	napiw = octeon3_napi_alloc(cxt, idx, -1);
++	if (unlikely(napiw == NULL)) {
++		spin_lock_irqsave(&cxt->napi_idx_lock, flags);
++		bitmap_clear(cxt->napi_idx_bitmap, idx, 1);
++		spin_unlock_irqrestore(&cxt->napi_idx_lock, flags);
++		return -ENOMEM;
++	}
++
++	rc = smp_call_function_single(napiw->cpu, octeon_cpu_napi_sched,
++				      &napiw->napi, 0);
++	if (unlikely(rc))
++		octeon3_rm_napi_from_cxt(priv->numa_node, napiw);
++
++	return rc;
++}
++
++/* Receive one packet.
++ * returns the number of RX buffers consumed.
++ */
++static int octeon3_eth_rx_one(struct octeon3_rx *rx, bool is_async,
++			      bool req_next)
++{
++	int segments;
++	int ret;
++	unsigned int packet_len;
++	cvmx_wqe_78xx_t *work;
++	u8 *data;
++	int len_remaining;
++	struct sk_buff *skb;
++	union cvmx_buf_ptr_pki packet_ptr;
++	struct wr_ret r;
++	struct octeon3_ethernet *priv = rx->parent;
++	void **buf;
++	u64 gaura;
++
++	if (is_async == true)
++		r = octeon3_eth_get_work_response_async();
++	else
++		r = octeon3_eth_work_request_grp_sync(rx->rx_grp,
++						      CVMX_POW_NO_WAIT);
++	work = r.work;
++	if (!work)
++		return 0;
++
++	/* Request the next work so it'll be ready when we need it */
++	if (is_async == true && req_next)
++		octeon3_eth_get_work_async(rx->rx_grp);
++
++	skb = octeon3_eth_work_to_skb(work);
++
++	/* Save the aura and node this skb came from to allow the pko to free
++	 * the skb back to the correct aura. A magic number is also added to
++	 * later verify the skb came from the fpa.
++	 *
++	 *  63                                    12 11  10 9                  0
++	 * ---------------------------------------------------------------------
++	 * |                  magic                 | node |        aura       |
++	 * ---------------------------------------------------------------------
++	 */
++	buf = (void **)PTR_ALIGN(skb->head, 128);
++	gaura = SKB_AURA_MAGIC | work->word0.aura;
++	buf[SKB_AURA_OFFSET] = (void *)gaura;
++
++	segments = work->word0.bufs;
++	ret = segments;
++	packet_ptr = work->packet_ptr;
++//	pr_err("RX %016lx.%016lx.%016lx\n",
++//	       (unsigned long)work->word0.u64, (unsigned long)work->word1.u64, (unsigned long)work->word2.u64);
++	if (unlikely(work->word2.err_level <= CVMX_PKI_ERRLEV_E_LA &&
++		     work->word2.err_code != CVMX_PKI_OPCODE_RE_NONE)) {
++		atomic64_inc(&priv->rx_errors);
++		switch (work->word2.err_code) {
++		case CVMX_PKI_OPCODE_RE_JABBER:
++			atomic64_inc(&priv->rx_length_errors);
++			break;
++		case CVMX_PKI_OPCODE_RE_FCS:
++			atomic64_inc(&priv->rx_crc_errors);
++			break;
++		}
++		data = phys_to_virt(packet_ptr.addr);
++		for (;;) {
++			dev_kfree_skb_any(skb);
++			segments--;
++			if (segments <= 0)
++				break;
++			packet_ptr.u64 = *(u64 *)(data - 8);
++#ifndef __LITTLE_ENDIAN
++			if (OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_X)) {
++				/* PKI_BUFLINK_S's are endian-swapped */
++				packet_ptr.u64 = swab64(packet_ptr.u64);
++			}
++#endif
++			data = phys_to_virt(packet_ptr.addr);
++			skb = octeon3_eth_work_to_skb((void *)round_down((unsigned long)data, 128ul));
++		}
++		goto out;
++	}
++
++	packet_len = work->word1.len;
++	data = phys_to_virt(packet_ptr.addr);
++	skb->data = data;
++	skb->len = packet_len;
++	len_remaining = packet_len;
++	if (segments == 1) {
++		/* Strip the ethernet fcs */
++		skb->len -= 4;
++		skb_set_tail_pointer(skb, skb->len);
++	} else {
++		bool first_frag = true;
++		struct sk_buff *current_skb = skb;
++		struct sk_buff *next_skb = NULL;
++		unsigned int segment_size;
++
++		skb_frag_list_init(skb);
++		for (;;) {
++			segment_size = (segments == 1) ? len_remaining : packet_ptr.size;
++			len_remaining -= segment_size;
++			if (!first_frag) {
++				current_skb->len = segment_size;
++				skb->data_len += segment_size;
++				skb->truesize += current_skb->truesize;
++			}
++			skb_set_tail_pointer(current_skb, segment_size);
++			segments--;
++			if (segments == 0)
++				break;
++			packet_ptr.u64 = *(u64 *)(data - 8);
++#ifndef __LITTLE_ENDIAN
++			if (OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_X)) {
++				/* PKI_BUFLINK_S's are endian-swapped */
++				packet_ptr.u64 = swab64(packet_ptr.u64);
++#if defined(CONFIG_CAVIUM_NET_PACKET_FWD_OFFLOAD)
++				/* Comment: Store that swapped
++				 * packet pointer back
++				 * Just in case anyone want to use it later
++				 */
++				*(u64 *)(data - 8) = packet_ptr.u64;
++#endif
++			}
++#endif
++			data = phys_to_virt(packet_ptr.addr);
++			next_skb = octeon3_eth_work_to_skb((void *)round_down((unsigned long)data, 128ul));
++			if (first_frag) {
++				next_skb->next = skb_shinfo(current_skb)->frag_list;
++				skb_shinfo(current_skb)->frag_list = next_skb;
++			} else {
++				current_skb->next = next_skb;
++				next_skb->next = NULL;
++			}
++			current_skb = next_skb;
++			first_frag = false;
++			current_skb->data = data;
++		}
++
++		/* Strip the ethernet fcs */
++		pskb_trim(skb, skb->len - 4);
++	}
++
++	if (likely(priv->netdev->flags & IFF_UP)) {
++		skb_checksum_none_assert(skb);
++
++#if IS_ENABLED(CONFIG_OCTEON3_ETHERNET_SRIO)
++		if (priv->mac_type == SRIO_MAC) {
++			__skb_pull(skb,
++				   sizeof(struct cvmx_srio_rx_message_header));
++		}
++#endif
++
++		skb->protocol = eth_type_trans(skb, priv->netdev);
++		skb->dev = priv->netdev;
++		if (priv->netdev->features & NETIF_F_RXCSUM) {
++			if ((work->word2.lc_hdr_type == CVMX_PKI_LTYPE_E_IP4 ||
++			     work->word2.lc_hdr_type == CVMX_PKI_LTYPE_E_IP6) &&
++			    (work->word2.lf_hdr_type == CVMX_PKI_LTYPE_E_TCP ||
++			     work->word2.lf_hdr_type == CVMX_PKI_LTYPE_E_UDP ||
++			     work->word2.lf_hdr_type == CVMX_PKI_LTYPE_E_SCTP))
++				if (work->word2.err_code == 0)
++					skb->ip_summed = CHECKSUM_UNNECESSARY;
++		}
++
++		if (unlikely(priv->intercept_cb)) {
++			enum cvm_oct_callback_result cb_result;
++
++			cb_result = priv->intercept_cb(priv->netdev, work, skb);
++			switch (cb_result) {
++			case CVM_OCT_PASS:
++				netif_receive_skb(skb);
++				break;
++			case CVM_OCT_DROP:
++				atomic64_inc(&priv->rx_dropped);
++				dev_kfree_skb_any(skb);
++				break;
++			case CVM_OCT_TAKE_OWNERSHIP_WORK:
++				/* Interceptor took our work, but we need to
++				 * free the skbuff. This case is not supported
++				 * as it's impossible to free the skb without
++				 * freeing the work.
++				 */
++#if defined(CONFIG_CAVIUM_NET_PACKET_FWD_OFFLOAD)
++				/* Comment: But since this was the result
++				 * to be supported
++				 * when dis_wq_dat is not clear
++				 * i.e when first data
++				 * is not present in the left over
++				 * space of work.
++				 * For now since dis_wq_dat is clear,
++				 * freeing skb == freeing work. Hence falling
++				 * through without complaining.
++				 */
++#else
++				WARN_ONCE(true,
++					  "unsupported intercept result %d",
++					  cb_result);
++				break;
++#endif
++			case CVM_OCT_TAKE_OWNERSHIP_SKB:
++				/* Interceptor took our packet */
++				break;
++			}
++		} else
++			netif_receive_skb(skb);
++	} else {
++		/* Drop any packet received for a device that isn't up */
++		atomic64_inc(&priv->rx_dropped);
++		dev_kfree_skb_any(skb);
++	}
++out:
++	return ret;
++}
++
++static int octeon3_eth_napi(struct napi_struct *napi, int budget)
++{
++	int rx_count = 0;
++	struct octeon3_napi_wrapper *napiw;
++	struct octeon3_rx *cxt;
++	struct octeon3_ethernet *priv;
++	union cvmx_sso_grpx_aq_cnt aq_cnt;
++	int idx;
++	int napis_inuse;
++	int n = 0;
++	int n_bufs = 0;
++	u64 old_scratch;
++
++	napiw = container_of(napi, struct octeon3_napi_wrapper, napi);
++	cxt = napiw->cxt;
++	priv = cxt->parent;
++
++	/* Get the amount of work pending */
++	aq_cnt.u64 = cvmx_read_csr_node(priv->numa_node,
++					CVMX_SSO_GRPX_AQ_CNT(cxt->rx_grp));
++
++	/* Allow the last thread to add/remove threads if the work
++	 * incremented/decremented by more than what the current number
++	 * of threads can support.
++	 */
++	idx = find_last_bit(cxt->napi_idx_bitmap, CVMX_MAX_CORES);
++	napis_inuse = bitmap_weight(cxt->napi_idx_bitmap, CVMX_MAX_CORES);
++
++	if (napiw->idx == idx) {
++		if (aq_cnt.s.aq_cnt > napis_inuse * 32)
++			octeon3_add_napi_to_cxt(cxt);
++		else if (napiw->idx > 0 &&
++			 aq_cnt.s.aq_cnt < (napis_inuse - 1) * 32) {
++			napi_complete(napi);
++			octeon3_rm_napi_from_cxt(priv->numa_node, napiw);
++			return 0;
++		}
++	}
++
++	if (likely(USE_ASYNC_IOBDMA)) {
++		/* Save scratch in case userspace is using it */
++		CVMX_SYNCIOBDMA;
++		old_scratch = cvmx_scratch_read64(CVMX_SCR_SCRATCH);
++
++		octeon3_eth_get_work_async(cxt->rx_grp);
++	}
++
++	while (rx_count < budget) {
++		n = 0;
++
++		if (likely(USE_ASYNC_IOBDMA)) {
++			bool req_next = rx_count < (budget - 1) ? true : false;
++
++			n = octeon3_eth_rx_one(cxt, true, req_next);
++		} else
++			n = octeon3_eth_rx_one(cxt, false, false);
++
++		if (n == 0) {
++			break;
++		}
++
++		n_bufs += n;
++		rx_count++;
++	}
++
++	/* Wake up worker threads */
++	n_bufs = atomic64_add_return(n_bufs, &priv->buffers_needed);
++	if (n_bufs >= 32) {
++		struct octeon3_ethernet_node *oen;
++
++		oen = octeon3_eth_node + priv->numa_node;
++		atomic_set(&oen->workers[0].kick, 1);
++		wake_up(&oen->workers[0].queue);
++	}
++
++	/* Stop the thread when no work is pending */
++	if (rx_count < budget) {
++		napi_complete(napi);
++
++		if (napiw->idx > 0) {
++			octeon3_rm_napi_from_cxt(priv->numa_node, napiw);
++		} else {
++			octeon3_eth_sso_irq_set_armed(cxt->parent->numa_node,
++						      cxt->rx_grp, true);
++		}
++	}
++
++	if (likely(USE_ASYNC_IOBDMA)) {
++		/* Restore the scratch area */
++		cvmx_scratch_write64(CVMX_SCR_SCRATCH, old_scratch);
++	}
++
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++	octeon_sfp_update(priv->netdev, SFP_TX_RX, 0, 0);
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020*/
++
++	return rx_count;
++}
++
++/* octeon3_napi_init_node:	Initialize the node napis.
++ *
++ *  node:			Node napis belong to.
++ *  netdev:			Default network device used to initialize the
++ *				napis.
++ *
++ *  returns:			0 on success, otherwise a negative error code.
++ */
++static int octeon3_napi_init_node(int node, struct net_device *netdev)
++{
++	struct octeon3_ethernet_node	*oen;
++	unsigned long			flags;
++	int				i;
++
++	oen = octeon3_eth_node + node;
++	spin_lock_irqsave(&oen->napi_alloc_lock, flags);
++
++	if (oen->napi_init_done)
++		goto done;
++
++	for (i = 0; i < MAX_NAPIS_PER_NODE; i++) {
++		/* Mainline 6.1 dropped the weight argument from netif_napi_add;
++		 * use netif_napi_add_weight to keep the explicit budget of 32. */
++		netif_napi_add_weight(netdev, &napi_wrapper[node][i].napi,
++				      octeon3_eth_napi, 32);
++		napi_enable(&napi_wrapper[node][i].napi);
++		napi_wrapper[node][i].available = 1;
++		napi_wrapper[node][i].idx = -1;
++		napi_wrapper[node][i].cpu = -1;
++		napi_wrapper[node][i].cxt = NULL;
++	}
++
++	oen->napi_init_done = true;
++ done:
++	spin_unlock_irqrestore(&oen->napi_alloc_lock, flags);
++	return 0;
++
++}
++
++//#define BROKEN_SIMULATOR_CSUM 1
++
++static void ethtool_get_drvinfo(struct net_device *netdev,
++				struct ethtool_drvinfo *info)
++{
++	strcpy(info->driver, "octeon3-ethernet");
++	strcpy(info->version, "1.0");
++	strcpy(info->bus_info, "Builtin");
++}
++
++static const struct ethtool_ops octeon3_ethtool_ops = {
++	.get_drvinfo = ethtool_get_drvinfo,
++	.get_link_ksettings = bgx_port_ethtool_get_link_ksettings,
++	.set_link_ksettings = bgx_port_ethtool_set_link_ksettings,
++	.nway_reset = bgx_port_ethtool_nway_reset,
++	.get_link = ethtool_op_get_link,
++};
++
++static int octeon3_eth_ndo_change_mtu(struct net_device *netdev, int new_mtu)
++{
++	if (OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_X)) {
++		int fifo_size;
++		int max_mtu = 1500;
++		struct octeon3_ethernet *priv = netdev_priv(netdev);
++
++		/* On 78XX-Pass1 the mtu must be limited.  The PKO may
++		 * to lock up when calculating the L4 checksum for
++		 * large packets. How large the packets can be depends
++		 * on the amount of pko fifo assigned to the port.
++		 *
++		 *   FIFO size                Max frame size
++		 *	2.5 KB				1920
++		 *	5.0 KB				4480
++		 *     10.0 KB				9600
++		 *
++		 * The maximum mtu is set to the largest frame size minus the
++		 * l2 header.
++		 */
++		fifo_size = cvmx_pko3_port_fifo_size(priv->xiface, priv->port_index);
++
++		switch (fifo_size) {
++		case 2560:
++			max_mtu = 1920 - ETH_HLEN - ETH_FCS_LEN - (2 * VLAN_HLEN);
++			break;
++
++		case 5120:
++			max_mtu = 4480 - ETH_HLEN - ETH_FCS_LEN - (2 * VLAN_HLEN);
++			break;
++
++		case 10240:
++			max_mtu = 9600 - ETH_HLEN - ETH_FCS_LEN - (2 * VLAN_HLEN);
++			break;
++
++		default:
++			break;
++		}
++		if (new_mtu > max_mtu) {
++			netdev_warn(netdev, "Maximum MTU supported is %d", max_mtu);
++			return -EINVAL;
++		}
++	}
++	return bgx_port_change_mtu(netdev, new_mtu);
++}
++
++static int octeon3_eth_common_ndo_init(struct net_device	*netdev,
++				       int			extra_skip)
++{
++	struct octeon3_ethernet *priv = netdev_priv(netdev);
++	struct octeon3_ethernet_node *oen = octeon3_eth_node + priv->numa_node;
++	struct cvmx_pki_port_config pki_prt_cfg;
++	struct cvmx_pki_prt_schd *prt_schd = NULL;
++	union cvmx_pki_aurax_cfg pki_aura_cfg;
++	union cvmx_pki_qpg_tblx qpg_tbl;
++	int ipd_port, node_dq;
++	int base_rx_grp[MAX_RX_CONTEXTS];
++	int first_skip, later_skip;
++	struct cvmx_xport xdq;
++	int r, i;
++	cvmx_fpa3_gaura_t aura;
++
++	netif_carrier_off(netdev);
++
++	/* Mainline 6.6+ removed NETIF_F_LLTX; equivalent behavior is now opt-in
++	 * via netdev->lltx = true (set after register_netdev returns). */
++	netdev->features |=
++		NETIF_F_SG |
++		NETIF_F_FRAGLIST |
++		NETIF_F_RXCSUM
++#ifndef BROKEN_SIMULATOR_CSUM
++		|
++		NETIF_F_IP_CSUM |
++		NETIF_F_IPV6_CSUM
++#endif
++		;
++	netdev->lltx = true;
++
++	if (!OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_X))
++		netdev->features |= NETIF_F_SCTP_CRC;
++
++	if (octeon_has_feature(OCTEON_FEATURE_TSO))
++		netdev->features |= NETIF_F_TSO | NETIF_F_TSO6;
++
++	/* Set user changable settings */
++	netdev->hw_features = netdev->features;
++
++	priv->rx_buf_count = num_packet_buffers;
++
++	ipd_port = cvmx_helper_get_ipd_port(priv->xiface, priv->port_index);
++
++	r =  __cvmx_pko3_config_gen_interface(priv->xiface, priv->port_index, 1, false);
++	if (r) {
++		dev_err(netdev->dev.parent, "__cvmx_pko3_config_gen_interface: %d\n", r);
++		return -ENODEV;
++	}
++
++	r = __cvmx_pko3_helper_dqs_activate(priv->xiface, priv->port_index, false);
++	if (r < 0) {
++		dev_err(netdev->dev.parent, "__cvmx_pko3_helper_dqs_activate: %d\n", r);
++		return -ENODEV;
++	}
++
++	node_dq = cvmx_pko3_get_queue_base(ipd_port);
++	xdq = cvmx_helper_ipd_port_to_xport(node_dq);
++
++	priv->pko_queue = xdq.port;
++	r = octeon_fpa3_aura_init(oen->pki_packet_pool, -1, &aura,
++				  num_packet_buffers, num_packet_buffers * 2);
++	if (r)
++		return r;
++	priv->pki_laura = aura.laura;
++	aura2bufs_needed[priv->numa_node][priv->pki_laura] =
++		&priv->buffers_needed;
++
++	*base_rx_grp = -1;
++	r = cvmx_sso_reserve_group_range(priv->numa_node, base_rx_grp, rx_contexts);
++	if (r) {
++		dev_err(netdev->dev.parent, "Failed to allocated SSO group\n");
++		r = -ENODEV;
++		goto err_aura;
++	}
++	for (i = 0; i < rx_contexts; i++) {
++		priv->rx_cxt[i].rx_grp = base_rx_grp[i];
++		priv->rx_cxt[i].parent = priv;
++
++		if (OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_X)) {
++			octeon3_eth_sso_pass1_limit(priv->numa_node,
++						    priv->rx_cxt[i].rx_grp);
++		}
++	}
++	priv->num_rx_cxt = rx_contexts;
++
++	priv->tx_complete_grp = oen->tx_complete_grp;
++	priv->pki_pkind = cvmx_helper_get_pknd(priv->xiface, priv->port_index);
++	dev_info(netdev->dev.parent, "rx sso grp:%d..%d aura:%d pknd:%d pko_queue:%d\n",
++		*base_rx_grp, *(base_rx_grp + priv->num_rx_cxt - 1), priv->pki_laura, priv->pki_pkind, priv->pko_queue);
++
++	prt_schd = kzalloc(sizeof(*prt_schd), GFP_KERNEL);
++	if (!prt_schd) {
++		r = -ENOMEM;
++		goto err_groups;
++	}
++
++	prt_schd->style = -1; /* Allocate net style per port */
++	prt_schd->qpg_base = -1;
++	prt_schd->aura_per_prt = true;
++	prt_schd->aura_num = priv->pki_laura;
++	prt_schd->sso_grp_per_prt = true;
++	prt_schd->sso_grp = octeon3_eth_lgrp_to_ggrp(priv->numa_node, *base_rx_grp);
++	prt_schd->qpg_qos = CVMX_PKI_QPG_QOS_NONE;
++
++	cvmx_helper_pki_init_port(ipd_port, prt_schd);
++	kfree(prt_schd);
++	cvmx_pki_get_port_config(ipd_port, &pki_prt_cfg);
++
++	pki_prt_cfg.style_cfg.parm_cfg.ip6_udp_opt = false;
++	pki_prt_cfg.style_cfg.parm_cfg.lenerr_en = true;
++	pki_prt_cfg.style_cfg.parm_cfg.maxerr_en = false;
++	pki_prt_cfg.style_cfg.parm_cfg.minerr_en = false;
++	pki_prt_cfg.style_cfg.parm_cfg.fcs_strip = false;
++	pki_prt_cfg.style_cfg.parm_cfg.ip6_udp_opt = false;
++	pki_prt_cfg.style_cfg.parm_cfg.ip6_udp_opt = false;
++	pki_prt_cfg.style_cfg.parm_cfg.wqe_skip = 1 * 128;
++#if defined(CONFIG_CAVIUM_IPFWD_OFFLOAD)
++	/* Comment: Need to reserve more bytes in the
++	 * first buffer in order to accommodate bigger L2 Header
++	 * when packet is being forwarded from one port to other port
++	 */
++	first_skip = 8 * 28 + extra_skip;
++#else
++	first_skip = 8 * 21 + extra_skip;
++#endif
++	later_skip = 8 * 16;
++	pki_prt_cfg.style_cfg.parm_cfg.first_skip = first_skip;
++	pki_prt_cfg.style_cfg.parm_cfg.later_skip = later_skip;
++#ifdef __LITTLE_ENDIAN
++	pki_prt_cfg.style_cfg.parm_cfg.pkt_lend = true;
++#else
++	pki_prt_cfg.style_cfg.parm_cfg.pkt_lend = false;
++#endif
++	pki_prt_cfg.style_cfg.parm_cfg.tag_type = CVMX_SSO_TAG_TYPE_UNTAGGED;
++	pki_prt_cfg.style_cfg.parm_cfg.qpg_dis_grptag = false;
++	pki_prt_cfg.style_cfg.parm_cfg.dis_wq_dat = false;
++
++	pki_prt_cfg.style_cfg.parm_cfg.csum_lb = true;
++	pki_prt_cfg.style_cfg.parm_cfg.csum_lc = true;
++	pki_prt_cfg.style_cfg.parm_cfg.csum_ld = true;
++	pki_prt_cfg.style_cfg.parm_cfg.csum_le = true;
++	pki_prt_cfg.style_cfg.parm_cfg.csum_lf = true;
++	pki_prt_cfg.style_cfg.parm_cfg.csum_lg = false;
++
++	pki_prt_cfg.style_cfg.parm_cfg.len_lb = false;
++	pki_prt_cfg.style_cfg.parm_cfg.len_lc = true;
++	pki_prt_cfg.style_cfg.parm_cfg.len_ld = false;
++	pki_prt_cfg.style_cfg.parm_cfg.len_le = false;
++	pki_prt_cfg.style_cfg.parm_cfg.len_lf = true;
++	pki_prt_cfg.style_cfg.parm_cfg.len_lg = false;
++
++	pki_prt_cfg.style_cfg.parm_cfg.mbuff_size = (packet_buffer_size - 128) & ~0xf;
++
++	pki_prt_cfg.style_cfg.tag_cfg.tag_fields.tag_vni = 0;
++	pki_prt_cfg.style_cfg.tag_cfg.tag_fields.tag_gtp = 0;
++	pki_prt_cfg.style_cfg.tag_cfg.tag_fields.tag_spi = 0;
++	pki_prt_cfg.style_cfg.tag_cfg.tag_fields.tag_sync = 0;
++	pki_prt_cfg.style_cfg.tag_cfg.tag_fields.ip_prot_nexthdr = 0;
++	pki_prt_cfg.style_cfg.tag_cfg.tag_fields.second_vlan = 0;
++	pki_prt_cfg.style_cfg.tag_cfg.tag_fields.first_vlan = 0;
++	pki_prt_cfg.style_cfg.tag_cfg.tag_fields.mpls_label = 0;
++	pki_prt_cfg.style_cfg.tag_cfg.tag_fields.input_port = 0;
++	pki_prt_cfg.style_cfg.tag_cfg.tag_fields.layer_b_dst = 1;
++	pki_prt_cfg.style_cfg.tag_cfg.tag_fields.layer_c_dst = 1;
++	pki_prt_cfg.style_cfg.tag_cfg.tag_fields.layer_d_dst = 1;
++	pki_prt_cfg.style_cfg.tag_cfg.tag_fields.layer_e_dst = 1;
++	pki_prt_cfg.style_cfg.tag_cfg.tag_fields.layer_f_dst = 1;
++	pki_prt_cfg.style_cfg.tag_cfg.tag_fields.layer_g_dst = 1;
++	pki_prt_cfg.style_cfg.tag_cfg.tag_fields.layer_b_src = 1;
++	pki_prt_cfg.style_cfg.tag_cfg.tag_fields.layer_c_src = 1;
++	pki_prt_cfg.style_cfg.tag_cfg.tag_fields.layer_d_src = 1;
++	pki_prt_cfg.style_cfg.tag_cfg.tag_fields.layer_e_src = 1;
++	pki_prt_cfg.style_cfg.tag_cfg.tag_fields.layer_f_src = 1;
++	pki_prt_cfg.style_cfg.tag_cfg.tag_fields.layer_g_src = 1;
++
++	cvmx_pki_set_port_config(ipd_port, &pki_prt_cfg);
++
++	i = 0;
++	while ((priv->num_rx_cxt & (1 << i)) == 0)
++		i++;
++
++	qpg_tbl.u64 = cvmx_read_csr_node(priv->numa_node, CVMX_PKI_QPG_TBLX(pki_prt_cfg.style_cfg.parm_cfg.qpg_base));
++	qpg_tbl.s.grptag_ok = i;
++	qpg_tbl.s.grptag_bad = i;
++	cvmx_write_csr_node(priv->numa_node,
++			    CVMX_PKI_QPG_TBLX(pki_prt_cfg.style_cfg.parm_cfg.qpg_base),
++			    qpg_tbl.u64);
++	pki_aura_cfg.u64 = 0;
++	pki_aura_cfg.s.ena_red = 1;
++	cvmx_write_csr_node(priv->numa_node, CVMX_PKI_AURAX_CFG(priv->pki_laura), pki_aura_cfg.u64);
++
++	cvmx_write_csr_node(priv->numa_node, CVMX_PKI_STATX_STAT0(priv->pki_pkind), 0);
++	priv->last_packets = 0;
++
++	cvmx_write_csr_node(priv->numa_node, CVMX_PKI_STATX_STAT1(priv->pki_pkind), 0);
++	priv->last_octets = 0;
++
++	cvmx_write_csr_node(priv->numa_node, CVMX_PKI_STATX_STAT3(priv->pki_pkind), 0);
++	priv->last_dropped = 0;
++
++	octeon3_napi_init_node(priv->numa_node, netdev);
++
++	/* Register ethtool methods */
++	netdev->ethtool_ops = &octeon3_ethtool_ops;
++
++	return 0;
++err_groups:
++	cvmx_sso_release_group_range(priv->numa_node, priv->rx_cxt[0].rx_grp,
++				     rx_contexts);
++err_aura:
++	aura2bufs_needed[priv->numa_node][priv->pki_laura] = NULL;
++	cvmx_fpa3_release_aura(__cvmx_fpa3_gaura(priv->numa_node,
++						 priv->pki_laura));
++	kfree(prt_schd);
++	return r;
++}
++
++static void octeon3_eth_ndo_uninit(struct net_device *netdev);
++
++static int octeon3_eth_bgx_ndo_init(struct net_device *netdev)
++{
++	struct octeon3_ethernet	*priv = netdev_priv(netdev);
++	const u8		*mac;
++	int			r;
++
++	r = octeon3_eth_common_ndo_init(netdev, 0);
++	if (r)
++		return r;
++
++	/* Padding and FCS are done in BGX */
++	r = cvmx_pko3_interface_options(priv->xiface, priv->port_index, false,
++					false, 0);
++	if (r) {
++		dev_err(netdev->dev.parent,
++			"cvmx_pko3_interface_options: %d\n", r);
++		octeon3_eth_ndo_uninit(netdev);
++		return -ENODEV;
++	}
++
++	mac = bgx_port_get_mac(netdev);
++	if (mac && is_valid_ether_addr(mac)) {
++		eth_hw_addr_set(netdev, mac);
++		netdev->addr_assign_type &= ~NET_ADDR_RANDOM;
++	} else {
++		eth_hw_addr_random(netdev);
++	}
++
++	bgx_port_set_rx_filtering(netdev);
++	octeon3_eth_ndo_change_mtu(netdev, netdev->mtu);
++
++	return 0;
++}
++
++static void octeon3_eth_ndo_uninit(struct net_device *netdev)
++{
++	struct octeon3_ethernet	*priv = netdev_priv(netdev);
++	int			ipd_port;
++
++	/* Shutdwon pki for this interface */
++	ipd_port = cvmx_helper_get_ipd_port(priv->xiface, priv->port_index);
++	cvmx_helper_pki_port_shutdown(ipd_port);
++	cvmx_fpa3_release_aura(__cvmx_fpa3_gaura(priv->numa_node,
++						 priv->pki_laura));
++	aura2bufs_needed[priv->numa_node][priv->pki_laura] = NULL;
++
++	/* Shutdown pko for this interface */
++	cvmx_helper_pko3_shut_interface(priv->xiface);
++
++	/* Free the receive contexts sso groups */
++	cvmx_sso_release_group_range(priv->numa_node, priv->rx_cxt[0].rx_grp,
++				     rx_contexts);
++
++	return;
++}
++
++static irqreturn_t octeon3_eth_rx_handler(int irq, void *info)
++{
++	struct octeon3_rx *rx = info;
++
++	/* Disarm the irq. */
++	octeon3_eth_sso_irq_set_armed(rx->parent->numa_node, rx->rx_grp, false);
++
++	napi_schedule(&rx->napiw->napi);
++	return IRQ_HANDLED;
++}
++
++static int octeon3_eth_common_ndo_open(struct net_device *netdev)
++{
++	struct octeon3_ethernet *priv = netdev_priv(netdev);
++	struct irq_domain *d = octeon_irq_get_block_domain(priv->numa_node, SSO_INTSN_EXE);
++	struct octeon3_rx *rx;
++	int idx;
++	int i;
++	int r;
++
++	for (i = 0; i < priv->num_rx_cxt; i++) {
++		unsigned int	sso_intsn;
++		int		cpu;
++
++		rx = priv->rx_cxt + i;
++		sso_intsn = SSO_INTSN_EXE << 12 | rx->rx_grp;
++
++		spin_lock_init(&rx->napi_idx_lock);
++
++		if (!d) {
++			netdev_err(netdev, "no SSO IRQ domain on node %u\n",
++				   priv->numa_node);
++			return -ENODEV;
++		}
++		rx->rx_irq = irq_create_mapping(d, sso_intsn);
++		if (!rx->rx_irq) {
++			netdev_err(netdev, "ERROR: Couldn't map hwirq: %x\n",
++				   sso_intsn);
++			r = -EINVAL;
++			goto err1;
++		}
++		{
++			struct irq_data *id = irq_get_irq_data(rx->rx_irq);
++
++			if (id)
++				irqd_set_trigger_type(id, IRQ_TYPE_EDGE_RISING);
++		}
++		r = request_irq(rx->rx_irq, octeon3_eth_rx_handler, 0,
++				netdev_name(netdev), rx);
++		if (r) {
++			netdev_err(netdev, "ERROR: Couldn't request irq: %d\n",
++				   rx->rx_irq);
++			r = -ENOMEM;
++			goto err2;
++		}
++
++		octeon3_eth_gen_affinity(priv->numa_node, &rx->rx_affinity_hint);
++		irq_set_affinity_hint(rx->rx_irq, &rx->rx_affinity_hint);
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++		irq_set_affinity(rx->rx_irq, &rx->rx_affinity_hint);
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020*/
++		/* Allocate a napi index for this receive context */
++		bitmap_zero(priv->rx_cxt[i].napi_idx_bitmap, CVMX_MAX_CORES);
++		idx = find_first_zero_bit(priv->rx_cxt[i].napi_idx_bitmap,
++					 CVMX_MAX_CORES);
++		if (idx >= CVMX_MAX_CORES) {
++			netdev_err(netdev, "ERROR: Couldn't get napi index\n");
++			r = -ENOMEM;
++			goto err3;
++		}
++		bitmap_set(priv->rx_cxt[i].napi_idx_bitmap, idx, 1);
++		cpu = cpumask_first(&rx->rx_affinity_hint);
++
++		priv->rx_cxt[i].napiw = octeon3_napi_alloc(&priv->rx_cxt[i],
++							   idx, cpu);
++		if (priv->rx_cxt[i].napiw == NULL) {
++			r = -ENOMEM;
++			goto err4;
++		}
++
++		/* Arm the irq. */
++		octeon3_eth_sso_irq_set_armed(priv->numa_node, rx->rx_grp,
++					      true);
++	}
++	octeon3_eth_replenish_rx(priv, priv->rx_buf_count);
++
++	return 0;
++
++ err4:
++	bitmap_clear(priv->rx_cxt[i].napi_idx_bitmap, idx, 1);
++ err3:
++	irq_set_affinity_hint(rx->rx_irq, NULL);
++	free_irq(rx->rx_irq, rx);
++ err2:
++	irq_dispose_mapping(rx->rx_irq);
++ err1:
++	for (i--; i >= 0; i--) {
++		rx = priv->rx_cxt + i;
++		free_irq(rx->rx_irq, rx);
++		irq_dispose_mapping(rx->rx_irq);
++		octeon3_rm_napi_from_cxt(priv->numa_node,
++					 priv->rx_cxt[i].napiw);
++		priv->rx_cxt[i].napiw = NULL;
++	}
++
++	return r;
++}
++
++static int octeon3_eth_bgx_ndo_open(struct net_device *netdev)
++{
++	int	rc;
++
++	rc = octeon3_eth_common_ndo_open(netdev);
++	if (rc == 0) {
++		rc = bgx_port_enable(netdev);
++		if (rc)
++			octeon3_eth_common_ndo_stop(netdev);
++	}
++
++	return rc;
++}
++
++static int octeon3_eth_common_ndo_stop(struct net_device *netdev)
++{
++	struct octeon3_ethernet *priv = netdev_priv(netdev);
++	void **w;
++	struct sk_buff *skb;
++	struct octeon3_rx *rx;
++	int i;
++
++	/* Allow enough time for ingress in transit packets to be drained */
++	msleep(20);
++
++	/* Wait until sso has no more work for this interface */
++	for (i = 0; i < priv->num_rx_cxt; i++) {
++		rx = priv->rx_cxt + i;
++		while (cvmx_read_csr_node(priv->numa_node, CVMX_SSO_GRPX_AQ_CNT(rx->rx_grp)))
++			msleep(20);
++	}
++
++	/* Free the irq and napi context for each rx context */
++	for (i = 0; i < priv->num_rx_cxt; i++) {
++		rx = priv->rx_cxt + i;
++		octeon3_eth_sso_irq_set_armed(priv->numa_node, rx->rx_grp, false);
++		irq_set_affinity_hint(rx->rx_irq, NULL);
++		free_irq(rx->rx_irq, rx);
++		irq_dispose_mapping(rx->rx_irq);
++		rx->rx_irq = 0;
++
++		octeon3_rm_napi_from_cxt(priv->numa_node, rx->napiw);
++		rx->napiw = NULL;
++		BUG_ON(!bitmap_empty(rx->napi_idx_bitmap, CVMX_MAX_CORES));
++	}
++
++	/* Free the packet buffers */
++	for (;;) {
++		w = cvmx_fpa3_alloc(__cvmx_fpa3_gaura(priv->numa_node, priv->pki_laura));
++		if (!w)
++			break;
++		skb = w[0];
++		dev_kfree_skb(skb);
++	}
++
++	return 0;
++}
++
++static int octeon3_eth_bgx_ndo_stop(struct net_device *netdev)
++{
++	int r;
++
++	r = bgx_port_disable(netdev);
++	if (r)
++		return r;
++
++	return octeon3_eth_common_ndo_stop(netdev);
++}
++
++/* octeon3_prepare_skb_to_recycle:	Reset all the skb fields to default
++ *					values so that the skb can be reused.
++ *					Note: the data buffer is not touched.
++ *
++ *  skb:				skb to reset.
++ */
++static inline void octeon3_prepare_skb_to_recycle(struct sk_buff *skb)
++{
++	struct skb_shared_info	*shinfo;
++
++	/* Prepare the skb to be recycled */
++	skb->data_len = 0;
++	skb_frag_list_init(skb);
++	skb_release_head_state(skb);
++
++	shinfo = skb_shinfo(skb);
++	memset(shinfo, 0, offsetof(struct skb_shared_info, dataref));
++	atomic_set(&shinfo->dataref, 1);
++
++	memset(skb, 0, offsetof(struct sk_buff, tail));
++	skb->data = skb->head + NET_SKB_PAD;
++	skb_reset_tail_pointer(skb);
++	skb->truesize = sizeof(*skb) + skb_end_pointer(skb) - skb->head;
++}
++
++#if defined(CONFIG_CAVIUM_NET_PACKET_FWD_OFFLOAD)
++/* Function to transmit data directly using work.
++ * This assumes that dis_wq_dat is clear for all PKI ports
++ * and hence the first segment of data is present in the work.
++ * This function assumes that it will only be called in the context
++ * of rx handler of octeon3-ethernet module
++ */
++int octeon3_transmit_qos(
++			struct net_device *dev,
++			void *work,
++			int do_free,
++			int qos_level)
++{
++	cvmx_wqe_78xx_t *wqe = work;
++	struct octeon3_ethernet *priv = netdev_priv(dev);
++	struct octeon3_ethernet_node *oen;
++	union cvmx_pko_send_hdr send_hdr;
++	union cvmx_pko_buf_ptr buf_ptr;
++	union cvmx_pko_send_work send_work;
++	cvmx_pko_send_free_t send_free;
++	union cvmx_pko_send_mem send_mem;
++	union cvmx_pko_lmtdma_data lmtdma_data;
++	union cvmx_pko_query_rtn query_rtn;
++	union cvmx_sso_grpx_aq_cnt aq_cnt;
++	unsigned int scr_off = CVMX_PKO_LMTLINE * CVMX_CACHE_LINE_SIZE;
++	unsigned int ret_off = scr_off;
++	struct sk_buff *skb = NULL;
++	u64 magic = 0;
++	int gaura = 0;
++	bool hw_free = false;
++	void **buf = NULL;
++	void *buffers_needed = NULL;
++	void **work_wkr = NULL;
++	u64 dma_addr;
++	u16 l4_hdr = IPPROTO_MAX;
++	int l4ptr = 0;
++	unsigned int checksum_alg;
++	int numa_node = priv->numa_node;
++	int tx_complete_grp;
++	struct octeon3_tx_cpustats *tx_stats;
++
++	skb = octeon3_eth_work_to_skb(work);
++
++	oen = octeon3_eth_node + numa_node;
++	tx_complete_grp = oen->tx_complete_grp;
++
++	/* Currently depending on octeon3-ethernet and doing minimal checks
++	 * as we get work directly from octeon3-ethernet
++	 * In future we can do multiple segment free when nat_align is not set
++	 * using multiple PKO_SEND_FREE command
++	 */
++	if (do_free && !(((cvmx_wqe_t *)work)->word0.pki.bufs > 1)) {
++		buf = (void **)PTR_ALIGN(skb->head, 128);
++		magic = (uint64_t)buf[SKB_AURA_OFFSET];
++		if (likely(buf[SKB_PTR_OFFSET] == skb) &&
++				likely((magic & 0xfffffffffffff000) ==
++					 SKB_AURA_MAGIC)) {
++			int		node;
++			int		aura;
++
++			gaura = magic & 0xfff;
++			node = gaura >> 10;
++			aura = gaura & 0x3ff;
++			buffers_needed = aura2bufs_needed[node][aura];
++			buf[SKB_AURA_OFFSET] = NULL;
++
++			hw_free = true;
++		}
++	}
++
++    /* SSO can only fall behind when the skb is not recycled */
++	if (!hw_free) {
++		aq_cnt.u64 = cvmx_read_csr_node(numa_node,
++				CVMX_SSO_GRPX_AQ_CNT(tx_complete_grp));
++
++		/* Drop the packet if pko or sso are not keeping up */
++		if (aq_cnt.s.aq_cnt > 100000)
++			goto skip_xmit;
++	}
++
++	/* Adjust the port statistics. */
++	tx_stats = get_cpu_ptr(priv->tx_stats);
++	if ((tx_stats->tx_backlog_cache + 1) >
++		(MAX_TX_QUEUE_DEPTH / CVMX_MAX_CORES)) {
++		s64 backlog = atomic64_add_return(tx_stats->tx_backlog_cache,
++						 &priv->tx_backlog);
++
++		if (unlikely(backlog > MAX_TX_QUEUE_DEPTH)) {
++			/* Decrement to be able to comeback for next pkt */
++			atomic64_sub(tx_stats->tx_backlog_cache,
++					&priv->tx_backlog);
++			put_cpu_ptr(priv->tx_stats);
++			goto skip_xmit;
++		}
++		tx_stats->tx_backlog_cache = 0;
++	}
++	tx_stats->tx_backlog_cache++;
++	tx_stats->tx_packets++;
++	tx_stats->tx_octets += skb->len;
++	put_cpu_ptr(priv->tx_stats);
++
++	/* Make sure packet data writes are committed before
++	 * submitting the command below
++	 */
++
++	/* Build the pko command */
++	send_hdr.u64 = 0;
++#ifdef __LITTLE_ENDIAN
++	send_hdr.s.le = 1;
++#endif
++	if (!OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_X))
++		send_hdr.s.n2 = 1; /* Don't allocate to L2 */
++
++	send_hdr.s.total = skb->len;
++	send_hdr.s.df = 1; /* Don't automatically free to FPA */
++	send_hdr.s.ii = 1; /* Don't automatically free to FPA */
++	/* Set gaura to desired value if we need to do a free */
++	send_hdr.s.aura = gaura;
++
++	if (cvmx_wqe_is_l3_ipv4(work)) {
++		send_hdr.s.l3ptr = ETH_HLEN + cvmx_wqe_get_unused8(work);
++		send_hdr.s.ckl3 = 1;
++		l4_hdr = ip_hdr(skb)->protocol;
++		/* Workaround for ipv4 checksum calculation */
++		send_hdr.s.l4ptr = send_hdr.s.l3ptr + (4 * ip_hdr(skb)->ihl);
++		l4ptr = send_hdr.s.l4ptr;
++
++	} else if (cvmx_wqe_is_l3_ipv6(work)) {
++		send_hdr.s.l3ptr = ETH_HLEN + cvmx_wqe_get_unused8(work);
++		l4_hdr = ipv6_hdr(skb)->nexthdr;
++		l4ptr = send_hdr.s.l3ptr + sizeof(struct ipv6hdr);
++	}
++
++	checksum_alg = 1; /* UDP == 1 */
++	switch (l4_hdr) {
++	case IPPROTO_SCTP:
++		if (OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_X))
++			break;
++		checksum_alg++; /* SCTP == 3 */
++		/* Fall through */
++	case IPPROTO_TCP: /* TCP == 2 */
++		checksum_alg++;
++		/* Fall through */
++	case IPPROTO_UDP:
++		send_hdr.s.l4ptr = l4ptr;
++		send_hdr.s.ckl4 = checksum_alg;
++		break;
++	default:
++		break;
++	}
++
++	preempt_disable();
++	cvmx_scratch_write64(scr_off, send_hdr.u64);
++	scr_off += sizeof(send_hdr);
++
++	buf_ptr.u64 = 0;
++
++	if (cvmx_wqe_get_bufs(wqe) > 1)
++		buf_ptr.s.subdc3 = CVMX_PKO_SENDSUBDC_LINK;
++	else
++		buf_ptr.s.subdc3 = CVMX_PKO_SENDSUBDC_GATHER;
++
++	/* Pointer to first segment of data */
++	buf_ptr.s.addr = wqe->packet_ptr.addr;
++	buf_ptr.s.size = wqe->packet_ptr.size;
++
++	cvmx_scratch_write64(scr_off, buf_ptr.u64);
++	scr_off += sizeof(buf_ptr);
++
++	/* Subtract 1 from the tx_backlog. */
++	send_mem.u64 = 0;
++	send_mem.s.subdc4 = CVMX_PKO_SENDSUBDC_MEM;
++	send_mem.s.dsz = MEMDSZ_B64;
++	send_mem.s.alg = MEMALG_SUB;
++	send_mem.s.offset = 1;
++	send_mem.s.addr = virt_to_phys(&priv->tx_backlog);
++	cvmx_scratch_write64(scr_off, send_mem.u64);
++	scr_off += sizeof(buf_ptr);
++
++	if (do_free && hw_free) {
++		/* Subtract 1 from buffers_needed */
++		send_mem.u64 = 0;
++		send_mem.s.subdc4 = CVMX_PKO_SENDSUBDC_MEM;
++		send_mem.s.dsz = MEMDSZ_B64;
++		send_mem.s.alg = MEMALG_SUB;
++		send_mem.s.offset = 1;
++		send_mem.s.addr = virt_to_phys(buffers_needed);
++		cvmx_scratch_write64(scr_off, send_mem.u64);
++		scr_off += sizeof(send_mem);
++
++		/* Free buffer when finished with the packet */
++		buf[SKB_PTR_OFFSET] = skb;
++		send_free.u64 = 0;
++		send_free.s.subdc4 = CVMX_PKO_SENDSUBDC_FREE;
++		send_free.s.addr = virt_to_phys(buf);
++		cvmx_scratch_write64(scr_off, send_free.u64);
++		scr_off += sizeof(send_free);
++
++		octeon3_prepare_skb_to_recycle(skb);
++
++	} else if (do_free) {
++		work_wkr = (void **)skb->cb;
++		work_wkr[0] = dev;
++		work_wkr[1] = NULL;
++		/* Send work when finished with the packet. */
++		send_work.u64 = 0;
++		send_work.s.subdc4 = CVMX_PKO_SENDSUBDC_WORK;
++		send_work.s.addr = virt_to_phys(work_wkr);
++		send_work.s.tt = CVMX_POW_TAG_TYPE_NULL;
++		send_work.s.grp = octeon3_eth_lgrp_to_ggrp(priv->numa_node,
++							priv->tx_complete_grp);
++		cvmx_scratch_write64(scr_off, send_work.u64);
++		scr_off += sizeof(send_work);
++	}
++
++	/* wmb */
++	wmb();
++
++	lmtdma_data.u64 = 0;
++	lmtdma_data.s.scraddr = ret_off >> 3;
++	lmtdma_data.s.rtnlen = wait_pko_response ? 1 : 0;
++	lmtdma_data.s.did = 0x51;
++	lmtdma_data.s.node = priv->numa_node;
++	lmtdma_data.s.dq = priv->pko_queue;
++	dma_addr = 0xffffffffffffa400ull | ((scr_off & 0x78) - 8);
++	cvmx_write64_uint64(dma_addr, lmtdma_data.u64);
++	preempt_enable();
++
++	if (wait_pko_response) {
++		CVMX_SYNCIOBDMA;
++
++		query_rtn.u64 = cvmx_scratch_read64(ret_off);
++		if (unlikely(query_rtn.s.dqstatus != PKO_DQSTATUS_PASS)) {
++			netdev_err(dev, "PKO enqueue failed for fast path%llx\n",
++				   (unsigned long long)query_rtn.u64);
++
++			if (do_free)
++				dev_kfree_skb_any(skb);
++		}
++	}
++
++	return 0;
++skip_xmit:
++	tx_stats = get_cpu_ptr(priv->tx_stats);
++	tx_stats->tx_dropped++;
++	put_cpu_ptr(priv->tx_stats);
++
++	dev_kfree_skb_any(skb);
++	return -1;
++}
++EXPORT_SYMBOL(octeon3_transmit_qos);
++#endif
++
++static int octeon3_eth_ndo_start_xmit(struct sk_buff *skb, struct net_device *netdev)
++{
++	struct sk_buff *skb_tmp;
++	struct octeon3_ethernet *priv = netdev_priv(netdev);
++	unsigned int scr_off = CVMX_PKO_LMTLINE * CVMX_CACHE_LINE_SIZE;
++	unsigned int ret_off = scr_off;
++	union cvmx_pko_send_hdr send_hdr;
++	union cvmx_pko_buf_ptr buf_ptr;
++	union cvmx_pko_send_work send_work;
++	union cvmx_pko_send_mem send_mem;
++	union cvmx_pko_lmtdma_data lmtdma_data;
++	union cvmx_pko_query_rtn query_rtn;
++	union cvmx_sso_grpx_aq_cnt aq_cnt;
++	union cvmx_pko_send_tso send_tso;
++	struct octeon3_ethernet_node *oen;
++	u8 l4_hdr = 0;
++	unsigned int checksum_alg;
++	long backlog;
++	int frag_count;
++	int head_len, i;
++	u64 dma_addr;
++	void **work;
++	bool can_recycle_skb = false;
++	int gaura = 0;
++	atomic64_t *buffers_needed = NULL;
++	void **buf;
++	unsigned int mss;
++#if defined(CONFIG_CAVIUM_NET_PACKET_FWD_OFFLOAD)
++	struct octeon3_tx_cpustats *tx_stats;
++#endif
++
++	frag_count = 0;
++	if (skb_has_frag_list(skb))
++		skb_walk_frags(skb, skb_tmp)
++			frag_count++;
++
++	/* Check if the skb can be recycled (freed back to the fpa) */
++	if (recycle_skbs &&
++	    skb_shinfo(skb)->nr_frags == 0 &&
++	    skb_shared(skb) == 0 &&
++	    skb_cloned(skb) == 0 &&
++	    frag_count == 0 &&
++	    skb_shinfo(skb)->nr_frags == 0 &&
++	    skb_headroom(skb) >= 128 &&
++	    skb_end_offset(skb) >= packet_buffer_size &&
++	    skb->fclone == SKB_FCLONE_UNAVAILABLE) {
++		uint64_t	magic;
++
++		buf = (void **)PTR_ALIGN(skb->head, 128);
++		magic = (uint64_t)buf[SKB_AURA_OFFSET];
++		if (likely(buf[SKB_PTR_OFFSET] == skb) &&
++		    likely((magic & 0xfffffffffffff000) == SKB_AURA_MAGIC)) {
++			int		node;
++			int		aura;
++
++			gaura = magic & 0xfff;
++			node = gaura >> 10;
++			aura = gaura & 0x3ff;
++			buffers_needed = aura2bufs_needed[node][aura];
++			/* Only allow aura overfill of up to 5 extra buffers. */
++			if (atomic64_read(buffers_needed) > -5) {
++				can_recycle_skb = true;
++				buf[SKB_AURA_OFFSET] = NULL;
++			}
++		}
++	}
++
++	/* SSO can only fall behind when the skb is not recycled */
++	if (!can_recycle_skb) {
++		oen = octeon3_eth_node + priv->numa_node;
++		aq_cnt.u64 = cvmx_read_csr_node(oen->numa_node,
++				CVMX_SSO_GRPX_AQ_CNT(oen->tx_complete_grp));
++	}
++
++	/* Drop the packet if pko or sso are not keeping up */
++	backlog = atomic64_inc_return(&priv->tx_backlog);
++	if (unlikely(backlog > MAX_TX_QUEUE_DEPTH ||
++		     (!can_recycle_skb && aq_cnt.s.aq_cnt > 100000))) {
++		if (use_tx_queues) {
++			netif_stop_queue(netdev);
++		} else {
++			atomic64_dec(&priv->tx_backlog);
++			goto skip_xmit;
++		}
++	}
++
++	/* We have space for 11 segment pointers, If there will be
++	 * more than that, we must linearize.  The count is: 1 (base
++	 * SKB) + frag_count + nr_frags.
++	 */
++	if (unlikely(skb_shinfo(skb)->nr_frags + frag_count > 10)) {
++		if (unlikely(__skb_linearize(skb)))
++			goto skip_xmit;
++		frag_count = 0;
++	}
++
++	work = (void **)skb->cb;
++	work[0] = netdev;
++	work[1] = NULL;
++
++#if defined(CONFIG_CAVIUM_NET_PACKET_FWD_OFFLOAD)
++	tx_stats = get_cpu_ptr(priv->tx_stats);
++	tx_stats->tx_packets++;
++	tx_stats->tx_octets += skb->len;
++	/* Since we are in dev_queue_xmit(), addup the backlog cache */
++	atomic64_add(tx_stats->tx_backlog_cache, &priv->tx_backlog);
++	tx_stats->tx_backlog_cache = 0;
++	put_cpu_ptr(priv->tx_stats);
++#else
++	/* Adjust the port statistics. */
++	atomic64_inc(&priv->tx_packets);
++	atomic64_add(skb->len, &priv->tx_octets);
++#endif
++
++	/* Make sure packet data writes are committed before
++	 * submitting the command below
++	 */
++	wmb();
++
++	/* Build the pko command */
++	send_hdr.u64 = 0;
++#ifdef __LITTLE_ENDIAN
++	send_hdr.s.le = 1;
++#endif
++	if (!OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_X))
++		send_hdr.s.n2 = 1; /* Don't allocate to L2 */
++	send_hdr.s.df = 1; /* Don't automatically free to FPA */
++	send_hdr.s.total = skb->len;
++	send_hdr.s.aura = gaura;
++
++	if (skb->ip_summed != CHECKSUM_NONE &&
++	    skb->ip_summed != CHECKSUM_UNNECESSARY) {
++#ifndef BROKEN_SIMULATOR_CSUM
++		switch (skb->protocol) {
++		case __constant_htons(ETH_P_IP):
++			send_hdr.s.l3ptr = ETH_HLEN;
++			send_hdr.s.ckl3 = 1;
++			l4_hdr = ip_hdr(skb)->protocol;
++			send_hdr.s.l4ptr = ETH_HLEN + (4 * ip_hdr(skb)->ihl);
++			break;
++		case __constant_htons(ETH_P_IPV6):
++			l4_hdr = ipv6_hdr(skb)->nexthdr;
++			send_hdr.s.l3ptr = ETH_HLEN;
++			break;
++		default:
++			break;
++		}
++#endif
++		checksum_alg = 1; /* UDP == 1 */
++		switch (l4_hdr) {
++		case IPPROTO_SCTP:
++			if (OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_X))
++				break;
++			checksum_alg++; /* SCTP == 3 */
++			/* Fall through */
++		case IPPROTO_TCP: /* TCP == 2 */
++			checksum_alg++;
++			/* Fall through */
++		case IPPROTO_UDP:
++			if (skb_transport_header_was_set(skb)) {
++				int l4ptr = skb_transport_header(skb) -
++					skb->data;
++				send_hdr.s.l4ptr = l4ptr;
++				send_hdr.s.ckl4 = checksum_alg;
++			}
++			break;
++		default:
++			break;
++		}
++	}
++	preempt_disable();
++	cvmx_scratch_write64(scr_off, send_hdr.u64);
++	scr_off += sizeof(send_hdr);
++
++	/* Add the tso descriptor if needed */
++	mss = skb_shinfo(skb)->gso_size;
++	if (mss) {
++		send_tso.u64 = 0;
++		send_tso.s.l2len = 12;
++		send_tso.s.subdc4 = CVMX_PKO_SENDSUBDC_TSO;
++		send_tso.s.sb = skb_transport_offset(skb) + tcp_hdrlen(skb);
++		send_tso.s.mss = netdev->mtu + ETH_HLEN;
++		cvmx_scratch_write64(scr_off, send_tso.u64);
++		scr_off += sizeof(send_tso);
++	}
++
++	buf_ptr.u64 = 0;
++	buf_ptr.s.subdc3 = CVMX_PKO_SENDSUBDC_GATHER;
++
++	/* Add a Gather entry for each segment. */
++	head_len = skb_headlen(skb);
++	if (head_len > 0) {
++		buf_ptr.s.size = head_len;
++		buf_ptr.s.addr = virt_to_phys(skb->data);
++		cvmx_scratch_write64(scr_off, buf_ptr.u64);
++		scr_off += sizeof(buf_ptr);
++	}
++	for (i = 1; i <= skb_shinfo(skb)->nr_frags; i++) {
++		/* Mainline 5.4+ renamed struct skb_frag_struct to skb_frag_t
++		 * (typedef of bio_vec); access members via accessors. */
++		skb_frag_t *fs = skb_shinfo(skb)->frags + i - 1;
++
++		buf_ptr.s.size = skb_frag_size(fs);
++		buf_ptr.s.addr = virt_to_phys((u8 *)page_address(skb_frag_page(fs)) +
++					      skb_frag_off(fs));
++		cvmx_scratch_write64(scr_off, buf_ptr.u64);
++		scr_off += sizeof(buf_ptr);
++	}
++	skb_walk_frags(skb, skb_tmp) {
++		buf_ptr.s.addr = virt_to_phys(skb_tmp->data);
++		buf_ptr.s.size = skb_tmp->len;
++		cvmx_scratch_write64(scr_off, buf_ptr.u64);
++		scr_off += sizeof(buf_ptr);
++	}
++
++	/* Subtract 1 from the tx_backlog. */
++	send_mem.u64 = 0;
++	send_mem.s.subdc4 = CVMX_PKO_SENDSUBDC_MEM;
++	send_mem.s.dsz = MEMDSZ_B64;
++	send_mem.s.alg = MEMALG_SUB;
++	send_mem.s.offset = 1;
++	send_mem.s.addr = virt_to_phys(&priv->tx_backlog);
++	cvmx_scratch_write64(scr_off, send_mem.u64);
++	scr_off += sizeof(buf_ptr);
++
++	if (likely(can_recycle_skb)) {
++		cvmx_pko_send_free_t	send_free;
++
++		/* Account for the recycled buffer now, so any backlog
++		 * in the PKO doesn't inadvertently increase the total
++		 * number of buffers in flight for the input port.
++		 */
++		atomic64_dec(buffers_needed);
++
++		/* Free buffer when finished with the packet */
++		send_free.u64 = 0;
++		send_free.s.subdc4 = CVMX_PKO_SENDSUBDC_FREE;
++		buf[SKB_PTR_OFFSET] = skb;
++		send_free.s.addr = virt_to_phys(buf);
++		cvmx_scratch_write64(scr_off, send_free.u64);
++		scr_off += sizeof(buf_ptr);
++
++		/* Reset skb before it's freed back to the fpa */
++		octeon3_prepare_skb_to_recycle(skb);
++	} else {
++		/* Send work when finished with the packet. */
++		send_work.u64 = 0;
++		send_work.s.subdc4 = CVMX_PKO_SENDSUBDC_WORK;
++		send_work.s.addr = virt_to_phys(work);
++		send_work.s.tt = CVMX_POW_TAG_TYPE_NULL;
++		send_work.s.grp = octeon3_eth_lgrp_to_ggrp(priv->numa_node, priv->tx_complete_grp);
++		cvmx_scratch_write64(scr_off, send_work.u64);
++		scr_off += sizeof(buf_ptr);
++	}
++
++	lmtdma_data.u64 = 0;
++	lmtdma_data.s.scraddr = ret_off >> 3;
++	lmtdma_data.s.rtnlen = wait_pko_response ? 1 : 0;
++	lmtdma_data.s.did = 0x51;
++	lmtdma_data.s.node = priv->numa_node;
++	lmtdma_data.s.dq = priv->pko_queue;
++	dma_addr = 0xffffffffffffa400ull | ((scr_off & 0x78) - 8);
++	cvmx_write64_uint64(dma_addr, lmtdma_data.u64);
++	preempt_enable();
++
++	if (wait_pko_response) {
++		CVMX_SYNCIOBDMA;
++
++		query_rtn.u64 = cvmx_scratch_read64(ret_off);
++		if (unlikely(query_rtn.s.dqstatus != PKO_DQSTATUS_PASS)) {
++			netdev_err(netdev, "PKO enqueue failed %llx\n",
++				   (unsigned long long)query_rtn.u64);
++			dev_kfree_skb_any(skb);
++		}
++	}
++
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++	octeon_sfp_update(netdev, SFP_TX_RX, 0, 0);
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020*/
++
++	return NETDEV_TX_OK;
++skip_xmit:
++#if defined(CONFIG_CAVIUM_NET_PACKET_FWD_OFFLOAD)
++	tx_stats = get_cpu_ptr(priv->tx_stats);
++	tx_stats->tx_dropped++;
++	put_cpu_ptr(priv->tx_stats);
++#else
++	atomic64_inc(&priv->tx_dropped);
++#endif
++	dev_kfree_skb_any(skb);
++	return NETDEV_TX_OK;
++}
++
++static u64 read_pki_stat(int numa_node, u64 csr)
++{
++	u64 v;
++
++	/* PKI-20775, must read until not all ones. */
++	do {
++		v = cvmx_read_csr_node(numa_node, csr);
++	} while (v == 0xffffffffffffffffull);
++	return v;
++}
++
++/* Mainline 4.11+ changed ndo_get_stats64 to return void. */
++static void octeon3_eth_ndo_get_stats64(struct net_device *netdev,
++					struct rtnl_link_stats64 *s)
++{
++	struct octeon3_ethernet *priv = netdev_priv(netdev);
++	u64 packets, octets, dropped;
++	u64 delta_packets, delta_octets, delta_dropped;
++#if defined(CONFIG_CAVIUM_NET_PACKET_FWD_OFFLOAD)
++	int cpu;
++#endif
++
++	spin_lock(&priv->stat_lock);
++
++	packets = read_pki_stat(priv->numa_node, CVMX_PKI_STATX_STAT0(priv->pki_pkind));
++	octets = read_pki_stat(priv->numa_node, CVMX_PKI_STATX_STAT1(priv->pki_pkind));
++	dropped = read_pki_stat(priv->numa_node, CVMX_PKI_STATX_STAT3(priv->pki_pkind));
++
++	delta_packets = (packets - priv->last_packets) & ((1ull << 48) - 1);
++	delta_octets = (octets - priv->last_octets) & ((1ull << 48) - 1);
++	delta_dropped = (dropped - priv->last_dropped) & ((1ull << 48) - 1);
++
++	priv->last_packets = packets;
++	priv->last_octets = octets;
++	priv->last_dropped = dropped;
++
++	spin_unlock(&priv->stat_lock);
++
++	atomic64_add(delta_packets, &priv->rx_packets);
++	atomic64_add(delta_octets, &priv->rx_octets);
++	atomic64_add(delta_dropped, &priv->rx_dropped);
++
++	s->rx_packets = atomic64_read(&priv->rx_packets);
++	s->rx_bytes = atomic64_read(&priv->rx_octets);
++	s->rx_dropped = atomic64_read(&priv->rx_dropped);
++	s->rx_errors = atomic64_read(&priv->rx_errors);
++	s->rx_length_errors = atomic64_read(&priv->rx_length_errors);
++	s->rx_crc_errors = atomic64_read(&priv->rx_crc_errors);
++
++#if defined(CONFIG_CAVIUM_NET_PACKET_FWD_OFFLOAD)
++	for_each_possible_cpu(cpu) {
++		struct octeon3_tx_cpustats *statsp;
++
++		statsp = per_cpu_ptr(priv->tx_stats, cpu);
++		s->tx_packets += statsp->tx_packets;
++		s->tx_bytes += statsp->tx_octets;
++		s->tx_dropped += statsp->tx_dropped;
++	}
++#else
++	s->tx_packets = atomic64_read(&priv->tx_packets);
++	s->tx_bytes = atomic64_read(&priv->tx_octets);
++	s->tx_dropped = atomic64_read(&priv->tx_dropped);
++#endif
++}
++
++static int octeon3_eth_set_mac_address(struct net_device *netdev, void *addr)
++{
++	int r = eth_mac_addr(netdev, addr);
++
++	if (r)
++		return r;
++
++	bgx_port_set_rx_filtering(netdev);
++
++	return 0;
++}
++
++static const struct net_device_ops octeon3_eth_netdev_ops = {
++	.ndo_init		= octeon3_eth_bgx_ndo_init,
++	.ndo_uninit		= octeon3_eth_ndo_uninit,
++	.ndo_open		= octeon3_eth_bgx_ndo_open,
++	.ndo_stop		= octeon3_eth_bgx_ndo_stop,
++	.ndo_start_xmit		= octeon3_eth_ndo_start_xmit,
++	.ndo_get_stats64	= octeon3_eth_ndo_get_stats64,
++	.ndo_set_rx_mode	= bgx_port_set_rx_filtering,
++	.ndo_set_mac_address	= octeon3_eth_set_mac_address,
++	.ndo_change_mtu		= octeon3_eth_ndo_change_mtu,
++	.ndo_eth_ioctl		= bgx_port_do_ioctl,
++};
++
++#if IS_ENABLED(CONFIG_OCTEON3_ETHERNET_SRIO)
++
++static int octeon3_eth_srio_set_mac_address(struct net_device	*netdev,
++					    void		*addr)
++{
++	eth_hw_addr_set(netdev, addr + 2);
++	return 0;
++}
++
++static int octeon3_eth_srio_ndo_init(struct net_device *netdev)
++{
++	struct octeon3_ethernet		*priv = netdev_priv(netdev);
++	cvmx_xiface_t			xiface;
++	union cvmx_sriox_status_reg	status_reg;
++	int				srio_port;
++	int				extra_skip;
++	int				rc;
++
++	extra_skip = sizeof(struct cvmx_srio_rx_message_header);
++	rc = octeon3_eth_common_ndo_init(netdev, extra_skip);
++	if (rc)
++		return rc;
++
++	xiface = cvmx_helper_xiface_to_node_interface(priv->xiface);
++	srio_port = xiface.interface - SRIO_INTERFACE_OFFSET;
++
++	rc = cvmx_pko3_interface_options(priv->xiface, priv->port_index, true,
++					true, 0);
++	if (rc) {
++		dev_err(netdev->dev.parent, "cvmx_pko3_interface_options: %d\n",
++			rc);
++		octeon3_eth_ndo_uninit(netdev);
++		return -ENODEV;
++	}
++
++	status_reg.u64 = cvmx_read_csr(CVMX_SRIOX_STATUS_REG(srio_port));
++	if (!status_reg.s.access)
++		return 0;
++
++	return 0;
++}
++
++static int octeon3_eth_srio_ndo_open(struct net_device *netdev)
++{
++
++	struct octeon3_ethernet	*priv = netdev_priv(netdev);
++	cvmx_xiface_t		xiface;
++	int			srio_port;
++	struct			rio_dev *rdev;
++	struct sockaddr		sa;
++	u32			devid;
++	int			rc;
++
++	xiface = cvmx_helper_xiface_to_node_interface(priv->xiface);
++	srio_port = xiface.interface - SRIO_INTERFACE_OFFSET;
++
++	cvmx_srio_config_read32(srio_port, 0, -1, 1, 0,
++				CVMX_SRIOMAINTX_PRI_DEV_ID(srio_port), &devid);
++	sa.sa_data[0] = 0;
++	sa.sa_data[1] = 0;
++	sa.sa_data[2] = 0;
++	sa.sa_data[3] = 0;
++	if (devid >> 16) {
++		sa.sa_data[4] = 0;
++		sa.sa_data[5] = (devid >> 16) & 0xff;
++	} else {
++		sa.sa_data[4] = (devid >> 8) & 0xff;
++		sa.sa_data[5] = devid & 0xff;
++	}
++
++	netdev->netdev_ops->ndo_set_mac_address(netdev, &sa);
++
++	rdev = NULL;
++	for (;;) {
++		struct octeon3_srio_bcast_target *target;
++		rdev = rio_get_device(RIO_ANY_ID, RIO_ANY_ID, rdev);
++		if (!rdev)
++			break;
++		if (rdev->net->hport->id != srio_port)
++			continue;
++		if (rdev->destid == 0xffff)
++			continue;
++		target = kmalloc(sizeof(*target), GFP_KERNEL);
++		if (!target) {
++			WARN(1, "No memory");
++			return -ENOMEM;
++		}
++		target->destid = rdev->destid;
++		list_add(&target->list, &priv->srio_bcast);
++	}
++
++	rc = octeon3_eth_common_ndo_open(netdev);
++	if (rc == 0) {
++		rc = __cvmx_helper_srio_enable(priv->xiface);
++		if (rc)
++			octeon3_eth_common_ndo_stop(netdev);
++		else
++			netif_carrier_on(netdev);
++	}
++
++	netdev->netdev_ops->ndo_change_mtu(netdev, netdev->mtu);
++
++	return rc;
++}
++
++static int octeon3_eth_srio_ndo_start_xmit(struct sk_buff	*skb,
++					   struct net_device	*netdev)
++{
++	struct octeon3_ethernet	*priv = netdev_priv(netdev);
++	union cvmx_srio_tx_message_header tx_header;
++	u64 dest_mac;
++
++	if (unlikely(skb->len > 4096)) {
++		dev_kfree_skb(skb);
++		netdev_dbg(netdev, "TX packet > 4096 bytes. Dropped.\n");
++		return 0;
++	}
++
++	if (unlikely(skb->len < 64)) {
++		if (likely(skb_tailroom(skb) >= 64 - skb->len))
++			skb_put(skb, 64 - skb->len);
++	}
++
++	if (skb->len & (SRIO_PAD - 1)) {
++		if (likely(skb_tailroom(skb) > SRIO_PAD - 1))
++			skb_put(skb, SRIO_PAD - (skb->len & (SRIO_PAD - 1)));
++	}
++
++	tx_header.u64 = priv->srio_tx_header;
++	if (skb->sk) {
++		if (skb->sk->sk_priority < 0)
++			tx_header.s.prio = 0;
++		else if (skb->sk->sk_priority > 3)
++			tx_header.s.prio = 3;
++		else
++			tx_header.s.prio = skb->sk->sk_priority;
++	}
++
++	dest_mac = cpu_to_be64(*(u64 *)skb->data >> 16);
++
++	if (dest_mac >> 40) {
++		struct list_head *pos;
++		struct sk_buff *new_skb;
++
++		list_for_each(pos, &priv->srio_bcast) {
++			struct octeon3_srio_bcast_target *t;
++
++			t = container_of(pos, struct octeon3_srio_bcast_target,
++					 list);
++			if (skb_headroom(skb) < 8) {
++				new_skb = skb_realloc_headroom(skb,
++					8 - skb_headroom(skb));
++			} else
++				new_skb = skb_copy(skb, GFP_ATOMIC);
++
++			if (new_skb) {
++				tx_header.s.did = t->destid;
++				*(u64 *)__skb_push(new_skb, 8) =
++					cpu_to_be64(tx_header.u64);
++				octeon3_eth_ndo_start_xmit(new_skb, netdev);
++			} else {
++				netdev_dbg(netdev, "SKB allocation failed\n");
++				break;
++			}
++		}
++
++		dev_kfree_skb(skb);
++		return NETDEV_TX_OK;
++	} else {
++		tx_header.s.did = *(u8 *)(skb->data + 5);
++		if (unlikely(skb_headroom(skb) < 8)) {
++			int	nhead = 8 - skb_headroom(skb);
++
++			if (pskb_expand_head(skb, nhead, 0, GFP_ATOMIC)) {
++				netdev_dbg(netdev,
++					   "SKB didn't have room for SRIO "
++					   "header and allocation failed\n");
++				return NETDEV_TX_OK;
++			}
++		}
++
++		*(u64 *)__skb_push(skb, 8) = cpu_to_be64(tx_header.u64);
++		return octeon3_eth_ndo_start_xmit(skb, netdev);
++	}
++}
++
++static int octeon3_eth_srio_ndo_stop(struct net_device *netdev)
++{
++	return octeon3_eth_common_ndo_stop(netdev);
++}
++
++static int octeon3_eth_srio_ndo_change_mtu(struct net_device	*netdev,
++					   int			new_mtu)
++{
++#if defined(CONFIG_VLAN_8021Q) || defined(CONFIG_VLAN_8021Q_MODULE)
++	int vlan_bytes = VLAN_HLEN;
++#else
++	int vlan_bytes = 0;
++#endif
++	unsigned int max_mtu;
++	int srio_hdr_len = sizeof(union cvmx_srio_tx_message_header);
++
++	max_mtu = RIO_MAX_MSG_SIZE - srio_hdr_len - ETH_HLEN - vlan_bytes -
++		SRIO_PAD - ETH_FCS_LEN;
++	if ((new_mtu < 68) || (new_mtu > max_mtu)) {
++		netdev_warn(netdev, "MTU must be between %d and %d.\n",
++			    68, max_mtu);
++		return -EINVAL;
++	}
++	netdev->mtu = new_mtu;
++
++	return 0;
++}
++
++const struct net_device_ops octeon3_eth_srio_netdev_ops = {
++	.ndo_init		= octeon3_eth_srio_ndo_init,
++	.ndo_uninit		= octeon3_eth_ndo_uninit,
++	.ndo_open		= octeon3_eth_srio_ndo_open,
++	.ndo_stop		= octeon3_eth_srio_ndo_stop,
++	.ndo_start_xmit		= octeon3_eth_srio_ndo_start_xmit,
++	.ndo_get_stats64	= octeon3_eth_ndo_get_stats64,
++	.ndo_set_mac_address	= octeon3_eth_srio_set_mac_address,
++	.ndo_change_mtu		= octeon3_eth_srio_ndo_change_mtu,
++};
++
++#endif /* CONFIG_OCTEON3_ETHERNET_SRIO */
++
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++#define REMAP_LOGIC_PORT 
++#ifdef REMAP_LOGIC_PORT
++extern int eth_remap[9];
++#endif
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020*/
++
++static int octeon3_eth_probe(struct platform_device *pdev)
++{
++	struct octeon3_ethernet *priv;
++	struct net_device *netdev;
++	int r;
++
++	struct mac_platform_data *pd = dev_get_platdata(&pdev->dev);
++
++	r = octeon3_eth_global_init(pd->numa_node);
++	if (r)
++		return r;
++
++	dev_err(&pdev->dev, "Probing %d-%d:%d\n", pd->numa_node, pd->interface, pd->port);
++	netdev = alloc_etherdev(sizeof(struct octeon3_ethernet));
++	if (!netdev) {
++		dev_err(&pdev->dev, "Failed to allocated ethernet device\n");
++		return -ENOMEM;
++	}
++
++#ifdef CONFIG_CAVIUM_IPFWD_OFFLOAD
++	netdev->is_cvm_dev = 1;
++#endif
++
++	/* Using transmit queues degrades performance significantly */
++	netdev->priv_flags |= IFF_NO_QUEUE;
++
++	SET_NETDEV_DEV(netdev, &pdev->dev);
++	dev_set_drvdata(&pdev->dev, netdev);
++
++	if (pd->mac_type == BGX_MAC)
++		bgx_port_set_netdev(pdev->dev.parent, netdev);
++	netdev->priv_flags |= IFF_LIVE_ADDR_CHANGE;
++
++	priv = netdev_priv(netdev);
++	priv->netdev = netdev;
++	priv->mac_type = pd->mac_type;
++	INIT_LIST_HEAD(&priv->list);
++	INIT_LIST_HEAD(&priv->srio_bcast);
++	priv->numa_node = pd->numa_node;
++#if defined(CONFIG_CAVIUM_NET_PACKET_FWD_OFFLOAD)
++	priv->tx_stats = alloc_percpu(struct octeon3_tx_cpustats);
++	if (!priv->tx_stats) {
++		dev_err(&pdev->dev, "Failed to allocated percpu tx stats\n");
++		free_netdev(netdev);
++		return -ENOMEM;
++	}
++#endif
++
++	mutex_lock(&octeon3_eth_node[priv->numa_node].device_list_lock);
++	list_add_tail_rcu(&priv->list, &octeon3_eth_node[priv->numa_node].device_list);
++	mutex_unlock(&octeon3_eth_node[priv->numa_node].device_list_lock);
++
++	priv->xiface = cvmx_helper_node_interface_to_xiface(pd->numa_node, pd->interface);
++	priv->port_index = pd->port;
++	spin_lock_init(&priv->stat_lock);
++
++	if (pd->src_type == XCV)
++		snprintf(netdev->name, IFNAMSIZ, "rgmii%d", pd->port);
++
++	if (priv->mac_type == BGX_MAC)
++		netdev->netdev_ops = &octeon3_eth_netdev_ops;
++#if IS_ENABLED(CONFIG_OCTEON3_ETHERNET_SRIO)
++	else if (priv->mac_type == SRIO_MAC) {
++		union cvmx_srio_tx_message_header tx_header;
++
++		srio_nexus_load();
++
++		tx_header.u64 = 0;
++		tx_header.s.tt = 0;
++		tx_header.s.ssize = 0xe;
++		tx_header.s.mbox = pd->port;
++		tx_header.s.lns = 1;
++		tx_header.s.intr = 1;
++		priv->srio_tx_header = tx_header.u64;
++
++		netdev->netdev_ops = &octeon3_eth_srio_netdev_ops;
++	}
++#endif
++
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++#ifdef USE_NET_DEVICE
++	snprintf(netdev->name, IFNAMSIZ, "%s", intf_remap[gindex]);
++	priv->intf_index = gindex;
++#endif
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020*/
++
++	r = register_netdev(netdev);
++	if (r) {
++		dev_err(&pdev->dev, "Failed to register ethernet device\n");
++		mutex_lock(&octeon3_eth_node[priv->numa_node].device_list_lock);
++		list_del_rcu(&priv->list);
++		mutex_unlock(&octeon3_eth_node[priv->numa_node].device_list_lock);
++		synchronize_rcu();
++		if (pd->mac_type == BGX_MAC)
++			bgx_port_set_netdev(pdev->dev.parent, NULL);
++#if defined(CONFIG_CAVIUM_NET_PACKET_FWD_OFFLOAD)
++		free_percpu(priv->tx_stats);
++#endif
++		free_netdev(netdev);
++		return r;
++	}
++
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++#ifdef USE_NET_DEVICE
++	if(netdev)
++		netdev_list[gindex++] = netdev;
++#endif
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020*/
++
++	netdev_info(netdev, "Registered\n");
++	return 0;
++}
++
++/*
++ * octeon3_eth_global_exit:	Free all the used resources and restore the
++ *				hardware to the default state.
++ *
++ *  node:			Node to free/reset.
++ *
++ *  Returns:			Zero on success, error otherwise.
++ */
++static int octeon3_eth_global_exit(int node)
++{
++	struct octeon3_ethernet_node	*oen = octeon3_eth_node + node;
++	int				i;
++
++	/* Free the tx_complete irq */
++	octeon3_eth_sso_irq_set_armed(node, oen->tx_complete_grp, false);
++	irq_set_affinity_hint(oen->tx_irq, NULL);
++	free_irq(oen->tx_irq, oen);
++	irq_dispose_mapping(oen->tx_irq);
++	oen->tx_irq = 0;
++
++	/* Stop the worker threads */
++	for (i = 0; i < ARRAY_SIZE(oen->workers); i++)
++		kthread_stop(oen->workers[i].task);
++
++	/* Shutdown pki */
++	cvmx_helper_pki_shutdown(node);
++	cvmx_fpa3_release_pool(oen->pki_packet_pool);
++	kfree(oen->pki_packet_pool_stack);
++
++	/* Shutdown pko */
++	cvmx_helper_pko3_shutdown(node);
++	for (;;) {
++		void **w;
++
++		w = cvmx_fpa3_alloc(oen->pko_aura);
++		if (!w)
++			break;
++		kmem_cache_free(octeon3_eth_sso_pko_cache, w);
++	}
++	cvmx_fpa3_release_aura(oen->pko_aura);
++	cvmx_fpa3_release_pool(oen->pko_pool);
++	kfree(oen->pko_pool_stack);
++
++	/* Shutdown sso */
++	cvmx_sso_release_group(node, oen->tx_complete_grp);
++	octeon3_eth_sso_shutdown(node);
++	for (;;) {
++		void **w;
++
++		w = cvmx_fpa3_alloc(oen->sso_aura);
++		if (!w)
++			break;
++		kmem_cache_free(octeon3_eth_sso_pko_cache, w);
++	}
++	cvmx_fpa3_release_aura(oen->sso_aura);
++	cvmx_fpa3_release_pool(oen->sso_pool);
++	kfree(oen->sso_pool_stack);
++
++	return 0;
++}
++
++/* Mainline 6.11+ changed platform_driver.remove from int to void. */
++static void octeon3_eth_remove(struct platform_device *pdev)
++{
++	struct net_device		*netdev = dev_get_drvdata(&pdev->dev);
++	struct octeon3_ethernet		*priv = netdev_priv(netdev);
++	int				node = priv->numa_node;
++	struct octeon3_ethernet_node	*oen = octeon3_eth_node + node;
++
++	unregister_netdev(netdev);
++	bgx_port_set_netdev(pdev->dev.parent, NULL);
++	dev_set_drvdata(&pdev->dev, NULL);
++
++	/* Free all resources when there are no more devices */
++	mutex_lock(&octeon3_eth_init_mutex);
++	mutex_lock(&oen->device_list_lock);
++	list_del_rcu(&priv->list);
++	if (oen->init_done && list_empty(&oen->device_list)) {
++		int	i;
++
++		for (i = 0; i < MAX_NAPIS_PER_NODE; i++) {
++			napi_disable(&napi_wrapper[node][i].napi);
++			netif_napi_del(&napi_wrapper[node][i].napi);
++		}
++
++		oen->init_done = false;
++		oen->napi_init_done = false;
++		octeon3_eth_global_exit(node);
++
++	}
++
++	mutex_unlock(&oen->device_list_lock);
++	mutex_unlock(&octeon3_eth_init_mutex);
++	synchronize_rcu();
++
++#if defined(CONFIG_CAVIUM_NET_PACKET_FWD_OFFLOAD)
++	free_percpu(priv->tx_stats);
++#endif
++	free_netdev(netdev);
++}
++
++static void octeon3_eth_shutdown(struct platform_device *pdev)
++{
++	octeon3_eth_remove(pdev);
++	return;
++}
++
++
++static struct platform_driver octeon3_eth_driver = {
++	.probe		= octeon3_eth_probe,
++	.remove		= octeon3_eth_remove,
++	.shutdown       = octeon3_eth_shutdown,
++	.driver		= {
++		.owner	= THIS_MODULE,
++		.name	= "ethernet-mac-pki",
++	},
++};
++
++
++static int __init octeon3_eth_init(void)
++{
++	if (!octeon_has_feature(OCTEON_FEATURE_BGX))
++		return 0;
++
++	if (rx_contexts <= 0)
++		rx_contexts = 1;
++	if (rx_contexts > MAX_RX_CONTEXTS)
++		rx_contexts = MAX_RX_CONTEXTS;
++
++	return platform_driver_register(&octeon3_eth_driver);
++}
++module_init(octeon3_eth_init);
++
++static void __exit octeon3_eth_exit(void)
++{
++	if (!octeon_has_feature(OCTEON_FEATURE_BGX))
++		return;
++
++	platform_driver_unregister(&octeon3_eth_driver);
++
++	/* Destroy the memory cache used by sso and pko */
++	if (octeon3_eth_sso_pko_cache)
++		kmem_cache_destroy(octeon3_eth_sso_pko_cache);
++}
++module_exit(octeon3_eth_exit);
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("Cavium Networks <support@caviumnetworks.com>");
++MODULE_DESCRIPTION("Cavium Networks PKI/PKO Ethernet driver.");
+diff --git a/drivers/net/ethernet/cavium/octeon/octeon-bgx-port.c b/drivers/net/ethernet/cavium/octeon/octeon-bgx-port.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/net/ethernet/cavium/octeon/octeon-bgx-port.c
+@@ -0,0 +1,885 @@
++/**********************************************************************
++ * Author: Cavium, Inc.
++ *
++ * Contact: support@cavium.com
++ * This file is part of the OCTEON SDK
++ *
++ * Copyright (c) 2014 Cavium, Inc.
++ * Copyright (C) 2026 Amaan Qureshi <git@amaanq.com>
++ *
++ * This file is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License, Version 2, as
++ * published by the Free Software Foundation.
++ *
++ * This file is distributed in the hope that it will be useful, but
++ * AS-IS and WITHOUT ANY WARRANTY; without even the implied warranty
++ * of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE, TITLE, or
++ * NONINFRINGEMENT.  See the GNU General Public License for more
++ * details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this file; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
++ * or visit http://www.gnu.org/licenses/.
++ *
++ * This file may also be available under a different license from Cavium.
++ * Contact Cavium, Inc. for more information
++ **********************************************************************/
++#include <linux/platform_device.h>
++#include <linux/netdevice.h>
++#include <linux/etherdevice.h>
++#include <linux/of_platform.h>
++#include <linux/of_address.h>
++#include <linux/of_mdio.h>
++#include <linux/of_net.h>
++#include <linux/module.h>
++#include <linux/slab.h>
++#include <linux/list.h>
++#include <linux/if_vlan.h>
++
++#include <asm/octeon/cvmx-helper.h>
++#include <asm/octeon/cvmx-helper-util.h>
++#include <asm/octeon/cvmx-helper-cfg.h>
++#include <asm/octeon/cvmx-bgxx-defs.h>
++#include <asm/octeon/cvmx-helper-bgx.h>
++#include <asm/octeon/cvmx-pko3.h>
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++#include <asm/octeon/cvmx-gserx-defs.h>
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++
++#include "octeon-bgx.h"
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++#define ENABLE_10G_1G_SWITCH 
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++
++struct bgx_port_priv {
++	int numa_node;
++	int bgx_interface;
++	int index; /* Port index on BGX block*/
++	int ipd_port;
++	int xiface;
++	u8 mac_addr[ETH_ALEN];
++	bool mac_addr_valid;
++	struct phy_device *phydev;
++	struct device_node *phy_np;
++	struct net_device *netdev;
++	struct mutex lock;
++	unsigned int last_duplex;
++	unsigned int last_link;
++	unsigned int last_speed;
++	struct delayed_work dwork;
++	bool work_queued;
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++	int intf_index;
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++};
++
++static struct workqueue_struct *check_state_wq;
++static DEFINE_MUTEX(check_state_wq_mutex);
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++extern int octeon_sfp_update(struct net_device *netdev, uint32_t event, uint32_t speed, uint32_t duplex);
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++static struct bgx_port_priv *bgx_port_netdev2priv(struct net_device *netdev)
++{
++	struct bgx_port_netdev_priv *nd_priv = netdev_priv(netdev);
++	return nd_priv->bgx_priv;
++}
++
++void bgx_port_set_netdev(struct device *dev, struct net_device *netdev)
++{
++	struct bgx_port_priv *priv = dev_get_drvdata(dev);
++
++	if (netdev) {
++		struct bgx_port_netdev_priv *nd_priv = netdev_priv(netdev);
++		nd_priv->bgx_priv = priv;
++	}
++
++	priv->netdev = netdev;
++}
++EXPORT_SYMBOL(bgx_port_set_netdev);
++
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++int bgx_port_get_carrier_speed_duplex(struct net_device *netdev, int *carrier, int *speed, int *duplex)
++{
++	cvmx_helper_link_info_t link_info;
++	struct bgx_port_priv *p = bgx_port_netdev2priv(netdev);
++
++	link_info = cvmx_helper_link_get(p->ipd_port);
++	*carrier = link_info.s.link_up;
++	*speed = link_info.s.link_up ? link_info.s.speed : 0;
++	*duplex = link_info.s.full_duplex ? DUPLEX_FULL : DUPLEX_HALF;
++	return 0;
++}
++EXPORT_SYMBOL(bgx_port_get_carrier_speed_duplex);
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++
++/* Mainline 4.6+ replaced get_settings/set_settings with get_link_ksettings
++ * /set_link_ksettings + struct ethtool_link_ksettings. The PHY-side helpers
++ * are phy_ethtool_ksettings_get / phy_ethtool_ksettings_set. */
++int bgx_port_ethtool_get_link_ksettings(struct net_device *netdev,
++					struct ethtool_link_ksettings *cmd)
++{
++	cvmx_helper_link_info_t link_info;
++	struct bgx_port_priv *p = bgx_port_netdev2priv(netdev);
++
++	if (p->phydev) {
++		phy_ethtool_ksettings_get(p->phydev, cmd);
++		return 0;
++	}
++
++	link_info = cvmx_helper_link_get(p->ipd_port);
++	cmd->base.speed = link_info.s.link_up ? link_info.s.speed : SPEED_UNKNOWN;
++	cmd->base.duplex = link_info.s.full_duplex ? DUPLEX_FULL : DUPLEX_HALF;
++
++	return 0;
++}
++EXPORT_SYMBOL(bgx_port_ethtool_get_link_ksettings);
++
++int bgx_port_ethtool_set_link_ksettings(struct net_device *netdev,
++					const struct ethtool_link_ksettings *cmd)
++{
++	struct bgx_port_priv *p = bgx_port_netdev2priv(netdev);
++
++	if (!capable(CAP_NET_ADMIN))
++		return -EPERM;
++
++	if (p->phydev)
++		return phy_ethtool_ksettings_set(p->phydev, cmd);
++
++	return -EOPNOTSUPP;
++}
++EXPORT_SYMBOL(bgx_port_ethtool_set_link_ksettings);
++
++int bgx_port_ethtool_nway_reset(struct net_device *netdev)
++{
++	struct bgx_port_priv *p = bgx_port_netdev2priv(netdev);
++
++	if (!capable(CAP_NET_ADMIN))
++		return -EPERM;
++
++	if (p->phydev)
++		return phy_start_aneg(p->phydev);
++
++	return -EOPNOTSUPP;
++}
++EXPORT_SYMBOL(bgx_port_ethtool_nway_reset);
++
++const u8 *bgx_port_get_mac(struct net_device *netdev)
++{
++	struct bgx_port_priv *priv = bgx_port_netdev2priv(netdev);
++	return priv->mac_addr_valid ? priv->mac_addr : NULL;
++}
++EXPORT_SYMBOL(bgx_port_get_mac);
++
++int bgx_port_do_ioctl(struct net_device *netdev, struct ifreq *ifr, int cmd)
++{
++	struct bgx_port_priv *p = bgx_port_netdev2priv(netdev);
++
++	if (p->phydev)
++		return phy_mii_ioctl(p->phydev, ifr, cmd);
++	return -EOPNOTSUPP;
++}
++EXPORT_SYMBOL(bgx_port_do_ioctl);
++
++static void bgx_port_write_cam(int numa_node, int interface, int index, int cam, const u8 *mac)
++{
++	int i;
++	union cvmx_bgxx_cmr_rx_adrx_cam adr_cam;
++	u64 m = 0;
++	if (mac)
++		for (i = 0; i < 6; i++)
++			m |= (((u64)mac[i]) << ((5 - i) * 8));
++	adr_cam.u64 = m;
++	adr_cam.s.en = mac ? 1 : 0;
++	adr_cam.s.id = index;
++	cvmx_write_csr_node(numa_node, CVMX_BGXX_CMR_RX_ADRX_CAM(index * 8 + cam, interface), adr_cam.u64);
++}
++
++/* Set MAC address for the net_device that is attached. */
++void bgx_port_set_rx_filtering(struct net_device *netdev)
++{
++	union cvmx_bgxx_cmrx_rx_adr_ctl adr_ctl;
++	struct bgx_port_priv *priv = bgx_port_netdev2priv(netdev);
++	int available_cam_entries, current_cam_entry;
++	struct netdev_hw_addr *ha;
++
++	available_cam_entries = 8;
++	adr_ctl.u64 = 0;
++	adr_ctl.s.bcst_accept = 1; /* Accept all Broadcast*/
++
++	if ((netdev->flags & IFF_PROMISC) || netdev->uc.count > 7) {
++		adr_ctl.s.cam_accept = 0; /* Reject CAM match */
++		available_cam_entries = 0;
++	} else {
++		/* One CAM entry for the primary address, leaves seven
++		 * for the secondary addresses.
++		 */
++		adr_ctl.s.cam_accept = 1; /* Accept CAM match */
++		available_cam_entries = 7 - netdev->uc.count;
++	}
++
++	if (netdev->flags & IFF_PROMISC) {
++		adr_ctl.s.mcst_mode = 1; /* Accept all Multicast */
++	} else {
++		if (netdev->flags & IFF_MULTICAST) {
++			if ((netdev->flags & IFF_ALLMULTI) || netdev_mc_count(netdev) > available_cam_entries)
++				adr_ctl.s.mcst_mode = 1; /* Accept all Multicast */
++			else
++				adr_ctl.s.mcst_mode = 2; /* Accept all Multicast via CAM */
++		}
++	}
++	current_cam_entry = 0;
++	if (adr_ctl.s.cam_accept) {
++		bgx_port_write_cam(priv->numa_node, priv->bgx_interface, priv->index,
++				   current_cam_entry, netdev->dev_addr);
++		current_cam_entry++;
++		netdev_for_each_uc_addr(ha, netdev) {
++			bgx_port_write_cam(priv->numa_node, priv->bgx_interface, priv->index,
++					   current_cam_entry, ha->addr);
++			current_cam_entry++;
++		}
++	}
++	if (adr_ctl.s.mcst_mode == 2) {/* Accept all Multicast via CAM */
++		netdev_for_each_mc_addr(ha, netdev) {
++			bgx_port_write_cam(priv->numa_node, priv->bgx_interface, priv->index,
++					   current_cam_entry, ha->addr);
++			current_cam_entry++;
++		}
++	}
++	while (current_cam_entry < 8) {
++		bgx_port_write_cam(priv->numa_node, priv->bgx_interface, priv->index,
++				   current_cam_entry, NULL);
++		current_cam_entry++;
++	}
++	cvmx_write_csr_node(priv->numa_node,
++			    CVMX_BGXX_CMRX_RX_ADR_CTL(priv->index, priv->bgx_interface),
++			    adr_ctl.u64);
++}
++EXPORT_SYMBOL(bgx_port_set_rx_filtering);
++
++static void bgx_port_adjust_link(struct net_device *netdev)
++{
++	struct bgx_port_priv *p = bgx_port_netdev2priv(netdev);
++	int link_changed = 0;
++	unsigned int link, speed, duplex;
++
++	mutex_lock(&p->lock);
++
++	if (!p->phydev->link && p->last_link)
++		link_changed = -1;
++
++	if (p->phydev->link
++	    && (p->last_duplex != p->phydev->duplex
++		|| p->last_link != p->phydev->link
++		|| p->last_speed != p->phydev->speed)) {
++		link_changed = 1;
++	}
++
++	link = p->last_link = p->phydev->link;
++	speed = p->last_speed = p->phydev->speed;
++	duplex = p->last_duplex = p->phydev->duplex;
++
++	mutex_unlock(&p->lock);
++
++	if (link_changed != 0) {
++		cvmx_helper_link_info_t link_info;
++		if (link_changed > 0) {
++			pr_info("%s: Link is up - %d/%s\n", netdev->name,
++				p->phydev->speed,
++				DUPLEX_FULL == p->phydev->duplex ?
++				"Full" : "Half");
++		} else {
++			pr_info("%s: Link is down\n", netdev->name);
++		}
++		link_info.u64 = 0;
++		link_info.s.link_up = link ? 1 : 0;
++		link_info.s.full_duplex = duplex ? 1 : 0;
++		link_info.s.speed = speed;
++		if (!link) {
++			netif_carrier_off(netdev);
++			mdelay(50); /* Let TX drain.  FIXME really check that it is drained. */
++		}
++		cvmx_helper_link_set(p->ipd_port, link_info);
++		if (link)
++			netif_carrier_on(netdev);
++	}
++}
++
++static void bgx_port_check_state(struct work_struct *work)
++{
++	struct bgx_port_priv		*priv;
++	cvmx_helper_link_info_t		link_info;
++
++	priv = container_of(work, struct bgx_port_priv, dwork.work);
++
++	link_info = cvmx_helper_link_get(priv->ipd_port);
++	if (priv->last_link != link_info.s.link_up) {
++		priv->last_link = link_info.s.link_up;
++		if (link_info.s.link_up) {
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++			octeon_sfp_update(priv->netdev, SFP_LINK_UP, link_info.s.speed, link_info.s.full_duplex);
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++			pr_info("%s: Link is up - %d/%s\n",
++				    priv->netdev->name, link_info.s.speed,
++				    link_info.s.full_duplex ? "Full" : "Half");
++		} else {
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++			octeon_sfp_update(priv->netdev, SFP_LINK_DOWN, 0, 0);
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++			pr_info("%s: Link is down\n", priv->netdev->name);
++		}
++	}
++
++#if !defined(CONFIG_UBNT_E1000) && !defined(CONFIG_UBNT_E1020)
++	mutex_lock(&priv->lock);
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++	if (priv->work_queued)
++		queue_delayed_work(check_state_wq, &priv->dwork, HZ);
++#if !defined(CONFIG_UBNT_E1000) && !defined(CONFIG_UBNT_E1020)
++	mutex_unlock(&priv->lock);
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++}
++
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++#define FIX_1G_SW_MODE 
++#ifdef FIX_1G_SW_MODE
++extern int gindex;
++#define MAX_NETDEV_NUM 9
++extern struct net_device *netdev_list[MAX_NETDEV_NUM];
++extern int setup_sgmii_port_phy_mode(int bgx, int port);
++#endif
++
++#define REMAP_LOGIC_PORT 
++#ifdef REMAP_LOGIC_PORT
++extern int eth_remap[9];
++extern int eth_inv_map[9];
++#endif
++
++#define USE_CONTROL_ETH_PWR
++#define DEBUG
++#ifdef DEBUG
++#define DPRINT(format, args...) printk(KERN_ERR format , ##args)
++#else
++#define DPRINT(format, args...)
++#endif
++
++#ifdef USE_CONTROL_ETH_PWR
++extern void set_bgx_led(int port, int on_off);
++extern void set_sfp_power(int port, int on_off);
++
++// on = 1, off =0
++int set_pcs_power(int port, int speed ,int on_off)
++{
++    int bgx = 0;
++    cvmx_bgxx_spux_control1_t spux_control1;
++    cvmx_bgxx_gmp_pcs_mrx_control_t gmp_control;
++
++    if(port >= 4 && port < 8){
++        bgx = 1;
++        port -= 4;
++    }else if (port ==8){
++        bgx = 2;
++        port = 2;
++    }
++    else if ( port >= 8)
++        return -1;
++
++    if(speed){
++        spux_control1.u64 = cvmx_read_csr_node(0, CVMX_BGXX_SPUX_CONTROL1(port, bgx));
++        spux_control1.s.lo_pwr = !on_off;
++        cvmx_write_csr_node(0, CVMX_BGXX_SPUX_CONTROL1(port, bgx), spux_control1.u64);
++    }
++    else{
++        gmp_control.u64 = cvmx_read_csr_node(0, CVMX_BGXX_GMP_PCS_MRX_CONTROL(port, bgx));
++        gmp_control.s.pwr_dn = !on_off;
++        cvmx_write_csr_node(0, CVMX_BGXX_GMP_PCS_MRX_CONTROL(port, bgx), gmp_control.u64);
++    }
++
++    return 0;
++}
++
++// on = 1, off =0
++int set_serdes_eie_detection(int port, int on_off){
++
++    cvmx_gserx_rx_eie_deten_t rx_eie_deten;
++    int gserx_id =2,port_id = port;
++    int tmp;
++
++    if(port >= 4 && port < 8){
++        gserx_id = 3;
++        port_id = port - 4;
++    }else if (port == 8){
++        gserx_id = 6;
++        port_id = 0;
++    }
++    else if ( port >= 8)
++        return -1;
++
++    rx_eie_deten.u64 = cvmx_read_csr_node(0, CVMX_GSERX_RX_EIE_DETEN(gserx_id));
++    tmp = rx_eie_deten.s.eiede;
++    tmp &=~(0x1<<port_id);
++    tmp |= on_off<<port_id;
++    rx_eie_deten.u64 = tmp;
++    cvmx_write_csr_node(0, CVMX_GSERX_RX_EIE_DETEN(gserx_id), rx_eie_deten.u64);
++    return 0;
++
++
++}
++
++int set_eth_pwr(int bgx, int index, int speed, int on_off)
++{
++	int port = bgx * 4 + index;
++
++	if(port == 10)
++		port = 8;
++	
++	set_serdes_eie_detection(port, on_off);
++	set_pcs_power(port, speed ,on_off);
++	
++	return 0;
++}	
++#endif 
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++
++int bgx_port_enable(struct net_device *netdev)
++{
++	bool dont_use_phy;
++	union cvmx_bgxx_cmrx_config cfg;
++	struct bgx_port_priv *priv = bgx_port_netdev2priv(netdev);
++	cvmx_helper_link_info_t link_info;
++
++	cvmx_helper_set_1000x_mode(priv->xiface, priv->index, false);
++	cvmx_helper_set_mac_phy_mode(priv->xiface, priv->index, false);
++
++	cfg.u64 = cvmx_read_csr_node(priv->numa_node, CVMX_BGXX_CMRX_CONFIG(priv->index, priv->bgx_interface));
++	if (cfg.s.lmac_type == 0 || cfg.s.lmac_type == 5) {
++		/* 1G */
++		union cvmx_bgxx_gmp_gmi_txx_append tx_append;
++		union cvmx_bgxx_gmp_gmi_txx_min_pkt min_pkt;
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++#ifdef USE_CONTROL_ETH_PWR
++		set_eth_pwr(priv->bgx_interface, priv->index, 0, 1);
++#endif
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++
++		tx_append.u64 = cvmx_read_csr_node(priv->numa_node,
++						   CVMX_BGXX_GMP_GMI_TXX_APPEND(priv->index, priv->bgx_interface));
++		tx_append.s.fcs = 1;
++		tx_append.s.pad = 1;
++
++		cvmx_write_csr_node(priv->numa_node,
++				    CVMX_BGXX_GMP_GMI_TXX_APPEND(priv->index, priv->bgx_interface),
++				    tx_append.u64);
++
++		min_pkt.u64 = 0;
++		/* packets are padded (without FCS) to MIN_SIZE + 1 in SGMII */
++		min_pkt.s.min_size = 60 - 1;
++		cvmx_write_csr_node(priv->numa_node,
++				    CVMX_BGXX_GMP_GMI_TXX_MIN_PKT(priv->index, priv->bgx_interface),
++				    min_pkt.u64);
++	} else {
++		/* 10G or higher */
++		union cvmx_bgxx_smux_tx_append tx_append;
++		union cvmx_bgxx_smux_tx_min_pkt min_pkt;
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++#ifdef USE_CONTROL_ETH_PWR
++		set_eth_pwr(priv->bgx_interface, priv->index, 1, 1);
++#endif		
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++
++		tx_append.u64 = cvmx_read_csr_node(priv->numa_node,
++						   CVMX_BGXX_SMUX_TX_APPEND(priv->index, priv->bgx_interface));
++		tx_append.s.fcs_d = 1;
++		tx_append.s.pad = 1;
++
++		cvmx_write_csr_node(priv->numa_node,
++				    CVMX_BGXX_SMUX_TX_APPEND(priv->index, priv->bgx_interface),
++				    tx_append.u64);
++
++		min_pkt.u64 = 0;
++		/* packets are padded(with FCS) to MIN_SIZE  in non-SGMII */
++		min_pkt.s.min_size = 60 + 4;
++		cvmx_write_csr_node(priv->numa_node,
++				    CVMX_BGXX_SMUX_TX_MIN_PKT(priv->index, priv->bgx_interface),
++				    min_pkt.u64);
++
++	}
++
++	switch (cvmx_helper_interface_get_mode(priv->xiface)) {
++	case CVMX_HELPER_INTERFACE_MODE_XLAUI:
++	case CVMX_HELPER_INTERFACE_MODE_XFI:
++	case CVMX_HELPER_INTERFACE_MODE_10G_KR:
++	case CVMX_HELPER_INTERFACE_MODE_40G_KR4:
++		dont_use_phy = true;
++		break;
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++#ifdef FIX_1G_SW_MODE
++	case CVMX_HELPER_INTERFACE_MODE_SGMII:
++
++#ifdef REMAP_LOGIC_PORT
++		if (!strncmp(netdev->name, "eth0", 4)){
++#else
++		if (!strncmp(netdev->name, "eth8", 4)){
++#endif			
++			dont_use_phy = false;
++		}	
++		else{
++			cvmx_helper_set_1000x_mode(priv->xiface, priv->index, true);
++			setup_sgmii_port_phy_mode(priv->bgx_interface, priv->index);
++			cvmx_helper_set_mac_phy_mode(priv->xiface, priv->index, true);
++			dont_use_phy = true;
++
++			link_info.s.link_up = 1;
++			link_info.s.full_duplex = 1;
++			if (OCTEON_IS_MODEL(OCTEON_CN78XX)) {
++				link_info.s.speed = cvmx_qlm_get_gbaud_mhz_node(priv->numa_node, cvmx_qlm_lmac(priv->xiface, priv->index)) * 8 / 10;
++			} else {
++				link_info.s.speed = cvmx_qlm_get_gbaud_mhz(cvmx_qlm_lmac(priv->xiface, priv->index)) * 8 / 10;
++			}
++
++			cvmx_helper_link_set(priv->ipd_port, link_info);
++		}	
++		break;
++#endif	
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++
++	default:
++		dont_use_phy = false;
++		break;
++	}
++
++	if (priv->phy_np == NULL || dont_use_phy) {
++		cvmx_helper_link_autoconf(priv->ipd_port);
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++		netif_carrier_off(netdev);
++#else
++		netif_carrier_on(netdev);
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++
++		mutex_lock(&check_state_wq_mutex);
++		if (!check_state_wq) {
++			check_state_wq =
++				alloc_workqueue("check_state_wq", WQ_UNBOUND |
++						WQ_MEM_RECLAIM, 1);
++		}
++		mutex_unlock(&check_state_wq_mutex);
++		if (!check_state_wq)
++			return -ENOMEM;
++
++#if !defined(CONFIG_UBNT_E1000) && !defined(CONFIG_UBNT_E1020)
++		mutex_lock(&priv->lock);
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++		INIT_DELAYED_WORK(&priv->dwork, bgx_port_check_state);
++		queue_delayed_work(check_state_wq, &priv->dwork, 0);
++		priv->work_queued = true;
++#if !defined(CONFIG_UBNT_E1000) && !defined(CONFIG_UBNT_E1020)
++		mutex_unlock(&priv->lock);
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++
++		pr_info("%s: Link is not ready\n", netdev->name);
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++		octeon_sfp_update(priv->netdev, SFP_ADM_UP, 0, 0);
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++
++		return 0;
++	} else {
++		priv->phydev = of_phy_connect(netdev, priv->phy_np,
++					      bgx_port_adjust_link, 0,
++					      PHY_INTERFACE_MODE_SGMII);
++		if (!priv->phydev)
++			return -ENODEV;
++	}
++
++	netif_carrier_off(netdev);
++
++	if (priv->phydev)
++		phy_start_aneg(priv->phydev);
++
++	return 0;
++}
++EXPORT_SYMBOL(bgx_port_enable);
++
++int bgx_port_disable(struct net_device *netdev)
++{
++	struct bgx_port_priv *priv = bgx_port_netdev2priv(netdev);
++	cvmx_helper_link_info_t link_info;
++
++	if (priv->phydev)
++		phy_disconnect(priv->phydev);
++	priv->phydev = NULL;
++
++	netif_carrier_off(netdev);
++	link_info.u64 = 0;
++	priv->last_link = 0;
++	cvmx_helper_link_set(priv->ipd_port, link_info);
++
++#if !defined(CONFIG_UBNT_E1000) && !defined(CONFIG_UBNT_E1020)
++	mutex_lock(&priv->lock);
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++	if (priv->work_queued) {
++		cancel_delayed_work_sync(&priv->dwork);
++		priv->work_queued = false;
++	}
++#if !defined(CONFIG_UBNT_E1000) && !defined(CONFIG_UBNT_E1020)
++	mutex_unlock(&priv->lock);
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++#ifdef USE_CONTROL_ETH_PWR
++	if(cvmx_helper_interface_get_mode(priv->xiface) == CVMX_HELPER_INTERFACE_MODE_XFI)
++		set_eth_pwr(priv->bgx_interface, priv->index, 1, 0);
++	else if (cvmx_helper_interface_get_mode(priv->xiface) == CVMX_HELPER_INTERFACE_MODE_SGMII) 
++		set_eth_pwr(priv->bgx_interface, priv->index, 0, 0);
++#endif		
++	octeon_sfp_update(priv->netdev, SFP_ADM_DOWN, 0, 0);
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++	return 0;
++}
++EXPORT_SYMBOL(bgx_port_disable);
++
++int bgx_port_change_mtu(struct net_device *netdev, int new_mtu)
++{
++	union cvmx_bgxx_cmrx_config cfg;
++	struct bgx_port_priv *priv = bgx_port_netdev2priv(netdev);
++	int max_frame;
++
++	if (new_mtu < 60 || new_mtu > 65392) {
++		netdev_warn(netdev, "Maximum MTU supported is 65392\n");
++		
++		return -EINVAL;
++	}
++
++	netdev->mtu = new_mtu;
++
++	max_frame = round_up(new_mtu + ETH_HLEN + ETH_FCS_LEN + VLAN_HLEN, 8);
++
++	cfg.u64 = cvmx_read_csr_node(priv->numa_node, CVMX_BGXX_CMRX_CONFIG(priv->index, priv->bgx_interface));
++	if (cfg.s.lmac_type == 0 || cfg.s.lmac_type == 5)
++		cvmx_write_csr_node(priv->numa_node,		/* 1G */
++				    CVMX_BGXX_GMP_GMI_RXX_JABBER(priv->index, priv->bgx_interface),
++				    max_frame);
++	else
++		cvmx_write_csr_node(priv->numa_node,		/* 10G or higher */
++				    CVMX_BGXX_SMUX_RX_JABBER(priv->index, priv->bgx_interface),
++				    max_frame);
++
++	return 0;
++}
++EXPORT_SYMBOL(bgx_port_change_mtu);
++
++void bgx_port_mix_assert_reset(struct net_device *netdev, int mix, bool v)
++{
++	u64 global_config;
++	struct bgx_port_priv *priv = bgx_port_netdev2priv(netdev);
++	u64 mask = 1ull << (3 + (mix & 1));
++	union cvmx_bgxx_cmrx_config cfg;
++
++	if (OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_X) && v == true) {
++		/* Need to disable the mix before resetting the bgx-mix
++		 * interface as not doing so confuses the other already up
++		 * lmacs.
++		 */
++		cfg.u64 = cvmx_read_csr_node(priv->numa_node,
++					     CVMX_BGXX_CMRX_CONFIG(priv->index,
++						   priv->bgx_interface));
++		cfg.s.mix_en = 0;
++		cvmx_write_csr_node(priv->numa_node,
++				    CVMX_BGXX_CMRX_CONFIG(priv->index,
++							  priv->bgx_interface),
++				    cfg.u64);
++	}
++
++	global_config = cvmx_read_csr_node(priv->numa_node,
++					   CVMX_BGXX_CMR_GLOBAL_CONFIG(priv->bgx_interface));
++
++	if (v)
++		global_config |= mask;
++	else
++		global_config &= ~mask;
++
++	cvmx_write_csr_node(priv->numa_node, CVMX_BGXX_CMR_GLOBAL_CONFIG(priv->bgx_interface), global_config);
++
++	if (OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_X) && v == false) {
++		cfg.u64 = cvmx_read_csr_node(priv->numa_node,
++					     CVMX_BGXX_CMRX_CONFIG(priv->index,
++						   priv->bgx_interface));
++		cfg.s.mix_en = 1;
++		cvmx_write_csr_node(priv->numa_node,
++				    CVMX_BGXX_CMRX_CONFIG(priv->index,
++							  priv->bgx_interface),
++				    cfg.u64);
++	}
++}
++EXPORT_SYMBOL(bgx_port_mix_assert_reset);
++
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++#ifdef ENABLE_10G_1G_SWITCH 
++static struct platform_device *bgx_port_pdev[8] = {NULL};
++static int bgx_port_index = 0;
++#endif
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++
++static int bgx_port_probe(struct platform_device *pdev)
++{
++	u64 addr;
++	u8 mac[ETH_ALEN];
++	bool mac_valid = false;
++	const __be32 *reg;
++	u32 index;
++	int r;
++	struct bgx_port_priv *priv;
++	int numa_node;
++
++	reg = of_get_property(pdev->dev.parent->of_node, "reg", NULL);
++	addr = of_translate_address(pdev->dev.parent->of_node, reg);
++	/* Mainline 5.13+ rewrote of_get_mac_address to take a u8 *out buffer
++	 * and return an int errno; the old API returned a const void * pointer
++	 * into the DT. */
++	if (of_get_mac_address(pdev->dev.of_node, mac) == 0)
++		mac_valid = true;
++
++	numa_node = (addr >> 36) & 0x7;
++
++	r = of_property_read_u32(pdev->dev.of_node, "reg", &index);
++	if (r)
++		return -ENODEV;
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++#ifdef ENABLE_10G_1G_SWITCH
++	if(bgx_port_index <= 8)
++		priv = kzalloc_node(sizeof(*priv), GFP_KERNEL, numa_node);
++#else
++	priv = kzalloc_node(sizeof(*priv), GFP_KERNEL, numa_node);
++#endif /* ENABLE_10G_1G_SWITCH */
++#else
++	priv = kzalloc_node(sizeof(*priv), GFP_KERNEL, numa_node);
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++	if (!priv)
++		return -ENOMEM;
++
++	mutex_init(&priv->lock);
++	priv->numa_node = numa_node;
++	priv->bgx_interface = (addr >> 24) & 0xf;
++	priv->index = index;
++	priv->xiface = cvmx_helper_node_interface_to_xiface(numa_node, priv->bgx_interface);
++	priv->ipd_port = cvmx_helper_get_ipd_port(priv->xiface, index);
++	if (mac_valid) {
++		memcpy(priv->mac_addr, mac, ETH_ALEN);
++		priv->mac_addr_valid = true;
++	}
++
++	priv->phy_np = of_parse_phandle(pdev->dev.of_node, "phy-handle", 0);
++
++	if (priv->phy_np == NULL)
++		cvmx_helper_set_port_phy_present(priv->xiface, priv->index, false);
++	else
++		cvmx_helper_set_port_phy_present(priv->xiface, priv->index, true);
++
++	dev_set_drvdata(&pdev->dev, priv);
++
++	if (priv->phy_np)
++		__cvmx_helper_bgx_port_init(priv->ipd_port, 1);
++	else
++		__cvmx_helper_bgx_port_init(priv->ipd_port, 0);
++
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++#ifdef USE_CONTROL_ETH_PWR
++	if(cvmx_helper_interface_get_mode(priv->xiface) == CVMX_HELPER_INTERFACE_MODE_XFI)
++		set_eth_pwr(priv->bgx_interface, priv->index, 1, 0);
++	else if (cvmx_helper_interface_get_mode(priv->xiface) == CVMX_HELPER_INTERFACE_MODE_SGMII) 
++		set_eth_pwr(priv->bgx_interface, priv->index, 0, 0);
++#endif
++
++#ifdef ENABLE_10G_1G_SWITCH
++	if(bgx_port_index < 8)
++		bgx_port_pdev[bgx_port_index++] = pdev;
++#endif
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++
++	dev_info(&pdev->dev, "Probed\n");
++	return 0;
++}
++
++/* Mainline 6.11+ changed platform_driver.remove from int to void. */
++static void bgx_port_remove(struct platform_device *pdev)
++{
++	struct bgx_port_priv *priv = dev_get_drvdata(&pdev->dev);
++	kfree(priv);
++}
++
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++#ifdef ENABLE_10G_1G_SWITCH
++extern int bgx_probe(struct platform_device *pdev);
++
++int bgx_port_off(int port)
++{
++	return bgx_port_disable(netdev_list[port]);
++}
++EXPORT_SYMBOL(bgx_port_off);
++extern void reset_bgx_ops(int xiface, int mode);
++int bgx_port_reinit(int port ,int mode)
++{
++
++	struct bgx_port_priv *priv = bgx_port_netdev2priv(netdev_list[port]);
++	
++	reset_bgx_ops(priv->xiface, mode);
++	cvmx_helper_interface_get_mode(priv->xiface);
++	
++	if(bgx_port_probe(bgx_port_pdev[port]))
++	{
++		DPRINT("Error occurs on bgx_port_reinit\n");
++		return -1;
++	}
++
++	return 0;
++}
++EXPORT_SYMBOL(bgx_port_reinit);
++#endif
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++
++static void bgx_port_shutdown(struct platform_device *pdev)
++{
++	return;
++}
++
++static struct of_device_id bgx_port_match[] = {
++	{
++		.compatible = "cavium,octeon-7890-bgx-port",
++	},
++	{
++		.compatible = "cavium,octeon-7360-xcv",
++	},
++	{},
++};
++MODULE_DEVICE_TABLE(of, bgx_port_match);
++
++static struct platform_driver bgx_port_driver = {
++	.probe		= bgx_port_probe,
++	.remove		= bgx_port_remove,
++	.shutdown       = bgx_port_shutdown,
++	.driver		= {
++		.owner	= THIS_MODULE,
++		.name	= KBUILD_MODNAME,
++		.of_match_table = bgx_port_match,
++	},
++};
++
++static int __init bgx_port_driver_init(void)
++{
++	int r;
++
++	bgx_nexus_load();
++	r =  platform_driver_register(&bgx_port_driver);
++	return r;
++}
++module_init(bgx_port_driver_init);
++
++static void __exit bgx_port_driver_exit(void)
++{
++	platform_driver_unregister(&bgx_port_driver);
++	if (check_state_wq)
++		destroy_workqueue(check_state_wq);
++}
++module_exit(bgx_port_driver_exit);
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("Cavium Networks <support@caviumnetworks.com>");
++MODULE_DESCRIPTION("Cavium Networks BGX Ethernet MAC driver.");
+diff --git a/drivers/net/ethernet/cavium/octeon/octeon-bgx-nexus.c b/drivers/net/ethernet/cavium/octeon/octeon-bgx-nexus.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/net/ethernet/cavium/octeon/octeon-bgx-nexus.c
+@@ -0,0 +1,765 @@
++/**********************************************************************
++ * Author: Cavium, Inc.
++ *
++ * Contact: support@cavium.com
++ * This file is part of the OCTEON SDK
++ *
++ * Copyright (c) 2014 Cavium, Inc.
++ * Copyright (C) 2026 Amaan Qureshi <git@amaanq.com>
++ *
++ * This file is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License, Version 2, as
++ * published by the Free Software Foundation.
++ *
++ * This file is distributed in the hope that it will be useful, but
++ * AS-IS and WITHOUT ANY WARRANTY; without even the implied warranty
++ * of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE, TITLE, or
++ * NONINFRINGEMENT.  See the GNU General Public License for more
++ * details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this file; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
++ * or visit http://www.gnu.org/licenses/.
++ *
++ * This file may also be available under a different license from Cavium.
++ * Contact Cavium, Inc. for more information
++ **********************************************************************/
++#include <linux/err.h>
++#include <linux/platform_device.h>
++#include <linux/of_platform.h>
++#include <linux/of_address.h>
++#include <linux/module.h>
++#include <linux/slab.h>
++#include <linux/list.h>
++#include <linux/ctype.h>
++
++#include <asm/octeon/cvmx-helper.h>
++#include <asm/octeon/cvmx-helper-util.h>
++#include <asm/octeon/cvmx-helper-cfg.h>
++#include <asm/octeon/cvmx-helper-bgx.h>
++#include <asm/octeon/cvmx-bgxx-defs.h>
++
++#include "octeon-bgx.h"
++#include "octeon-common-nexus.h"
++
++static atomic_t request_mgmt_once;
++
++static char *mix_port;
++module_param(mix_port, charp, S_IRUGO);
++MODULE_PARM_DESC(mix_port, "Specifies which ports connect to MIX interfaces.");
++
++static char *pki_port;
++module_param(pki_port, charp, S_IRUGO);
++MODULE_PARM_DESC(pki_port, "Specifies which ports connect to the PKI.");
++
++#define MAX_MIX_PER_NODE	2
++#define MAX_BGX_PER_NODE	6
++#define MAX_LMAC_PER_NODE	4
++
++#define MAX_MIX			(MAX_NODES * MAX_MIX_PER_NODE)
++
++/* mix_port_lmac:		Describes a lmac that connects to a mix port.
++ *				The lmac must be on the same node as the mix.
++ *
++ *  node:			Node of the lmac.
++ *  bgx:			Bgx of the lmac.
++ *  lmac:			Lmac index.
++ */
++struct mix_port_lmac {
++	int	node;
++	int	bgx;
++	int	lmac;
++};
++
++/* mix_ports_lmacs contains all the lmacs connected to mix ports */
++static struct mix_port_lmac mix_port_lmacs[MAX_MIX];
++
++/* pki_ports keeps track of the lmacs connected to the pki */
++static bool pki_ports[MAX_NODES][MAX_BGX_PER_NODE][MAX_LMAC_PER_NODE];
++
++/* Created platform devices get added to this list */
++static struct list_head pdev_list;
++static struct mutex pdev_list_lock;
++
++/* Created platform device use this structure to add themselves to the list */
++struct pdev_list_item {
++	struct list_head	list;
++	struct platform_device	*pdev;
++};
++
++/* is_lmac_to_mix:		Search the list of lmacs connected to mix'es
++ *				for a match.
++ *
++ *  node:			Numa node of lmac to search for.
++ *  bgx:			Bgx of lmac to search for.
++ *  lmac:			Lmac index to search for.
++ *
++ *  returns:			true if the lmac is connected to a mix, false
++ *				otherwise.
++ */
++static bool is_lmac_to_mix(int node, int bgx, int lmac)
++{
++	int	i;
++
++	for (i = 0; i < MAX_MIX; i++) {
++		if (mix_port_lmacs[i].node == node &&
++		    mix_port_lmacs[i].bgx == bgx &&
++		    mix_port_lmacs[i].lmac == lmac)
++			return true;
++	}
++
++	return false;
++}
++
++/* is_lmac_to_pki:		Search the list of lmacs connected to the pki
++ *				for a match.
++ *
++ *  node:			Numa node of lmac to search for.
++ *  bgx:			Bgx of lmac to search for.
++ *  lmac:			Lmac index to search for.
++ *
++ *  returns:			true if the lmac is connected to the pki, false
++ *				otherwise.
++ */
++static bool is_lmac_to_pki(int node, int bgx, int lmac)
++{
++	return pki_ports[node][bgx][lmac];
++}
++
++/* is_lmac_to_xcv:		Check if this lmac is connected to the xcv
++ *				block (rgmii).
++ *
++ *  of_node:			Device node to check.
++ *
++ *  returns:			true if the lmac is connected to the xcv, false
++ *				otherwise.
++ */
++static bool is_lmac_to_xcv(struct device_node *of_node)
++{
++	return of_device_is_compatible(of_node, "cavium,octeon-7360-xcv");
++}
++
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++int bgx_probe(struct platform_device *pdev)
++#else
++static int bgx_probe(struct platform_device *pdev)
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020*/
++{
++	struct mac_platform_data platform_data;
++	const __be32 *reg;
++	u32 port;
++	u64 addr;
++	struct device_node *child;
++	struct platform_device *new_dev;
++	struct platform_device *pki_dev;
++	int pki_id;
++	int numa_node, interface;
++	int i;
++	int r = 0;
++	char id[64];
++
++	reg = of_get_property(pdev->dev.of_node, "reg", NULL);
++	addr = of_translate_address(pdev->dev.of_node, reg);
++	interface = (addr >> 24) & 0xf;
++	numa_node = (addr >> 36) & 0x7;
++
++	/* Initialize the node's ports' configuration data */
++	octeon3_init_port_cfg_data(numa_node);
++
++	__cvmx_helper_bgx_probe(cvmx_helper_node_interface_to_xiface(numa_node, interface));
++
++	/* Assign 8 CAM entries per LMAC */
++	for (i = 0; i < 32; i++) {
++		union cvmx_bgxx_cmr_rx_adrx_cam adr_cam;
++		adr_cam.u64 = 0;
++		adr_cam.s.id = i >> 3;
++		cvmx_write_csr_node(numa_node, CVMX_BGXX_CMR_RX_ADRX_CAM(i, interface), adr_cam.u64);
++	}
++
++	for_each_available_child_of_node(pdev->dev.of_node, child) {
++		bool is_mix = false;
++		bool is_pki = false;
++		bool is_xcv = false;
++		union cvmx_bgxx_cmrx_config cmr_config;
++		cvmx_bgxx_cmr_global_config_t global_config;
++		struct pdev_list_item *pdev_item;
++		struct pdev_list_item *pki_item;
++
++		if (!of_device_is_compatible(child, "cavium,octeon-7890-bgx-port") &&
++		    !of_device_is_compatible(child, "cavium,octeon-7360-xcv"))
++			continue;
++		r = of_property_read_u32(child, "reg", &port);
++		if (r) {
++			of_node_put(child);
++			return -ENODEV;
++		}
++
++		is_mix = is_lmac_to_mix(numa_node, interface, port);
++		is_pki = is_lmac_to_pki(numa_node, interface, port);
++		is_xcv = is_lmac_to_xcv(child);
++
++		/* Check if this port should be configured */
++		if (is_mix == false && is_pki == false)
++			continue;
++
++		/* Connect to PKI/PKO */
++		cmr_config.u64 = cvmx_read_csr_node(numa_node, CVMX_BGXX_CMRX_CONFIG(port, interface));
++		cmr_config.s.mix_en = is_mix ? 1 : 0;
++		cvmx_write_csr_node(numa_node, CVMX_BGXX_CMRX_CONFIG(port, interface), cmr_config.u64);
++
++		/* Unreset the mix bgx interface or it will interfare with the
++		 * other ports.
++		 */
++		if (is_mix) {
++			global_config.u64 = cvmx_read_csr_node(numa_node,
++					CVMX_BGXX_CMR_GLOBAL_CONFIG(interface));
++			if (!port)
++				global_config.s.cmr_mix0_reset = 0;
++			else if (port == 1)
++				global_config.s.cmr_mix1_reset = 0;
++			cvmx_write_csr_node(numa_node,
++				    CVMX_BGXX_CMR_GLOBAL_CONFIG(interface),
++					    global_config.u64);
++		}
++
++		snprintf(id, sizeof(id), "%llx.%u.ethernet-mac", (unsigned long long)addr, port);
++		new_dev = of_platform_device_create(child, id, &pdev->dev);
++		if (!new_dev) {
++			dev_err(&pdev->dev, "Error creating %s\n", id);
++			continue;
++		}
++		platform_data.mac_type = BGX_MAC;
++		platform_data.numa_node = numa_node;
++		platform_data.interface = interface;
++		platform_data.port = port;
++		if (is_xcv)
++			platform_data.src_type = XCV;
++		else
++			platform_data.src_type = QLM;
++
++		/* Add device to the list of created devices so we can remove it
++		 * on exit.
++		 */
++		pdev_item = kmalloc(sizeof(*pdev_item), GFP_KERNEL);
++		if (!pdev_item) {
++			of_device_unregister(new_dev);
++			of_node_put(child);
++			return -ENOMEM;
++		}
++		pdev_item->pdev = new_dev;
++		mutex_lock(&pdev_list_lock);
++		list_add(&pdev_item->list, &pdev_list);
++		mutex_unlock(&pdev_list_lock);
++
++		pki_id = octeon3_get_eth_id();
++		pki_dev = platform_device_register_data(&new_dev->dev,
++							is_mix ? "octeon_mgmt" : "ethernet-mac-pki",
++							pki_id,
++							&platform_data, sizeof(platform_data));
++		if (IS_ERR(pki_dev)) {
++			r = PTR_ERR(pki_dev);
++			mutex_lock(&pdev_list_lock);
++			list_del(&pdev_item->list);
++			mutex_unlock(&pdev_list_lock);
++			kfree(pdev_item);
++			of_device_unregister(new_dev);
++			of_node_put(child);
++			return r;
++		}
++		dev_info(&pdev->dev, "Created %s %u: %p\n", is_mix ? "MIX" : "PKI", pki_dev->id, pki_dev);
++
++		/* Add device to the list of created devices so we can remove it
++		 * on exit.
++		 */
++		pki_item = kmalloc(sizeof(*pki_item), GFP_KERNEL);
++		if (!pki_item) {
++			platform_device_unregister(pki_dev);
++			mutex_lock(&pdev_list_lock);
++			list_del(&pdev_item->list);
++			mutex_unlock(&pdev_list_lock);
++			kfree(pdev_item);
++			of_device_unregister(new_dev);
++			of_node_put(child);
++			return -ENOMEM;
++		}
++		pki_item->pdev = pki_dev;
++		mutex_lock(&pdev_list_lock);
++		list_add(&pki_item->list, &pdev_list);
++		mutex_unlock(&pdev_list_lock);
++
++#ifdef CONFIG_NUMA
++		new_dev->dev.numa_node = pdev->dev.numa_node;
++		pki_dev->dev.numa_node = pdev->dev.numa_node;
++#endif
++		/* One time request driver module */
++		if (is_mix) {
++			if (atomic_cmpxchg(&request_mgmt_once, 0, 1) == 0)
++				request_module_nowait("octeon_mgmt");
++		}
++		if (is_pki)
++			octeon3_load_eth_driver();
++	}
++
++	dev_info(&pdev->dev, "Probed\n");
++	return 0;
++}
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++EXPORT_SYMBOL(bgx_probe);
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020*/
++
++/* bgx_mix_init_from_fdt:	Initialize the list of lmacs that connect to mix
++ *				ports from information in the device tree.
++ *
++ *  returns:			Zero on success, error otherwise.
++ */
++static int bgx_mix_init_from_fdt(void)
++{
++	struct device_node	*node;
++	struct device_node	*parent = NULL;
++	int			mix = 0;
++
++	for_each_compatible_node(node, NULL, "cavium,octeon-7890-mix") {
++		struct device_node	*lmac_fdt_node;
++		const __be32		*reg;
++		u64			addr;
++
++		/* Get the fdt node of the lmac connected to this mix */
++		lmac_fdt_node = of_parse_phandle(node, "cavium,mac-handle", 0);
++		if (!lmac_fdt_node)
++			goto err;
++
++		/* Get the numa node and bgx of the lmac */
++		parent = of_get_parent(lmac_fdt_node);
++		if (!parent)
++			goto err;
++		reg = of_get_property(parent, "reg", NULL);
++		if (!reg)
++			goto err;
++		addr = of_translate_address(parent, reg);
++		of_node_put(parent);
++		parent = NULL;
++
++		mix_port_lmacs[mix].node = (addr >> 36) & 0x7;
++		mix_port_lmacs[mix].bgx = (addr >> 24) & 0xf;
++
++		/* Get the lmac index */
++		reg = of_get_property(lmac_fdt_node, "reg", NULL);
++		if (!reg)
++			goto err;
++
++		mix_port_lmacs[mix].lmac = *reg;
++
++		mix++;
++		if (mix >= MAX_MIX)
++			break;
++	}
++
++	return 0;
++ err:
++	pr_warn("Invalid device tree mix port information\n");
++	for (mix = 0; mix < MAX_MIX; mix++) {
++		mix_port_lmacs[mix].node = -1;
++		mix_port_lmacs[mix].bgx = -1;
++		mix_port_lmacs[mix].lmac = -1;
++	}
++	if (parent)
++		of_node_put(parent);
++
++	return -EINVAL;
++}
++
++/* bgx_mix_init_from_param:	Initialize the list of lmacs that connect to mix
++ *				ports from information in the "mix_port"
++ *				parameter. The mix_port parameter format is as
++ *				follows:
++ *				mix_port=nbl
++ *				where:
++ *					n = node
++ *					b = bgx
++ *					l = lmac
++ *				There can be up to 4 lmacs defined separated by
++ *				commas. For example to select node0, bgx0, lmac0
++ *				and node0, bgx4, lamc0, the mix_port parameter
++ *				would be: mix_port=000,040
++ *
++ *  returns:			Zero on success, error otherwise.
++ */
++static int bgx_mix_init_from_param(void)
++{
++	char	*p = mix_port;
++	int	mix = 0;
++	int	i;
++
++	while (*p) {
++		int	node = -1;
++		int	bgx = -1;
++		int	lmac = -1;
++
++		if (strlen(p) < 3)
++			goto err;
++
++		/* Get the numa node */
++		if (!isdigit(*p))
++			goto err;
++		node = *p - '0';
++		if (node >= MAX_NODES)
++			goto err;
++
++		/* Get the bgx */
++		p++;
++		if (!isdigit(*p))
++			goto err;
++		bgx = *p - '0';
++		if (bgx >= MAX_BGX_PER_NODE)
++			goto err;
++
++		/* Get the lmac index */
++		p++;
++		if (!isdigit(*p))
++			goto err;
++		lmac = *p - '0';
++		if (lmac >= 2)
++			goto err;
++
++		/* Only one lmac0 and one lmac1 per node is supported */
++		for (i = 0; i < MAX_MIX; i++) {
++			if (mix_port_lmacs[i].node == node &&
++			    mix_port_lmacs[i].lmac == lmac)
++				goto err;
++		}
++
++		mix_port_lmacs[mix].node = node;
++		mix_port_lmacs[mix].bgx = bgx;
++		mix_port_lmacs[mix].lmac = lmac;
++
++		p++;
++		if (*p == ',')
++			p++;
++
++		mix++;
++		if (mix >= MAX_MIX)
++			break;
++	}
++
++	return 0;
++ err:
++	pr_warn("Invalid parameter mix_port=%s\n", mix_port);
++	for (mix = 0; mix < MAX_MIX; mix++) {
++		mix_port_lmacs[mix].node = -1;
++		mix_port_lmacs[mix].bgx = -1;
++		mix_port_lmacs[mix].lmac = -1;
++	}
++	return -EINVAL;
++}
++
++/* bgx_mix_port_lmacs_init:	Initialize the mix_port_lmacs variable with the
++ *				lmacs that connect to mic ports.
++ *
++ *  returns:			Zero on success, error otherwise.
++ */
++static int bgx_mix_port_lmacs_init(void)
++{
++	int	mix;
++
++	/* Start with no mix ports configured */
++	for (mix = 0; mix < MAX_MIX; mix++) {
++		mix_port_lmacs[mix].node = -1;
++		mix_port_lmacs[mix].bgx = -1;
++		mix_port_lmacs[mix].lmac = -1;
++	}
++
++	/* Check if no mix port should be configured */
++	if (mix_port && !strcmp(mix_port, "none"))
++		return 0;
++
++	/* Configure the mix ports using information from the device tree if no
++	 * parameter was passed. Otherwise, use the information in the module
++	 * parameter.
++	 */
++	if (!mix_port)
++		bgx_mix_init_from_fdt();
++	else
++		bgx_mix_init_from_param();
++
++	return 0;
++}
++
++/* bgx_parse_pki_elem:		Parse a single element (node, bgx, or lmac) out
++ *				a pki lmac string and set its bitmap
++ *				accordingly.
++ *
++ *  str:			Pki lmac string to parse.
++ *  bitmap:			Updated with the bits selected by str.
++ *  size:			Maximum size of the bitmap.
++ *
++ *  returns:			Number of characters processed from str,
++ *				error otherwise.
++ */
++static int bgx_parse_pki_elem(const char *str, unsigned long *bitmap, int size)
++{
++	const char	*p = str;
++	int		len = -1;
++	int		bit;
++
++	if (*p == 0) {
++		/* If identifier is missing, the whole subset is allowed */
++		bitmap_set(bitmap, 0, size);
++		len = 0;
++	} else if (*p == '*') {
++		/* If identifier is an asterisk, the whole subset is allowed */
++		bitmap_set(bitmap, 0, size);
++		len = 1;
++	} else if (isdigit(*p)) {
++		/* If identifier is a digit, only the bit corresponding to the
++		 * digit is set.
++		 */
++		bit = *p - '0';
++		if (bit < size) {
++			bitmap_set(bitmap, bit, 1);
++			len = 1;
++		}
++	} else if (*p == '[') {
++		/* If identifier is a bracket, all the bits corresponding to
++		 * the digits inside the bracket are set.
++		 */
++		p++;
++		len = 1;
++		do {
++			if (isdigit(*p)) {
++				bit = *p - '0';
++				if (bit < size)
++					bitmap_set(bitmap, bit, 1);
++				else
++					return -1;
++			} else
++				return -1;
++			p++;
++			len++;
++		} while (*p != ']');
++		len++;
++	} else
++		len = -1;
++
++	return len;
++}
++
++/* bgx_pki_bitmap_set:		Set the bitmap bits for all elements (node, bgx,
++ *				and lmac) selected by a pki lmac string.
++ *
++ *  str:			Pki lmac string to process.
++ *  node:			Updated with the nodes specified in the pki lmac
++ *				string.
++ *  bgx:			Updated with the bgx's specified in the pki lmac
++ *				string.
++ *  lmac:			Updated with the lmacs specified in the pki lmac
++ *				string.
++ *
++ *  returns:			Zero on success, error otherwise.
++ */
++static unsigned long bgx_pki_bitmap_set(const char *str, unsigned long *node,
++					unsigned long *bgx, unsigned long *lmac)
++{
++	const char	*p = str;
++	int		len;
++
++	/* Parse the node */
++	len = bgx_parse_pki_elem(p, node, MAX_NODES);
++	if (len < 0)
++		goto err;
++
++	/* Parse the bgx */
++	p += len;
++	len = bgx_parse_pki_elem(p, bgx, MAX_BGX_PER_NODE);
++	if (len < 0)
++		goto err;
++
++	/* Parse the lmac */
++	p += len;
++	len = bgx_parse_pki_elem(p, lmac, MAX_LMAC_PER_NODE);
++	if (len < 0)
++		goto err;
++
++	return 0;
++ err:
++	bitmap_zero(node, MAX_NODES);
++	bitmap_zero(bgx, MAX_BGX_PER_NODE);
++	bitmap_zero(lmac, MAX_LMAC_PER_NODE);
++	return len;
++
++}
++
++/* bgx_pki_init_from_param:	Initialize the list of lmacs that connect to the
++ *				pki from information in the "pki_port"
++ *				parameter.
++ *
++ *				The pki_port parameter format is as follows:
++ *				pki_port=nbl
++ *				where:
++ *					n = node
++ *					b = bgx
++ *					l = lmac
++ *
++ *				Commas must be used to separate multiple lmacs:
++ *				pki_port=000,100,110
++ *
++ *				Asterisks (*) specify all possible characters in
++ *				the subset:
++ *				pki_port=00* (all lmacs of node0 bgx0).
++ *
++ *				Missing lmacs identifiers default to all
++ *				possible characters in the subset:
++ *				pki_port=00 (all lmacs on node0 bgx0)
++ *
++ *				Brackets ('[' and ']') specify the valid
++ *				characters in the subset:
++ *				pki_port=00[01] (lmac0 and lmac1 of node0 bgx0).
++ *
++ *  returns:			Zero on success, error otherwise.
++ */
++static int bgx_pki_init_from_param(void)
++{
++	char	*cur;
++	char	*next;
++	DECLARE_BITMAP(node_bitmap, MAX_NODES);
++	DECLARE_BITMAP(bgx_bitmap, MAX_BGX_PER_NODE);
++	DECLARE_BITMAP(lmac_bitmap, MAX_LMAC_PER_NODE);
++
++	/* Parse each comma separated lmac specifier */
++	cur = pki_port;
++	while (cur) {
++		unsigned long	node;
++		unsigned long	bgx;
++		unsigned long	lmac;
++
++		bitmap_zero(node_bitmap, BITS_PER_LONG);
++		bitmap_zero(bgx_bitmap, BITS_PER_LONG);
++		bitmap_zero(lmac_bitmap, BITS_PER_LONG);
++
++		next = strchr(cur, ',');
++		if (next)
++			*next++ = '\0';
++
++		/* Convert the specifier into a bitmap */
++		bgx_pki_bitmap_set(cur, node_bitmap, bgx_bitmap, lmac_bitmap);
++
++		/* Mark the lmacs to be connected to the pki */
++		for_each_set_bit(node, node_bitmap, MAX_NODES) {
++			for_each_set_bit(bgx, bgx_bitmap, MAX_BGX_PER_NODE) {
++				for_each_set_bit(lmac, lmac_bitmap,
++						 MAX_LMAC_PER_NODE)
++					pki_ports[node][bgx][lmac] = true;
++			}
++		}
++
++		cur = next;
++	}
++
++	return 0;
++}
++
++/* bgx_pki_ports_init:		Initialize the pki_ports variable with the
++ *				lmacs that connect to the pki.
++ *
++ *  returns:			Zero on success, error otherwise.
++ */
++static int bgx_pki_ports_init(void)
++{
++	int	i, j, k;
++	bool	def_val;
++
++	/* Whether all ports default to connect to the pki or not depend on the
++	 * passed module parameter (if any).
++	 */
++	if (pki_port)
++		def_val = false;
++	else
++		def_val = true;
++
++	for (i = 0; i < MAX_NODES; i++) {
++		for (j = 0; j < MAX_BGX_PER_NODE; j++) {
++			for (k = 0; k < MAX_LMAC_PER_NODE; k++)
++				pki_ports[i][j][k] = def_val;
++		}
++	}
++
++	/* Check if ports have to be individually configured */
++	if (pki_port && strcmp(pki_port, "none"))
++		bgx_pki_init_from_param();
++
++	return 0;
++}
++
++/* Mainline 6.11+ changed platform_driver.remove from int to void. */
++static void bgx_remove(struct platform_device *pdev)
++{
++}
++
++static void bgx_shutdown(struct platform_device *pdev)
++{
++	return;
++}
++
++static struct of_device_id bgx_match[] = {
++	{
++		.compatible = "cavium,octeon-7890-bgx",
++	},
++	{},
++};
++MODULE_DEVICE_TABLE(of, bgx_match);
++
++static struct platform_driver bgx_driver = {
++	.probe		= bgx_probe,
++	.remove		= bgx_remove,
++	.shutdown       = bgx_shutdown,
++	.driver		= {
++		.owner	= THIS_MODULE,
++		.name	= KBUILD_MODNAME,
++		.of_match_table = bgx_match,
++	},
++};
++
++/* Allow bgx_port driver to force this driver to load */
++void bgx_nexus_load(void)
++{
++}
++EXPORT_SYMBOL(bgx_nexus_load);
++
++static int __init bgx_driver_init(void)
++{
++	int r;
++
++	INIT_LIST_HEAD(&pdev_list);
++	mutex_init(&pdev_list_lock);
++
++	bgx_mix_port_lmacs_init();
++	bgx_pki_ports_init();
++
++	r = platform_driver_register(&bgx_driver);
++
++	return r;
++}
++
++static void __exit bgx_driver_exit(void)
++{
++	struct pdev_list_item *pdev_item;
++
++	mutex_lock(&pdev_list_lock);
++	while (!list_empty(&pdev_list)) {
++		pdev_item = list_first_entry(&pdev_list, struct pdev_list_item,
++					     list);
++		list_del(&pdev_item->list);
++		platform_device_unregister(pdev_item->pdev);
++		kfree(pdev_item);
++	}
++	mutex_unlock(&pdev_list_lock);
++
++	platform_driver_unregister(&bgx_driver);
++}
++
++module_init(bgx_driver_init);
++module_exit(bgx_driver_exit);
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("Cavium Networks <support@caviumnetworks.com>");
++MODULE_DESCRIPTION("Cavium Networks BGX MAC Nexus driver.");
+diff --git a/drivers/net/ethernet/cavium/octeon/octeon-common-nexus.c b/drivers/net/ethernet/cavium/octeon/octeon-common-nexus.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/net/ethernet/cavium/octeon/octeon-common-nexus.c
+@@ -0,0 +1,76 @@
++/**********************************************************************
++ * Copyright (c) 2015 Cavium, Inc.
++ *
++ * This file is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License, Version 2, as
++ * published by the Free Software Foundation.
++ *
++ * This file is distributed in the hope that it will be useful, but
++ * AS-IS and WITHOUT ANY WARRANTY; without even the implied warranty
++ * of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE, TITLE, or
++ * NONINFRINGEMENT.  See the GNU General Public License for more
++ * details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this file; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
++ * or visit http://www.gnu.org/licenses/.
++ *
++ * This file may also be available under a different license from Cavium.
++ * Contact Cavium, Inc. for more information
++ **********************************************************************/
++
++#include <linux/module.h>
++#include <linux/types.h>
++#include <linux/atomic.h>
++
++#include <asm/octeon/cvmx-helper-cfg.h>
++
++
++static atomic_t init_port_cfg_data_once[4];
++static atomic_t octeon3_eth_driver_once;
++
++
++int octeon3_init_port_cfg_data(int node)
++{
++	int	rc = 0;
++
++	if (atomic_cmpxchg(init_port_cfg_data_once + node, 0, 1) == 0)
++		rc = __cvmx_helper_init_port_config_data(node);
++
++	return rc;
++}
++EXPORT_SYMBOL(octeon3_init_port_cfg_data);
++
++int octeon3_load_eth_driver(void)
++{
++	if (atomic_cmpxchg(&octeon3_eth_driver_once, 0, 1) == 0)
++		request_module_nowait("octeon3-ethernet");
++
++	return 0;
++}
++EXPORT_SYMBOL(octeon3_load_eth_driver);
++
++int octeon3_get_eth_id(void)
++{
++	static int pki_id;
++
++	return pki_id++;
++}
++EXPORT_SYMBOL(octeon3_get_eth_id);
++
++static int __init common_nexus_init(void)
++{
++	return 0;
++}
++
++static void __exit common_nexus_exit(void)
++{
++}
++
++module_init(common_nexus_init);
++module_exit(common_nexus_exit);
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("Carlos Munoz <cmunoz@caviumnetworks.com>");
++MODULE_DESCRIPTION("Cavium Networks common ethernet nexus driver.");
+diff --git a/drivers/net/ethernet/cavium/octeon/octeon_common.c b/drivers/net/ethernet/cavium/octeon/octeon_common.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/net/ethernet/cavium/octeon/octeon_common.c
+@@ -0,0 +1,227 @@
++/*
++ * This file is subject to the terms and conditions of the GNU General Public
++ * License.  See the file "COPYING" in the main directory of this archive
++ * for more details.
++ *
++ * Copyright (C) 2013 Cavium, Inc.
++ */
++
++#include <linux/module.h>
++
++#include <asm/octeon/octeon.h>
++#include "octeon_common.h"
++
++#include <asm/octeon/cvmx-gmxx-defs.h>
++#include <asm/octeon/cvmx-agl-defs.h>
++#include <asm/octeon/cvmx-pip-defs.h>
++
++struct cvm_oct_cam_state {
++	u64 cam[6];
++	u64 cam_mask;
++	int cam_index;
++};
++
++static void cvm_oct_cam_state_add(struct cvm_oct_cam_state *cs, unsigned char *addr)
++{
++	int i;
++
++	for (i = 0; i < 6; i++)
++		cs->cam[i] |= (u64)addr[i] << (8 * (cs->cam_index));
++	cs->cam_mask |= (1ULL << cs->cam_index);
++	cs->cam_index++;
++}
++
++/**
++ * Set the multicast list
++ * @dev      : Device to work on
++ * @base_reg : Base address of register bank
++ * @rx_lock  : For locking
++ *
++ */
++void cvm_oct_common_set_rx_filtering(struct net_device *dev, u64 base_reg, spinlock_t *lock)
++{
++	u64 reg, saved_reg;
++	unsigned long flags;
++	unsigned int cam_mode = 1; /* 1 - Accept on CAM match */
++	unsigned int multicast_mode = 1; /* 1 - Reject all multicast.  */
++	struct cvm_oct_cam_state cam_state;
++	struct netdev_hw_addr *ha;
++	int available_cam_entries;
++
++	if (base_reg == 0)
++		return;
++
++	memset(&cam_state, 0, sizeof(cam_state));
++
++	if ((dev->flags & IFF_PROMISC) || dev->uc.count > 7) {
++		cam_mode = 0;
++		available_cam_entries = 8;
++	} else {
++		/* One CAM entry for the primary address, leaves seven
++		 * for the secondary addresses.
++		 */
++		available_cam_entries = 7 - dev->uc.count;
++	}
++
++	if (dev->flags & IFF_MULTICAST) {
++		if (cam_mode == 0 || (dev->flags & IFF_ALLMULTI) ||
++		    netdev_mc_count(dev) > available_cam_entries)
++			multicast_mode = 2; /* 2 - Accept all multicast.  */
++		else
++			multicast_mode = 0; /* 0 - Use CAM.  */
++	}
++
++	if (cam_mode == 1) {
++		/* Add primary address. */
++		cvm_oct_cam_state_add(&cam_state, dev->dev_addr);
++		netdev_for_each_uc_addr(ha, dev)
++			cvm_oct_cam_state_add(&cam_state, ha->addr);
++	}
++	if (multicast_mode == 0) {
++		netdev_for_each_mc_addr(ha, dev)
++			cvm_oct_cam_state_add(&cam_state, ha->addr);
++	}
++
++	/* Disable packet I/O. */
++	spin_lock_irqsave(lock, flags);
++
++	reg = cvmx_read_csr(base_reg + GMX_PRT_CFG);
++	saved_reg = reg;
++	cvmx_write_csr(base_reg + GMX_PRT_CFG, reg & ~1ull);
++
++	reg = 0;
++	reg |= (cam_mode << 3) & 0x8;
++	reg |= (multicast_mode << 1) & 0x6;
++	reg |= 1;     /* Allow broadcast */
++
++	cvmx_write_csr(base_reg + GMX_RX_ADR_CTL, reg);
++
++	cvmx_write_csr(base_reg + GMX_RX_ADR_CAM0, cam_state.cam[0]);
++	cvmx_write_csr(base_reg + GMX_RX_ADR_CAM1, cam_state.cam[1]);
++	cvmx_write_csr(base_reg + GMX_RX_ADR_CAM2, cam_state.cam[2]);
++	cvmx_write_csr(base_reg + GMX_RX_ADR_CAM3, cam_state.cam[3]);
++	cvmx_write_csr(base_reg + GMX_RX_ADR_CAM4, cam_state.cam[4]);
++	cvmx_write_csr(base_reg + GMX_RX_ADR_CAM5, cam_state.cam[5]);
++	cvmx_write_csr(base_reg + GMX_RX_ADR_CAM_EN, cam_state.cam_mask);
++
++	/* Restore packet I/O. */
++	cvmx_write_csr(base_reg + GMX_PRT_CFG, saved_reg);
++
++	spin_unlock_irqrestore(lock, flags);
++}
++EXPORT_SYMBOL(cvm_oct_common_set_rx_filtering);
++
++/**
++ * Set the hardware MAC address for a device.
++ * @dev      : Device to work on
++ * @addr     : Address to change it to
++ * @base_reg : Base address of register bank
++ * @rx_lock  : For locking
++ *
++ * Returns zero on success
++ */
++int cvm_oct_common_set_mac_address(struct net_device *dev, void *addr,
++	 u64 base_reg, spinlock_t *lock)
++{
++	int r = eth_mac_addr(dev, addr);
++
++	if (r)
++		return r;
++
++	cvm_oct_common_set_rx_filtering(dev, base_reg, lock);
++
++	return 0;
++}
++EXPORT_SYMBOL(cvm_oct_common_set_mac_address);
++
++/**
++ * cvm_oct_common_change_mtu - change the link MTU
++ * @dev      : Device to change
++ * @mtu      : The new MTU
++ * @base_reg : Base address of register bank
++ * @pip_reg  : Used for frame checking
++ * @mtu_limit: Max allowed MTU size
++ *
++ * Returns Zero on success
++ */
++int cvm_oct_common_change_mtu(struct net_device *dev, int mtu, u64 base_reg,
++		u64 pip_reg, int mtu_limit)
++{
++	int max_packet = mtu + OCTEON_FRAME_HEADER_LEN;
++
++	if (max_packet < 64 || max_packet > mtu_limit) {
++		netdev_err(dev, "MTU must be between %d and %d.\n",
++			64 - OCTEON_FRAME_HEADER_LEN, mtu_limit - OCTEON_FRAME_HEADER_LEN);
++		return -EINVAL;
++	}
++
++	dev->mtu = mtu;
++
++	/* Set the hardware to truncate packets larger than
++	 * the MTU. The jabber register must be set to a
++	 * multiple of 8 bytes, so round up.
++	 */
++	if (base_reg) {
++		if (pip_reg == 0)
++			cvmx_write_csr(base_reg + GMX_RX_FRM_MAX, max_packet);
++		else {
++			union cvmx_pip_prt_cfgx port_cfg;
++
++			port_cfg.u64 = cvmx_read_csr(pip_reg);
++			if (port_cfg.s.maxerr_en) {
++				/* Disable the PIP check as it can
++				 * only be controlled over a group of
++				 * ports, let the check be done in the
++				 * GMX instead.
++				 */
++				port_cfg.s.maxerr_en = 0;
++				cvmx_write_csr(pip_reg, port_cfg.u64);
++			}
++		}
++		/* Set the hardware to truncate packets larger than
++		 * the MTU. The jabber register must be set to a
++		 * multiple of 8 bytes, so round up.
++		 */
++		cvmx_write_csr(base_reg + GMX_RX_JABBER, (max_packet + 7) & ~7u);
++		/* Need to configure AGL_GMX_RX_FRM_MAX for agl interface. */
++		if ((base_reg >> 28 & 0xf) == 0xe)
++			cvmx_write_csr(base_reg + GMX_RX_FRM_MAX, max_packet);
++	}
++
++	return 0;
++}
++EXPORT_SYMBOL(cvm_oct_common_change_mtu);
++
++#ifdef CONFIG_UBNT_E300
++static u16 vlan_base_vid=4086;;
++static u16 vlan_switch0_vid=4094;
++static u32 is_vlan_aware_enabled=0;
++inline int cvm_oct_get_vlan_aware_state(void)
++{
++	return is_vlan_aware_enabled;
++}
++EXPORT_SYMBOL(cvm_oct_get_vlan_aware_state);
++
++inline int cvm_oct_get_vlan_base_vid(void)
++{
++	return vlan_base_vid;
++}
++EXPORT_SYMBOL(cvm_oct_get_vlan_base_vid);
++
++inline int cvm_oct_get_vlan_switch0_vid(void)
++{
++	return vlan_switch0_vid;
++}
++EXPORT_SYMBOL(cvm_oct_get_vlan_switch0_vid);
++
++void cvm_oct_set_vlan_aware_cb(u32 status, u16 base_vid, u16 sw0_vid)
++{
++	vlan_base_vid = base_vid;
++	vlan_switch0_vid = sw0_vid;
++	is_vlan_aware_enabled = status;
++}
++EXPORT_SYMBOL(cvm_oct_set_vlan_aware_cb);
++#endif /* CONFIG_UBNT_E300 */
++
++MODULE_LICENSE("GPL");
++MODULE_DESCRIPTION("Cavium, Inc. Common Network Driver");
+diff --git a/drivers/net/ethernet/cavium/octeon/octeon-bgx.h b/drivers/net/ethernet/cavium/octeon/octeon-bgx.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/net/ethernet/cavium/octeon/octeon-bgx.h
+@@ -0,0 +1,66 @@
++/**********************************************************************
++ * Author: Cavium, Inc.
++ *
++ * Contact: support@cavium.com
++ * This file is part of the OCTEON SDK
++ *
++ * Copyright (c) 2014 Cavium, Inc.
++ *
++ * This file is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License, Version 2, as
++ * published by the Free Software Foundation.
++ *
++ * This file is distributed in the hope that it will be useful, but
++ * AS-IS and WITHOUT ANY WARRANTY; without even the implied warranty
++ * of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE, TITLE, or
++ * NONINFRINGEMENT.  See the GNU General Public License for more
++ * details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this file; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
++ * or visit http://www.gnu.org/licenses/.
++ *
++ * This file may also be available under a different license from Cavium.
++ * Contact Cavium, Inc. for more information
++ **********************************************************************/
++#ifndef _OCTEON_BGX_H_
++#define _OCTEON_BGX_H_
++
++#include <linux/ethtool.h>
++
++#if defined(CONFIG_UBNT_E1000) || defined(CONFIG_UBNT_E1020)
++#define SFP_LINK_UP		1
++#define SFP_LINK_DOWN	2
++#define SFP_TX_RX		3
++#define SFP_ADM_UP		4
++#define SFP_ADM_DOWN	5
++#endif /* CONFIG_UBNT_E1000 || CONFIG_UBNT_E1020 */
++
++struct device;
++struct net_device;
++struct bgx_port_priv;
++
++struct bgx_port_netdev_priv {
++	struct bgx_port_priv *bgx_priv;
++};
++
++void bgx_nexus_load(void);
++
++void bgx_port_set_netdev(struct device *dev, struct net_device *netdev);
++int bgx_port_enable(struct net_device *netdev);
++int bgx_port_disable(struct net_device *netdev);
++const u8 *bgx_port_get_mac(struct net_device *netdev);
++void bgx_port_set_rx_filtering(struct net_device *netdev);
++int bgx_port_change_mtu(struct net_device *netdev, int new_mtu);
++/* Mainline 4.6+ ethtool API. */
++int bgx_port_ethtool_get_link_ksettings(struct net_device *netdev,
++					struct ethtool_link_ksettings *cmd);
++int bgx_port_ethtool_set_link_ksettings(struct net_device *netdev,
++					const struct ethtool_link_ksettings *cmd);
++int bgx_port_ethtool_nway_reset(struct net_device *netdev);
++int bgx_port_do_ioctl(struct net_device *netdev, struct ifreq *ifr, int cmd);
++
++void bgx_port_mix_assert_reset(struct net_device *netdev, int mix, bool v);
++
++#endif /* _OCTEON_BGX_H_ */
+diff --git a/drivers/net/ethernet/cavium/octeon/octeon-common-nexus.h b/drivers/net/ethernet/cavium/octeon/octeon-common-nexus.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/net/ethernet/cavium/octeon/octeon-common-nexus.h
+@@ -0,0 +1,53 @@
++/**********************************************************************
++ * Copyright (c) 2015 Cavium, Inc.
++ *
++ * This file is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License, Version 2, as
++ * published by the Free Software Foundation.
++ *
++ * This file is distributed in the hope that it will be useful, but
++ * AS-IS and WITHOUT ANY WARRANTY; without even the implied warranty
++ * of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE, TITLE, or
++ * NONINFRINGEMENT.  See the GNU General Public License for more
++ * details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this file; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
++ * or visit http://www.gnu.org/licenses/.
++ *
++ * This file may also be available under a different license from Cavium.
++ * Contact Cavium, Inc. for more information
++ **********************************************************************/
++
++#ifndef __OCTEON3_COMMON_NEXUS_H__
++#define __OCTEON3_COMMON_NEXUS_H__
++
++#define MAX_NODES		2
++#define SRIO_INTERFACE_OFFSET	1
++
++
++enum octeon3_mac_type {
++	BGX_MAC,
++	SRIO_MAC
++};
++
++enum octeon3_src_type {
++	QLM,
++	XCV
++};
++
++struct mac_platform_data {
++	enum octeon3_mac_type	mac_type;
++	int			numa_node;
++	int			interface;
++	int			port;
++	enum octeon3_src_type	src_type;
++};
++
++extern int octeon3_init_port_cfg_data(int node);
++extern int octeon3_load_eth_driver(void);
++extern int octeon3_get_eth_id(void);
++extern void srio_nexus_load(void);
++
++#endif /* __OCTEON3_COMMON_NEXUS_H__ */
+diff --git a/drivers/net/ethernet/cavium/octeon/octeon_common.h b/drivers/net/ethernet/cavium/octeon/octeon_common.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/net/ethernet/cavium/octeon/octeon_common.h
+@@ -0,0 +1,46 @@
++/*
++ * This file is subject to the terms and conditions of the GNU General Public
++ * License.  See the file "COPYING" in the main directory of this archive
++ * for more details.
++ *
++ * Copyright (C) 2013 Cavium, Inc.
++ */
++#ifndef _ETHERNET_OCTEON_OCTEON_COMMON_H
++#define _ETHERNET_OCTEON_OCTEON_COMMON_H
++
++#include <linux/netdevice.h>
++#include <linux/etherdevice.h>
++#include <linux/if_vlan.h>
++
++/* Allow 8 bytes for vlan and FCS. */
++#define OCTEON_FRAME_HEADER_LEN	(ETH_HLEN + ETH_FCS_LEN + VLAN_HLEN)
++
++#define GMX_PRT_CFG                 0x10
++
++#define GMX_RX_FRM_MAX              0x30
++#define GMX_RX_JABBER               0x38
++
++#define GMX_RX_ADR_CTL              0x100
++#define GMX_RX_ADR_CAM_EN           0x108
++#define GMX_RX_ADR_CAM0             0x180
++#define GMX_RX_ADR_CAM1             0x188
++#define GMX_RX_ADR_CAM2             0x190
++#define GMX_RX_ADR_CAM3             0x198
++#define GMX_RX_ADR_CAM4             0x1a0
++#define GMX_RX_ADR_CAM5             0x1a8
++
++extern void cvm_oct_common_set_rx_filtering(struct net_device *dev, u64 base_reg,
++					spinlock_t *lock);
++
++extern int cvm_oct_common_set_mac_address(struct net_device *dev, void *addr,
++					u64 base_reg, spinlock_t *lock);
++
++extern int cvm_oct_common_change_mtu(struct net_device *dev, int mtu, u64 base_reg,
++		u64 pip_reg, int mtu_limit);
++
++#ifdef CONFIG_UBNT_E300
++extern int cvm_oct_get_vlan_aware_state(void);
++extern int cvm_oct_get_vlan_base_vid(void);
++extern int cvm_oct_get_vlan_switch0_vid(void);
++#endif /* CONFIG_UBNT_E300 */
++#endif
+diff --git a/drivers/net/ethernet/cavium/octeon/octeon-ethernet.h b/drivers/net/ethernet/cavium/octeon/octeon-ethernet.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/net/ethernet/cavium/octeon/octeon-ethernet.h
+@@ -0,0 +1,230 @@
++/**********************************************************************
++ * Author: Cavium, Inc.
++ *
++ * Contact: support@cavium.com
++ * This file is part of the OCTEON SDK
++ *
++ * Copyright (c) 2003-2012 Cavium, Inc.
++ *
++ * This file is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License, Version 2, as
++ * published by the Free Software Foundation.
++ *
++ * This file is distributed in the hope that it will be useful, but
++ * AS-IS and WITHOUT ANY WARRANTY; without even the implied warranty
++ * of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE, TITLE, or
++ * NONINFRINGEMENT.  See the GNU General Public License for more
++ * details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this file; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
++ * or visit http://www.gnu.org/licenses/.
++ *
++ * This file may also be available under a different license from Cavium.
++ * Contact Cavium, Inc. for more information
++ **********************************************************************/
++
++/*
++ * External interface for the Cavium Octeon ethernet driver.
++ */
++#ifndef OCTEON_ETHERNET_H
++#define OCTEON_ETHERNET_H
++
++#include <linux/of.h>
++
++#include "octeon_common.h"
++
++#include <asm/octeon/cvmx-helper.h>
++#include <asm/octeon/cvmx-hwfau.h>
++#include <asm/octeon/octeon-ethernet-user.h>
++
++/**
++ * This is the definition of the Ethernet driver's private
++ * driver state stored in netdev_priv(dev).
++ */
++struct octeon_ethernet {
++	struct rb_node ipd_tree;
++	int key;
++	int ipd_port;
++	int pko_port;
++	int ipd_pkind;
++	int interface;
++	int interface_port;
++
++	/* My netdev. */
++	struct net_device *netdev;
++	/* My location in the cvm_oct_list */
++	struct list_head list;
++
++	/* Type of port. This is one of the enums in
++	 * cvmx_helper_interface_mode_t
++	 */
++	int imode;
++
++	unsigned int rx_strip_fcs:1;
++	unsigned int tx_timestamp_hw:1;
++	unsigned int rx_timestamp_hw:1;
++	unsigned int tx_multiple_queues:1;
++	unsigned int tx_lockless:1;
++
++	/* Base address for accessing GMX registers */
++	u64 gmx_base;
++
++	/* Optional intecept callback defined above */
++	cvm_oct_callback_t      intercept_cb;
++
++	/* Number of elements in tx_queue below */
++	int                     num_tx_queues;
++
++	/* SRIO ports add this header for the SRIO block */
++	u64 srio_tx_header;
++
++	struct {
++		/* PKO hardware queue for the port */
++		int	queue;
++		/* Hardware fetch and add to count outstanding tx buffers */
++		int	fau;
++	} tx_queue[32];
++
++	struct phy_device *phydev;
++	int last_link;
++	int last_speed;
++	int last_duplex;
++	/* Last negotiated link state */
++	u64 link_info;
++	/* Called periodically to check link status */
++	spinlock_t poll_lock;
++	void (*poll) (struct net_device *dev);
++	void (*link_change) (struct octeon_ethernet *, cvmx_helper_link_info_t);
++	struct delayed_work	port_periodic_work;
++	struct work_struct	port_work;	/* may be unused. */
++	struct device_node	*of_node;
++	u64 last_tx_octets;
++	u32 last_tx_packets;
++	struct list_head srio_bcast;
++	struct notifier_block	hw_status_notifier;
++};
++
++struct octeon_ethernet_srio_bcast_target {
++	struct list_head list;
++	u16 destid;
++};
++
++struct octeon_ethernet *cvm_oct_dev_for_port(int);
++
++int cvm_oct_free_work(void *work_queue_entry);
++
++int cvm_oct_rgmii_init(struct net_device *dev);
++int cvm_oct_rgmii_open(struct net_device *dev);
++int cvm_oct_rgmii_stop(struct net_device *dev);
++
++int cvm_oct_sgmii_init(struct net_device *dev);
++void cvm_oct_sgmii_uninit(struct net_device *dev);
++int cvm_oct_sgmii_open(struct net_device *dev);
++int cvm_oct_sgmii_stop(struct net_device *dev);
++
++int cvm_oct_spi_init(struct net_device *dev);
++void cvm_oct_spi_uninit(struct net_device *dev);
++
++int cvm_oct_xaui_init(struct net_device *dev);
++int cvm_oct_xaui_open(struct net_device *dev);
++int cvm_oct_xaui_stop(struct net_device *dev);
++
++int cvm_oct_srio_init(struct net_device *dev);
++int cvm_oct_srio_open(struct net_device *dev);
++int cvm_oct_srio_stop(struct net_device *dev);
++int cvm_oct_xmit_srio(struct sk_buff *skb, struct net_device *dev);
++int cvm_oct_srio_set_mac_address(struct net_device *dev, void *addr);
++int cvm_oct_srio_change_mtu(struct net_device *dev, int new_mtu);
++struct net_device_stats *cvm_oct_srio_get_stats(struct net_device *dev);
++
++int cvm_oct_common_init(struct net_device *dev);
++int cvm_oct_common_stop(struct net_device *dev);
++
++void cvm_oct_set_carrier(struct octeon_ethernet *priv,
++				cvmx_helper_link_info_t link_info);
++void cvm_oct_adjust_link(struct net_device *dev);
++
++int cvm_oct_ioctl(struct net_device *dev, struct ifreq *rq, int cmd);
++int cvm_oct_phy_setup_device(struct net_device *dev);
++
++int cvm_oct_xmit(struct sk_buff *skb, struct net_device *dev);
++int cvm_oct_xmit_lockless(struct sk_buff *skb, struct net_device *dev);
++
++void cvm_oct_poll_controller(struct net_device *dev);
++void cvm_oct_rx_initialize(int);
++void cvm_oct_rx_shutdown0(void);
++void cvm_oct_rx_shutdown1(void);
++
++int cvm_oct_mem_fill_fpa(int pool, int elements);
++int cvm_oct_mem_empty_fpa(int pool, int elements);
++int cvm_oct_alloc_fpa_pool(int pool, int size);
++int cvm_oct_release_fpa_pool(int pool);
++void cvm_oct_mem_cleanup(void);
++
++extern const struct ethtool_ops cvm_oct_ethtool_ops;
++
++extern int rx_cpu_factor;
++extern int octeon_recycle_tx;
++extern int packet_pool;
++extern int wqe_pool;
++extern int output_pool;
++extern int always_use_pow;
++extern int pow_send_group;
++extern int pow_receive_group;
++extern char pow_send_list[];
++extern struct list_head cvm_oct_list;
++extern struct octeon_ethernet *cvm_oct_by_pkind[];
++extern struct octeon_ethernet *cvm_oct_by_srio_mbox[4][4];
++
++extern struct workqueue_struct *cvm_oct_poll_queue;
++extern atomic_t cvm_oct_poll_queue_stopping;
++
++extern int max_rx_cpus;
++extern int rx_napi_weight;
++
++static inline void cvm_oct_rx_refill_pool(int fill_threshold)
++{
++	int number_to_free;
++	int num_freed;
++	/* Refill the packet buffer pool */
++	number_to_free =
++		cvmx_hwfau_fetch_and_add32(FAU_NUM_PACKET_BUFFERS_TO_FREE, 0);
++
++	if (number_to_free > fill_threshold) {
++		cvmx_hwfau_atomic_add32(FAU_NUM_PACKET_BUFFERS_TO_FREE,
++				      -number_to_free);
++		num_freed = cvm_oct_mem_fill_fpa(packet_pool, number_to_free);
++		if (num_freed != number_to_free) {
++			cvmx_hwfau_atomic_add32(FAU_NUM_PACKET_BUFFERS_TO_FREE,
++					number_to_free - num_freed);
++		}
++	}
++}
++
++/**
++ * cvm_oct_get_buffer_ptr - convert packet data address to pointer
++ * @pd: Packet data hardware address
++ *
++ * Returns Packet buffer pointer
++ */
++static inline void *cvm_oct_get_buffer_ptr(union cvmx_buf_ptr pd)
++{
++	return phys_to_virt(((pd.s.addr >> 7) - pd.s.back) << 7);
++}
++
++static inline struct sk_buff **cvm_oct_packet_to_skb(void *packet)
++{
++	char *p = packet;
++	return (struct sk_buff **)(p - sizeof(void *));
++}
++
++#define CVM_OCT_SKB_TO_FPA_PADDING (128 + sizeof(void *) - 1)
++
++static inline u8 *cvm_oct_get_fpa_head(struct sk_buff *skb)
++{
++	return (u8 *)((unsigned long)(skb->head + CVM_OCT_SKB_TO_FPA_PADDING) & ~0x7ful);
++}
++
++#endif
+diff --git a/drivers/net/ethernet/cavium/octeon/Makefile b/drivers/net/ethernet/cavium/octeon/Makefile
+--- a/drivers/net/ethernet/cavium/octeon/Makefile
++++ b/drivers/net/ethernet/cavium/octeon/Makefile
+@@ -1,6 +1,13 @@
+ # SPDX-License-Identifier: GPL-2.0-only
+ #
+-# Makefile for the Cavium network device drivers.
++# Makefile for the Cavium Octeon ethernet drivers.
+ #
+ 
+ obj-$(CONFIG_OCTEON_MGMT_ETHERNET)	+= octeon_mgmt.o
++
++# CN73XX BGX, PKI and PKO3 stack.
++obj-$(CONFIG_OCTEON_BGX_PORT)		+= octeon-bgx-port.o
++obj-$(CONFIG_OCTEON_BGX_NEXUS)		+= octeon-bgx-nexus.o
++obj-$(CONFIG_OCTEON_COMMON_NEXUS)	+= octeon-common-nexus.o
++obj-$(CONFIG_OCTEON3_ETHERNET)		+= octeon3-ethernet.o
++obj-$(CONFIG_OCTEON_ETHERNET_COMMON)	+= octeon_common.o
+diff --git a/drivers/net/ethernet/cavium/Kconfig b/drivers/net/ethernet/cavium/Kconfig
+--- a/drivers/net/ethernet/cavium/Kconfig
++++ b/drivers/net/ethernet/cavium/Kconfig
+@@ -105,4 +105,39 @@
+ 	  will be called liquidio_vf. MSI-X interrupt support is required
+ 	  for this driver to work correctly
+ 
++
++config OCTEON3_ETHERNET
++	tristate "Octeon III BGX/PKI/PKO3 ethernet support (CN73XX/CN78XX)"
++	depends on CAVIUM_OCTEON_SOC
++	depends on OF
++	select OCTEON_BGX_PORT
++	select OCTEON_FPA3
++	help
++	  Enable the Octeon III ethernet driver for SoCs with the BGX MAC +
++	  PKI/PKO3 packet pipeline (CN73XX, CN78XX). Forward-ported from
++	  Cavium SDK 5.1.
++
++config OCTEON_FPA3
++	bool
++	depends on CAVIUM_OCTEON_SOC
++
++config OCTEON_ETHERNET_COMMON
++	tristate
++
++config OCTEON_BGX_NEXUS
++	tristate
++	depends on CAVIUM_OCTEON_SOC
++
++config OCTEON_COMMON_NEXUS
++	tristate
++
++config OCTEON_BGX_PORT
++	tristate
++	depends on CAVIUM_OCTEON_SOC
++	select OCTEON_BGX_NEXUS
++	select OCTEON_COMMON_NEXUS
++	select OCTEON_ETHERNET_COMMON
++	select PHYLIB
++	select MDIO_OCTEON
++
+ endif # NET_VENDOR_CAVIUM
+-- 
+2.54.0
