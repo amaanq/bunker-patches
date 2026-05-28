@@ -514,6 +514,8 @@ let
     CRAMFS = option no;
     EFS_FS = option no;
     EROFS_FS = option no;
+    EROFS_FS_ZIP_DEFLATE = option no;
+    EROFS_FS_ZIP_ZSTD = option no;
     F2FS_FS = option no;
     GFS2_FS = option no;
     HFS_FS = option no;
