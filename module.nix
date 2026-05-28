@@ -1135,6 +1135,11 @@ let
     # silently skips the file → empty modules.dep → stage-2 boot
     # failure.  Decompress, strip debug sections + nuke refs, then
     # recompress — keeps checksums intact for depmod/modprobe.
+    // lib.optionalAttrs (prev ? zenpower) {
+      zenpower = prev.zenpower.overrideAttrs (old: {
+        makeFlags = prev.kernelModuleMakeFlags ++ (old.makeFlags or [ ]);
+      });
+    }
     // lib.optionalAttrs (prev ? bcachefs) {
       bcachefs =
         pkgsKernel.runCommand "${prev.bcachefs.name}-stripped"
