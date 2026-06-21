@@ -1100,7 +1100,10 @@ let
   # the in-tree build system; out-of-tree modules skip that step.
   kernelPackage = (pkgsKernel.linuxKernel.packagesFor bunkernel').extend (
     _: prev:
-    lib.optionalAttrs (prev ? bcachefs-tools) {
+    {
+      kernelModuleMakeFlags = prev.kernelModuleMakeFlags ++ [ "INSTALL_MOD_STRIP=1" ];
+    }
+    // lib.optionalAttrs (prev ? bcachefs-tools) {
       # bch_bindgen sets `.layout_tests(true)`, which emits static assertions
       # like `align_of::<bch_replicas_padded__bindgen_ty_N>() - 4`. Cross-
       # compiling on x86_64 → aarch64, libclang reports packed-bitfield inner
