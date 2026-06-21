@@ -34,12 +34,12 @@ fix replaces this patch.
 
 Carried in bunker only — do not upstream.
 ---
- libbcachefs/vfs/pagecache.c | 14 +++++++++++++-
- libbcachefs/vfs/pagecache.h | 17 ++++++++++++++++-
+ fs/vfs/pagecache.c | 14 +++++++++++++-
+ fs/vfs/pagecache.h | 17 ++++++++++++++++-
  2 files changed, 29 insertions(+), 2 deletions(-)
 
---- a/libbcachefs/vfs/pagecache.h
-+++ b/libbcachefs/vfs/pagecache.h
+--- a/fs/vfs/pagecache.h
++++ b/fs/vfs/pagecache.h
 @@ -101,7 +101,22 @@
 
  static inline struct bch_folio *bch2_folio(struct folio *folio)
@@ -64,8 +64,8 @@ Carried in bunker only — do not upstream.
  }
 
  struct bch_folio *__bch2_folio_create(struct folio *, gfp_t);
---- a/libbcachefs/vfs/pagecache.c
-+++ b/libbcachefs/vfs/pagecache.c
+--- a/fs/vfs/pagecache.c
++++ b/fs/vfs/pagecache.c
 @@ -524,7 +524,19 @@
  			    struct folio *folio,
  			    size_t offset, size_t len)
