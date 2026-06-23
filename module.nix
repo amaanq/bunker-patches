@@ -49,7 +49,7 @@ let
 
   stableRelease = {
     "6.19" = "6.19.12";
-    "7.0" = "7.0.10";
+    "7.0" = "7.0.13";
   };
 
   resolvedVersion =
@@ -67,12 +67,13 @@ let
   sharedGroups = {
     base = [ "bunker/0001" ];
     interactive = [
-      # zen: mm tuning, preempt, BFQ, EEVDF, swap/watermark/compaction
+      # zen: mm tuning, preempt, BFQ/Kyber, EEVDF, swap/watermark/compaction
       "zen/0009"
       "zen/0010"
       "zen/0012"
       "zen/0013"
       "zen/0014"
+      "zen/0020"
       "zen/0015"
       "zen/0016"
       "zen/0017"
@@ -111,7 +112,7 @@ let
       "bunker/0005"
     ];
     hardened =
-      (lib.genList (i: "hardened/${lib.fixedWidthString 4 "0" (toString (i + 1))}") 100)
+      (lib.genList (i: "hardened/${lib.fixedWidthString 4 "0" (toString (i + 1))}") 105)
       ++ (lib.genList (i: "grapheneos/${lib.fixedWidthString 4 "0" (toString (i + 1))}") 5)
       ++ [
         "cachyos/0014" # VMSCAPE/BHB clear mitigation
@@ -300,7 +301,7 @@ let
   sourceHash =
     {
       "6.19.12" = "sha256-zlxPEgX5cpKGtWmwN2SVkVVfMcoeA8xQS9O3C45YqNU=";
-      "7.0.10" = "sha256-CUl362LCDj0ZOf6BqSlYofmH8zlEblMvqGljsoBOMtw=";
+      "7.0.13" = "sha256-PIHt0PcWrKPdSN/2kWgYJ1gMxT01qO7DvkfTRtH4mRM=";
     }
     .${resolvedVersion};
 
@@ -386,7 +387,7 @@ let
       TRANSPARENT_HUGEPAGE = yes;
       TRANSPARENT_HUGEPAGE_ALWAYS = yes;
       TRANSPARENT_HUGEPAGE_MADVISE = no;
-      MQ_IOSCHED_KYBER = no;
+      MQ_IOSCHED_KYBER = yes;
       BLK_WBT = no;
       BLK_WBT_MQ = option no;
     }

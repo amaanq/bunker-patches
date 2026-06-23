@@ -1,20 +1,20 @@
-From edc12d7b4164440283be5911713f7e109c28eaa3 Mon Sep 17 00:00:00 2001
+From 7f2df99b2f7096c9d5604aaea1a005948329ee82 Mon Sep 17 00:00:00 2001
 From: Steven Barrett <steven@liquorix.net>
 Date: Sat, 5 Mar 2022 11:37:14 -0600
-Subject: [PATCH 20/190] mm: disable unevictable compaction
+Subject: [PATCH] ZEN: INTERACTIVE: mm: Disable unevictable compaction
 
+This option is already disabled when CONFIG_PREEMPT_RT is enabled, lets
+turn it off when CONFIG_ZEN_INTERACTIVE is set as well.
 ---
  init/Kconfig | 1 +
  mm/Kconfig   | 2 +-
  2 files changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/init/Kconfig b/init/Kconfig
-index c80bd2df5123..ccb216965cee 100644
+index 2cfea8380d1fbf..0b4a053646a8ed 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -205,10 +205,11 @@ config BUNKER
- 	    Default scheduler for SQ..: mq-deadline ->   bfq
- 
+@@ -220,6 +220,7 @@ config ZEN_INTERACTIVE
  	  --- Virtual Memory Subsystem ---------------------------
  
  	    Background-reclaim hugepages...:   no   ->   yes
@@ -22,15 +22,11 @@ index c80bd2df5123..ccb216965cee 100644
  
  	  --- EEVDF CPU Scheduler --------------------------------
  
- 	    Minimal granularity............:   0.7  ->   0.4  ms
- 	    Migration cost.................:   0.5  ->   0.3  ms
 diff --git a/mm/Kconfig b/mm/Kconfig
-index a992f2203eb9..d9ddb03766aa 100644
+index ebd8ea353687e0..94d0d216e79c3f 100644
 --- a/mm/Kconfig
 +++ b/mm/Kconfig
-@@ -629,11 +629,11 @@ config COMPACTION
- 	  linux-mm@kvack.org.
- 
+@@ -617,7 +617,7 @@ config COMPACTION
  config COMPACT_UNEVICTABLE_DEFAULT
  	int
  	depends on COMPACTION
@@ -39,8 +35,3 @@ index a992f2203eb9..d9ddb03766aa 100644
  	default 1
  
  #
- # support for free page reporting
- config PAGE_REPORTING
--- 
-2.52.0
-

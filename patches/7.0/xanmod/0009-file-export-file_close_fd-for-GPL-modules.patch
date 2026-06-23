@@ -1,21 +1,37 @@
-From a296f52d216383cad8a2326daaa0541f2f0ede66 Mon Sep 17 00:00:00 2001
-From: Alexandre Frade <kernel@xanmod.org>
-Date: Sun, 8 Feb 2026 00:53:35 -0500
-Subject: [PATCH 48/190] file: export file_close_fd() for GPL modules
+From 62aa6267e770f305f944889c833787d9ac7ec46a Mon Sep 17 00:00:00 2001
+From: Paolo Pisati <paolo.pisati@canonical.com>
+Date: Tue, 23 Jan 2024 16:33:16 +0100
+Subject: [PATCH] file: export file_close_fd() instead of close_fd_get_file()
 
-Export file_close_fd() to GPL modules, prerequisite for
-binder-as-module support.
+Following the refactor done in:
+
+commit a88c955fcfb49727d0ed86b47410f6555a8e69e4
+Author: Christian Brauner <brauner@kernel.org>
+Date:   Thu Nov 30 13:49:07 2023 +0100
+
+    file: s/close_fd_get_file()/file_close_fd()/g
+
+update the export directive we added in:
+
+commit 17f7fa4baad268cc4a93205747222be931699788
+Author: Christian Brauner <brauner@kernel.org>
+Date:   Wed Jan 16 23:13:25 2019 +0100
+
+    UBUNTU: SAUCE: binder: turn into module
+
+Anbox probably needs a review too.
+
+Signed-off-by: Paolo Pisati <paolo.pisati@canonical.com>
+Signed-off-by: Alexandre Frade <kernel@xanmod.org>
 ---
- fs/file.c | 1 +
- 1 file changed, 1 insertion(+)
+fs/file.c | 1 +
+1 file changed, 1 insertion(+)
 
 diff --git a/fs/file.c b/fs/file.c
-index 0a4f3bdb2dec..0046d0034bf1 100644
+index 0616f7962387..737dc5f195c7 100644
 --- a/fs/file.c
 +++ b/fs/file.c
-@@ -879,10 +879,11 @@ struct file *file_close_fd(unsigned int fd)
- 	file = file_close_fd_locked(files, fd);
- 	spin_unlock(&files->file_lock);
+@@ -887,6 +887,7 @@ struct file *file_close_fd(unsigned int fd)
  
  	return file;
  }
@@ -23,8 +39,5 @@ index 0a4f3bdb2dec..0046d0034bf1 100644
  
  void do_close_on_exec(struct files_struct *files)
  {
- 	unsigned i;
- 	struct fdtable *fdt;
 -- 
-2.52.0
-
+GitLab

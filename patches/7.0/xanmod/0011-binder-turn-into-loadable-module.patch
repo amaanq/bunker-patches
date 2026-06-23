@@ -1,14 +1,38 @@
-From a31a730898c312875d59353f985d3138d4a13045 Mon Sep 17 00:00:00 2001
-From: Alexandre Frade <kernel@xanmod.org>
-Date: Sun, 8 Feb 2026 00:53:56 -0500
-Subject: [PATCH 50/190] binder: turn into loadable module
+From cad3c9ebd4c36ebcf1a9bf5aa0db735fac3d3eb8 Mon Sep 17 00:00:00 2001
+From: Christian Brauner <christian@brauner.io>
+Date: Wed, 16 Jan 2019 23:13:25 +0100
+Subject: [PATCH] binder: turn into module
 
-Make the Android binder driver buildable as a loadable kernel module
-instead of only built-in. Exports necessary symbols from core kernel
-subsystems (mm, ipc, security, sched) to support this.
+The Android binder driver needs to become a module for the sake of shipping
+Anbox. To do this we need to export the following functions since binder is
+currently still using them:
 
-Enables Waydroid/Anbox support without compiling binder into the
-kernel permanently.
+- security_binder_set_context_mgr()
+- security_binder_transaction()
+- security_binder_transfer_binder()
+- security_binder_transfer_file()
+- can_nice()
+- __close_fd_get_file()
+- mmput_async()
+- task_work_add()
+- map_kernel_range_noflush()
+- get_vm_area()
+- zap_page_range_single()
+- put_ipc_ns()
+- get_ipc_ns_exported()
+- show_init_ipc_ns()
+
+Signed-off-by: Christian Brauner <christian.brauner@ubuntu.com>
+[ saf: fix additional reference to init_ipc_ns from 5.0-rc6 ]
+Signed-off-by: Seth Forshee <seth.forshee@canonical.com>
+[ arighi: fix EXPORT_SYMBOL vs EXPORT_SYMBOL_GPL change from 6.0-rc5 ]
+[ arighi: zap_page_range() has been dropped, export zap_page_range_single() in 6.3 ]
+Signed-off-by: Andrea Righi <andrea.righi@canonical.com>
+[ ppisati: export list_lru_add, list_lru_del, lock_vma_under_rcu]
+Signed-off-by: Paolo Pisati <paolo.pisati@canonical.com>
+[ tjaalton: selftests got converted to KUnit ]
+Signed-off-by: Timo Aaltonen <timo.aaltonen@canonical.com>
+Signed-off-by: Alexandre Frade <kernel@xanmod.org>
 ---
  drivers/android/Kconfig           |  6 +++---
  drivers/android/Makefile          |  9 +++++----
@@ -31,8 +55,7 @@ diff --git a/drivers/android/Kconfig b/drivers/android/Kconfig
 index e2e402c9d175..20c985de667e 100644
 --- a/drivers/android/Kconfig
 +++ b/drivers/android/Kconfig
-@@ -1,10 +1,10 @@
- # SPDX-License-Identifier: GPL-2.0
+@@ -2,7 +2,7 @@
  menu "Android"
  
  config ANDROID_BINDER_IPC
@@ -41,11 +64,7 @@ index e2e402c9d175..20c985de667e 100644
  	depends on MMU
  	depends on NET
  	default n
- 	help
- 	  Binder is used in Android for both communication between processes,
-@@ -26,12 +26,12 @@ config ANDROID_BINDER_IPC_RUST
- 	  This means one Android process can call a method/routine in another
- 	  Android process, using Binder to identify, invoke and pass arguments
+@@ -28,8 +28,8 @@ config ANDROID_BINDER_IPC_RUST
  	  between said processes.
  
  config ANDROID_BINDERFS
@@ -56,8 +75,6 @@ index e2e402c9d175..20c985de667e 100644
  	default n
  	help
  	  Binderfs is a pseudo-filesystem for the Android Binder IPC driver
- 	  which can be mounted per-ipc namespace allowing to run multiple
- 	  instances of Android.
 diff --git a/drivers/android/Makefile b/drivers/android/Makefile
 index e0c650d3898e..81ac0681fa1b 100644
 --- a/drivers/android/Makefile
@@ -76,12 +93,10 @@ index e0c650d3898e..81ac0681fa1b 100644
 +binder_linux-$(CONFIG_ANDROID_BINDER_ALLOC_KUNIT_TEST) += binder_alloc_selftest.o
 +binder_linux-$(CONFIG_ANDROID_BINDER_IPC_RUST)   += binder/
 diff --git a/drivers/android/binder.c b/drivers/android/binder.c
-index b356c9b88254..8e02e223425e 100644
+index 21f91d9f2fbc..ce891c27f6c5 100644
 --- a/drivers/android/binder.c
 +++ b/drivers/android/binder.c
-@@ -7165,9 +7165,22 @@ static int __init binder_init(void)
- 	binder_alloc_shrinker_exit();
- 
+@@ -7165,7 +7165,20 @@ static int __init binder_init(void)
  	return ret;
  }
  
@@ -107,9 +122,7 @@ diff --git a/drivers/android/binder_alloc.h b/drivers/android/binder_alloc.h
 index d6f1f6f2d00e..7edae3eb50f5 100644
 --- a/drivers/android/binder_alloc.h
 +++ b/drivers/android/binder_alloc.h
-@@ -4,10 +4,11 @@
-  */
- 
+@@ -6,6 +6,7 @@
  #ifndef _LINUX_BINDER_ALLOC_H
  #define _LINUX_BINDER_ALLOC_H
  
@@ -117,15 +130,11 @@ index d6f1f6f2d00e..7edae3eb50f5 100644
  #include <linux/rbtree.h>
  #include <linux/list.h>
  #include <linux/mm.h>
- #include <linux/rtmutex.h>
- #include <linux/vmalloc.h>
 diff --git a/drivers/android/binder_internal.h b/drivers/android/binder_internal.h
 index 342574bfd28a..a723f845bd6a 100644
 --- a/drivers/android/binder_internal.h
 +++ b/drivers/android/binder_internal.h
-@@ -2,10 +2,11 @@
- 
- #ifndef _LINUX_BINDER_INTERNAL_H
+@@ -4,6 +4,7 @@
  #define _LINUX_BINDER_INTERNAL_H
  
  #include <linux/fs.h>
@@ -133,11 +142,7 @@ index 342574bfd28a..a723f845bd6a 100644
  #include <linux/list.h>
  #include <linux/miscdevice.h>
  #include <linux/mutex.h>
- #include <linux/refcount.h>
- #include <linux/stddef.h>
-@@ -74,11 +75,11 @@ struct binderfs_info {
- 
- extern const struct file_operations binder_fops;
+@@ -76,7 +77,7 @@ extern const struct file_operations binder_fops;
  
  extern char *binder_devices_param;
  
@@ -146,11 +151,7 @@ index 342574bfd28a..a723f845bd6a 100644
  extern bool is_binderfs_device(const struct inode *inode);
  extern struct dentry *binderfs_create_file(struct dentry *dir, const char *name,
  					   const struct file_operations *fops,
- 					   void *data);
- #else
-@@ -93,11 +94,11 @@ static inline struct dentry *binderfs_create_file(struct dentry *dir,
- {
- 	return NULL;
+@@ -95,7 +96,7 @@ static inline struct dentry *binderfs_create_file(struct dentry *dir,
  }
  #endif
  
@@ -159,15 +160,11 @@ index 342574bfd28a..a723f845bd6a 100644
  extern int __init init_binderfs(void);
  #else
  static inline int __init init_binderfs(void)
- {
- 	return 0;
 diff --git a/drivers/android/binderfs.c b/drivers/android/binderfs.c
-index 9f8a18c88d66..2df67f49492f 100644
+index 361d69f756f5..e0de8a3a9091 100644
 --- a/drivers/android/binderfs.c
 +++ b/drivers/android/binderfs.c
-@@ -121,11 +121,11 @@ static int binderfs_binder_device_create(struct inode *ref_inode,
- 	char *name = NULL;
- 	struct inode *inode = NULL;
+@@ -123,7 +123,7 @@ static int binderfs_binder_device_create(struct inode *ref_inode,
  	struct super_block *sb = ref_inode->i_sb;
  	struct binderfs_info *info = sb->s_fs_info;
  #if defined(CONFIG_IPC_NS)
@@ -176,11 +173,7 @@ index 9f8a18c88d66..2df67f49492f 100644
  #else
  	bool use_reserve = true;
  #endif
- 
- 	/* Reserve new minor number for the new device. */
-@@ -389,11 +389,11 @@ static int binderfs_binder_ctl_create(struct super_block *sb)
- 	struct binder_device *device;
- 	struct inode *inode = NULL;
+@@ -391,7 +391,7 @@ static int binderfs_binder_ctl_create(struct super_block *sb)
  	struct dentry *root = sb->s_root;
  	struct binderfs_info *info = sb->s_fs_info;
  #if defined(CONFIG_IPC_NS)
@@ -189,11 +182,7 @@ index 9f8a18c88d66..2df67f49492f 100644
  #else
  	bool use_reserve = true;
  #endif
- 
- 	device = kzalloc(sizeof(*device), GFP_KERNEL);
-@@ -641,11 +641,11 @@ static int binderfs_fill_super(struct super_block *sb, struct fs_context *fc)
- 	sb->s_fs_info = kzalloc(sizeof(struct binderfs_info), GFP_KERNEL);
- 	if (!sb->s_fs_info)
+@@ -643,7 +643,7 @@ static int binderfs_fill_super(struct super_block *sb, struct fs_context *fc)
  		return -ENOMEM;
  	info = sb->s_fs_info;
  
@@ -202,15 +191,11 @@ index 9f8a18c88d66..2df67f49492f 100644
  
  	info->root_gid = make_kgid(sb->s_user_ns, 0);
  	if (!gid_valid(info->root_gid))
- 		info->root_gid = GLOBAL_ROOT_GID;
- 	info->root_uid = make_kuid(sb->s_user_ns, 0);
 diff --git a/include/linux/ipc_namespace.h b/include/linux/ipc_namespace.h
 index 12faca29bbb9..5bf174df249e 100644
 --- a/include/linux/ipc_namespace.h
 +++ b/include/linux/ipc_namespace.h
-@@ -126,10 +126,13 @@ extern int mq_init_ns(struct ipc_namespace *ns);
- #define HARD_MSGSIZEMAX	    (16*1024*1024)
- #else
+@@ -128,6 +128,9 @@ extern int mq_init_ns(struct ipc_namespace *ns);
  static inline int mq_init_ns(struct ipc_namespace *ns) { return 0; }
  #endif
  
@@ -220,15 +205,11 @@ index 12faca29bbb9..5bf174df249e 100644
  #if defined(CONFIG_IPC_NS)
  static inline struct ipc_namespace *to_ipc_ns(struct ns_common *ns)
  {
- 	return container_of(ns, struct ipc_namespace, ns);
- }
 diff --git a/ipc/namespace.c b/ipc/namespace.c
-index 535f16ea40e1..c12da4ff9a09 100644
+index 1e71353bdb4a..40414a58ae9a 100644
 --- a/ipc/namespace.c
 +++ b/ipc/namespace.c
-@@ -208,10 +208,27 @@ void put_ipc_ns(struct ipc_namespace *ns)
- 		ns_tree_remove(ns);
- 		if (llist_add(&ns->mnt_llist, &free_ipc_list))
+@@ -210,6 +210,23 @@ void put_ipc_ns(struct ipc_namespace *ns)
  			schedule_work(&free_ipc_work);
  	}
  }
@@ -252,15 +233,11 @@ index 535f16ea40e1..c12da4ff9a09 100644
  
  static struct ns_common *ipcns_get(struct task_struct *task)
  {
- 	struct ipc_namespace *ns = NULL;
- 	struct nsproxy *nsproxy;
 diff --git a/kernel/sched/syscalls.c b/kernel/sched/syscalls.c
-index c2f60d9460f4..08adb62ac3d7 100644
+index cadb0e9fe19b..d06a9ccbae40 100644
 --- a/kernel/sched/syscalls.c
 +++ b/kernel/sched/syscalls.c
-@@ -117,10 +117,11 @@ static bool is_nice_reduction(const struct task_struct *p, const int nice)
-  */
- int can_nice(const struct task_struct *p, const int nice)
+@@ -119,6 +119,7 @@ int can_nice(const struct task_struct *p, const int nice)
  {
  	return is_nice_reduction(p, nice) || capable(CAP_SYS_NICE);
  }
@@ -268,15 +245,11 @@ index c2f60d9460f4..08adb62ac3d7 100644
  
  #ifdef __ARCH_WANT_SYS_NICE
  
- /*
-  * sys_nice - change the priority of the current process.
 diff --git a/kernel/task_work.c b/kernel/task_work.c
 index 0f7519f8e7c9..08eb29abaea6 100644
 --- a/kernel/task_work.c
 +++ b/kernel/task_work.c
-@@ -100,10 +100,11 @@ int task_work_add(struct task_struct *task, struct callback_head *work,
- 		break;
- 	}
+@@ -102,6 +102,7 @@ int task_work_add(struct task_struct *task, struct callback_head *work,
  
  	return 0;
  }
@@ -284,15 +257,11 @@ index 0f7519f8e7c9..08eb29abaea6 100644
  
  /**
   * task_work_cancel_match - cancel a pending work added by task_work_add()
-  * @task: the task which should execute the work
-  * @match: match function to call
 diff --git a/mm/list_lru.c b/mm/list_lru.c
-index ec48b5dadf51..bf95d73c9815 100644
+index 26463ae29c64..cdb9bd774f24 100644
 --- a/mm/list_lru.c
 +++ b/mm/list_lru.c
-@@ -177,10 +177,11 @@ bool list_lru_add(struct list_lru *lru, struct list_head *item, int nid,
- 		return true;
- 	}
+@@ -179,6 +179,7 @@ bool list_lru_add(struct list_lru *lru, struct list_head *item, int nid,
  	unlock_list_lru(l, false);
  	return false;
  }
@@ -300,11 +269,7 @@ index ec48b5dadf51..bf95d73c9815 100644
  
  bool list_lru_add_obj(struct list_lru *lru, struct list_head *item)
  {
- 	bool ret;
- 	int nid = page_to_nid(virt_to_page(item));
-@@ -214,10 +215,11 @@ bool list_lru_del(struct list_lru *lru, struct list_head *item, int nid,
- 		return true;
- 	}
+@@ -216,6 +217,7 @@ bool list_lru_del(struct list_lru *lru, struct list_head *item, int nid,
  	unlock_list_lru(l, false);
  	return false;
  }
@@ -312,15 +277,11 @@ index ec48b5dadf51..bf95d73c9815 100644
  
  bool list_lru_del_obj(struct list_lru *lru, struct list_head *item)
  {
- 	bool ret;
- 	int nid = page_to_nid(virt_to_page(item));
 diff --git a/mm/memory.c b/mm/memory.c
-index da360a6eb8a4..64083ace239a 100644
+index c65e82c86fed..e498a37c0f1c 100644
 --- a/mm/memory.c
 +++ b/mm/memory.c
-@@ -2166,10 +2166,11 @@ void zap_page_range_single(struct vm_area_struct *vma, unsigned long address,
- 
- 	tlb_gather_mmu(&tlb, vma->vm_mm);
+@@ -2235,6 +2235,7 @@ void zap_page_range_single(struct vm_area_struct *vma, unsigned long address,
  	zap_page_range_single_batched(&tlb, vma, address, size, details);
  	tlb_finish_mmu(&tlb);
  }
@@ -328,15 +289,11 @@ index da360a6eb8a4..64083ace239a 100644
  
  /**
   * zap_vma_ptes - remove ptes mapping the vma
-  * @vma: vm_area_struct holding ptes to be zapped
-  * @address: starting address of pages to zap
 diff --git a/mm/mmap_lock.c b/mm/mmap_lock.c
-index 7421b7ea8001..1933e8bafab4 100644
+index 898c2ef1e958..4f5e3badb8ea 100644
 --- a/mm/mmap_lock.c
 +++ b/mm/mmap_lock.c
-@@ -287,10 +287,11 @@ struct vm_area_struct *lock_vma_under_rcu(struct mm_struct *mm,
- 
- inval:
+@@ -340,6 +340,7 @@ struct vm_area_struct *lock_vma_under_rcu(struct mm_struct *mm,
  	count_vm_vma_lock_event(VMA_LOCK_ABORT);
  	return NULL;
  }
@@ -344,15 +301,11 @@ index 7421b7ea8001..1933e8bafab4 100644
  
  static struct vm_area_struct *lock_next_vma_under_mmap_lock(struct mm_struct *mm,
  							    struct vma_iterator *vmi,
- 							    unsigned long from_addr)
- {
 diff --git a/mm/vmalloc.c b/mm/vmalloc.c
-index e286c2d2068c..e30857a42821 100644
+index 61caa55a4402..54642083a06c 100644
 --- a/mm/vmalloc.c
 +++ b/mm/vmalloc.c
-@@ -3261,10 +3261,11 @@ struct vm_struct *get_vm_area(unsigned long size, unsigned long flags)
- 	return __get_vm_area_node(size, 1, PAGE_SHIFT, flags,
- 				  VMALLOC_START, VMALLOC_END,
+@@ -3276,6 +3276,7 @@ struct vm_struct *get_vm_area(unsigned long size, unsigned long flags)
  				  NUMA_NO_NODE, GFP_KERNEL,
  				  __builtin_return_address(0));
  }
@@ -360,15 +313,11 @@ index e286c2d2068c..e30857a42821 100644
  
  struct vm_struct *get_vm_area_caller(unsigned long size, unsigned long flags,
  				const void *caller)
- {
- 	return __get_vm_area_node(size, 1, PAGE_SHIFT, flags,
 diff --git a/security/security.c b/security/security.c
-index 31a688650601..6fd9dc64a611 100644
+index a26c1474e2e4..fe6340771e22 100644
 --- a/security/security.c
 +++ b/security/security.c
-@@ -486,10 +486,11 @@ OUT:									\
-  */
- int security_binder_set_context_mgr(const struct cred *mgr)
+@@ -489,6 +489,7 @@ int security_binder_set_context_mgr(const struct cred *mgr)
  {
  	return call_int_hook(binder_set_context_mgr, mgr);
  }
@@ -376,11 +325,7 @@ index 31a688650601..6fd9dc64a611 100644
  
  /**
   * security_binder_transaction() - Check if a binder transaction is allowed
-  * @from: sending process
-  * @to: receiving process
-@@ -501,10 +502,11 @@ int security_binder_set_context_mgr(const struct cred *mgr)
- int security_binder_transaction(const struct cred *from,
- 				const struct cred *to)
+@@ -504,6 +505,7 @@ int security_binder_transaction(const struct cred *from,
  {
  	return call_int_hook(binder_transaction, from, to);
  }
@@ -388,11 +333,7 @@ index 31a688650601..6fd9dc64a611 100644
  
  /**
   * security_binder_transfer_binder() - Check if a binder transfer is allowed
-  * @from: sending process
-  * @to: receiving process
-@@ -516,10 +518,11 @@ int security_binder_transaction(const struct cred *from,
- int security_binder_transfer_binder(const struct cred *from,
- 				    const struct cred *to)
+@@ -519,6 +521,7 @@ int security_binder_transfer_binder(const struct cred *from,
  {
  	return call_int_hook(binder_transfer_binder, from, to);
  }
@@ -400,11 +341,7 @@ index 31a688650601..6fd9dc64a611 100644
  
  /**
   * security_binder_transfer_file() - Check if a binder file xfer is allowed
-  * @from: sending process
-  * @to: receiving process
-@@ -532,10 +535,11 @@ int security_binder_transfer_binder(const struct cred *from,
- int security_binder_transfer_file(const struct cred *from,
- 				  const struct cred *to, const struct file *file)
+@@ -535,6 +538,7 @@ int security_binder_transfer_file(const struct cred *from,
  {
  	return call_int_hook(binder_transfer_file, from, to, file);
  }
@@ -412,8 +349,6 @@ index 31a688650601..6fd9dc64a611 100644
  
  /**
   * security_ptrace_access_check() - Check if tracing is allowed
-  * @child: target process
-  * @mode: PTRACE_MODE flags
 -- 
-2.52.0
+GitLab
 

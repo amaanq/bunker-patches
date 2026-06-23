@@ -1,8 +1,11 @@
-From 6f73cfb1f426001e722fbda3120f5e3340c544d5 Mon Sep 17 00:00:00 2001
+From 6e449a8e9c2ac523e09a638ebb21e8f6e7576d10 Mon Sep 17 00:00:00 2001
 From: Arjan van de Ven <arjan@linux.intel.com>
-Date: Sat, 7 Feb 2026 21:58:01 -0500
-Subject: [PATCH 44/190] locking/rwsem: spin more aggressively before cpu_relax
+Date: Sun, 18 Feb 2018 23:35:41 +0000
+Subject: [PATCH] locking: rwsem: spin faster
 
+tweak rwsem owner spinning a bit
+
+Signed-off-by: Alexandre Frade <kernel@xanmod.org>
 ---
  kernel/locking/rwsem.c | 4 +++-
  1 file changed, 3 insertions(+), 1 deletion(-)
@@ -11,9 +14,7 @@ diff --git a/kernel/locking/rwsem.c b/kernel/locking/rwsem.c
 index 24df4d98f7d2..1d5923996fa5 100644
 --- a/kernel/locking/rwsem.c
 +++ b/kernel/locking/rwsem.c
-@@ -744,10 +744,11 @@ static noinline enum owner_state
- rwsem_spin_on_owner(struct rw_semaphore *sem)
- {
+@@ -746,6 +746,7 @@ rwsem_spin_on_owner(struct rw_semaphore *sem)
  	struct task_struct *new, *owner;
  	unsigned long flags, new_flags;
  	enum owner_state state;
@@ -21,11 +22,7 @@ index 24df4d98f7d2..1d5923996fa5 100644
  
  	lockdep_assert_preemption_disabled();
  
- 	owner = rwsem_owner_flags(sem, &flags);
- 	state = rwsem_owner_state(owner, flags);
-@@ -780,11 +781,12 @@ rwsem_spin_on_owner(struct rw_semaphore *sem)
- 		if (need_resched() || !owner_on_cpu(owner)) {
- 			state = OWNER_NONSPINNABLE;
+@@ -782,7 +783,8 @@ rwsem_spin_on_owner(struct rw_semaphore *sem)
  			break;
  		}
  
@@ -35,8 +32,6 @@ index 24df4d98f7d2..1d5923996fa5 100644
  	}
  
  	return state;
- }
- 
 -- 
-2.52.0
+GitLab
 

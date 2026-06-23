@@ -1,20 +1,19 @@
-From 29b567e50ca21144241bd92462258c64eb9d142e Mon Sep 17 00:00:00 2001
+From 30db2fc23e6c648992e14ded5866319149341136 Mon Sep 17 00:00:00 2001
 From: Alexandre Frade <kernel@xanmod.org>
 Date: Mon, 16 Sep 2024 15:36:01 +0000
-Subject: [PATCH 30/190] block: set rq_affinity to force complete I/O on same
- CPU
+Subject: [PATCH] XANMOD: block: Set rq_affinity to force complete I/O requests
+ on same CPU
 
+Signed-off-by: Alexandre Frade <kernel@xanmod.org>
 ---
  include/linux/blkdev.h | 3 ++-
  1 file changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/include/linux/blkdev.h b/include/linux/blkdev.h
-index 72e34acd439c..475e3dba80c1 100644
+index d463b9b5a0a5..0e9eadf97d2d 100644
 --- a/include/linux/blkdev.h
 +++ b/include/linux/blkdev.h
-@@ -669,11 +669,12 @@ enum {
- 	QUEUE_FLAG_QOS_ENABLED,		/* qos is enabled */
- 	QUEUE_FLAG_BIO_ISSUE_TIME,	/* record bio->issue_time_ns */
+@@ -671,7 +671,8 @@ enum {
  	QUEUE_FLAG_MAX
  };
  
@@ -24,8 +23,6 @@ index 72e34acd439c..475e3dba80c1 100644
  
  void blk_queue_flag_set(unsigned int flag, struct request_queue *q);
  void blk_queue_flag_clear(unsigned int flag, struct request_queue *q);
- 
- #define blk_queue_dying(q)	test_bit(QUEUE_FLAG_DYING, &(q)->queue_flags)
 -- 
-2.52.0
+GitLab
 

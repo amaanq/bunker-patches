@@ -1,20 +1,25 @@
-From 8729811d787cbf78c34f76cb78dfc7241582d2f7 Mon Sep 17 00:00:00 2001
-From: Alexandre Frade <kernel@xanmod.org>
-Date: Sun, 8 Feb 2026 00:53:42 -0500
-Subject: [PATCH 49/190] binder: give binder_alloc its own debug mask file
+From df50a5ce1c072dc5f2d7e68bbca60af1d9314963 Mon Sep 17 00:00:00 2001
+From: Christian Brauner <christian@brauner.io>
+Date: Wed, 23 Jan 2019 21:54:23 +0100
+Subject: [PATCH] binder: give binder_alloc its own debug mask file
 
-Separate binder_alloc debug mask for module build support.
+Currently both binder.c and binder_alloc.c both register the
+/sys/module/binder_linux/paramters/debug_mask file which leads to conflicts
+in sysfs. This commit gives binder_alloc.c its own
+/sys/module/binder_linux/paramters/alloc_debug_mask file.
+
+Signed-off-by: Christian Brauner <christian.brauner@ubuntu.com>
+Signed-off-by: Seth Forshee <seth.forshee@canonical.com>
+Signed-off-by: Alexandre Frade <kernel@xanmod.org>
 ---
  drivers/android/binder_alloc.c | 3 +--
  1 file changed, 1 insertion(+), 2 deletions(-)
 
 diff --git a/drivers/android/binder_alloc.c b/drivers/android/binder_alloc.c
-index 979c96b74cad..dc29625013c0 100644
+index 241f16a9b63d..cf759893e2ad 100644
 --- a/drivers/android/binder_alloc.c
 +++ b/drivers/android/binder_alloc.c
-@@ -37,12 +37,11 @@ enum {
- 	BINDER_DEBUG_BUFFER_ALLOC           = 1U << 2,
- 	BINDER_DEBUG_BUFFER_ALLOC_ASYNC     = 1U << 3,
+@@ -39,8 +39,7 @@ enum {
  };
  static uint32_t binder_alloc_debug_mask = BINDER_DEBUG_USER_ERROR;
  
@@ -24,8 +29,6 @@ index 979c96b74cad..dc29625013c0 100644
  
  #define binder_alloc_debug(mask, x...) \
  	do { \
- 		if (binder_alloc_debug_mask & mask) \
- 			pr_info_ratelimited(x); \
 -- 
-2.52.0
+GitLab
 

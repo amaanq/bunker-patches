@@ -1,0 +1,50 @@
+From 6589e3b65531d6f813fc068c1a84163ec50484f1 Mon Sep 17 00:00:00 2001
+From: Levente Polyak <levente@leventepolyak.net>
+Date: Sun, 7 Jun 2026 23:56:48 +0200
+Subject: [PATCH] mm/slub: Fix swapped canary booleans in
+ rcu_free_sheaf_nobarn()
+
+The canary rewrite tracks objects in their inactive state, allocated
+objects are always tagged as `random_active`, free objects are tagged as
+`sheaf_random_inactive` or `random_inactive` depending on if they are in
+a sheaf or in a slab freelist. But rcu_free_sheaf_nobarn() called
+__rcu_free_sheaf_prepare with the canary parameter while
+sheaf_flush_unused() was called with canary parameter disabled, so
+slab_free_hook() ran check_canary(random_active) against objects that
+__kfree_rcu_sheaf() had already tagged `sheaf_random_inactive`, which
+resulted in a canary mismatch triggering BUG_ON().
+
+This has only happened on very specific call paths like on suspend via
+freeze_secondary_cpus() -> slub_cpu_dead() -> __pcs_flush_all_cpu() ->
+rcu_free_sheaf_nobarn() which drains every per-CPU `rcu_free` sheaf
+caches.
+
+Fix this by mirroring the same canary transition as done in rcu_free_sheaf(),
+by skipping canary param in __rcu_free_sheaf_prepare() to run the free
+hooks without touching the canary, then sheaf_flush_unused()
+with canary enabled checking and transitioning from `sheaf_random_inactive`
+to `random_inactive`.
+
+Fixes: 33306a5361be ("7.0 canary adaptation")
+Fixes: a2e18d6d2bea ("6.19 canary rewrite")
+Signed-off-by: Levente Polyak <levente@leventepolyak.net>
+---
+ mm/slub.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/mm/slub.c b/mm/slub.c
+index 6e1f19be937e..e9715fbbfa8c 100644
+--- a/mm/slub.c
++++ b/mm/slub.c
+@@ -3126,9 +3126,9 @@ static void rcu_free_sheaf_nobarn(struct rcu_head *head)
+ 	sheaf = container_of(head, struct slab_sheaf, rcu_head);
+ 	s = sheaf->cache;
+ 
+-	__rcu_free_sheaf_prepare(s, sheaf);
++	__rcu_free_sheaf_prepare_nocanary(s, sheaf);
+ 
+-	sheaf_flush_unused(s, sheaf, false);
++	sheaf_flush_unused(s, sheaf, true);
+ 
+ 	free_empty_sheaf(s, sheaf);
+ }

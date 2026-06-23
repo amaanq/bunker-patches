@@ -1,7 +1,7 @@
-From a361e6d3e2d44098cfa7130ca319810d6c2c6bb5 Mon Sep 17 00:00:00 2001
+From c782b4ba919631c56e3b4b2369005ee7606e8dd1 Mon Sep 17 00:00:00 2001
 From: Steven Barrett <steven@liquorix.net>
 Date: Sat, 21 May 2022 15:15:09 -0500
-Subject: [PATCH 55/190] ZEN: dm-crypt: Disable workqueues for crypto ops
+Subject: [PATCH] ZEN: dm-crypt: Disable workqueues for crypto ops
 
 Queueing in dm-crypt for crypto operations reduces performance on modern
 systems.  As discussed in an article from Cloudflare, they discovered
@@ -17,12 +17,10 @@ Signed-off-by: Alexandre Frade <kernel@xanmod.org>
  1 file changed, 3 insertions(+)
 
 diff --git a/drivers/md/dm-crypt.c b/drivers/md/dm-crypt.c
-index 5ef43231fe77..c6f9815830e1 100644
+index 54823341c9fd..18e2f03f1133 100644
 --- a/drivers/md/dm-crypt.c
 +++ b/drivers/md/dm-crypt.c
-@@ -3303,10 +3303,13 @@ static int crypt_ctr(struct dm_target *ti, unsigned int argc, char **argv)
- 		ret = crypt_ctr_optional(ti, argc - 5, &argv[5]);
- 		if (ret)
+@@ -3264,6 +3264,9 @@ static int crypt_ctr(struct dm_target *ti, unsigned int argc, char **argv)
  			goto bad;
  	}
  
@@ -32,8 +30,6 @@ index 5ef43231fe77..c6f9815830e1 100644
  	ret = crypt_ctr_cipher(ti, argv[0], argv[1]);
  	if (ret < 0)
  		goto bad;
- 
- 	if (crypt_integrity_aead(cc)) {
 -- 
-2.52.0
+GitLab
 

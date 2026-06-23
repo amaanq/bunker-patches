@@ -1,8 +1,46 @@
-From feb932022615c944fc54fbb4b0b2e351aad08e35 Mon Sep 17 00:00:00 2001
+From 9655114d3b3f8326042617ca5f59bfc7596efe23 Mon Sep 17 00:00:00 2001
 From: Daniel Drake <drake@endlessm.com>
 Date: Tue, 4 Jun 2019 14:51:21 +0800
-Subject: [PATCH 2/190] PCI: add Intel remapped NVMe device support
+Subject: [PATCH] ZEN: PCI: Add Intel remapped NVMe device support
 
+Contains:
+  - PCI: Add Intel remapped NVMe device support
+
+    Consumer products that are configured by default to run the Intel SATA AHCI
+    controller in "RAID" or "Intel RST Premium With Intel Optane System
+    Acceleration" mode are becoming increasingly prevalent.
+
+    Unde this mode, NVMe devices are remapped into the SATA device and become
+    hidden from the PCI bus, which means that Linux users cannot access their
+    storage devices unless they go into the firmware setup menu to revert back
+    to AHCI mode - assuming such option is available. Lack of support for this
+    mode is also causing complications for vendors who distribute Linux.
+
+    Add support for the remapped NVMe mode by creating a virtual PCI bus,
+    where the AHCI and NVMe devices are presented separately, allowing the
+    ahci and nvme drivers to bind in the normal way.
+
+    Unfortunately the NVMe device configuration space is inaccesible under
+    this scheme, so we provide a fake one, and hope that no DeviceID-based
+    quirks are needed. The interrupt is shared between the AHCI and NVMe
+    devices.
+
+    Allow pci_real_dma_dev() to traverse back to the real DMA device from
+    the PCI devices created on our virtual bus, in case the iommu driver
+    will be involved with data transfers here.
+
+    The existing ahci driver is modified to not claim devices where remapped
+    NVMe devices are present, allowing this new driver to step in.
+
+    The details of the remapping scheme came from patches previously
+    posted by Dan Williams and the resulting discussion.
+
+    https://phabricator.endlessm.com/T24358
+    https://phabricator.endlessm.com/T29119
+
+    Signed-off-by: Daniel Drake <drake@endlessm.com>
+
+  - PCI: Fix order of remapped NVMe devices
 ---
  arch/x86/include/asm/pci.h                |   6 +
  arch/x86/pci/common.c                     |   7 +-
@@ -13,12 +51,10 @@ Subject: [PATCH 2/190] PCI: add Intel remapped NVMe device support
  create mode 100644 drivers/pci/controller/intel-nvme-remap.c
 
 diff --git a/arch/x86/include/asm/pci.h b/arch/x86/include/asm/pci.h
-index b3ab80a03365..5e883b397ff3 100644
+index b3ab80a03365cf..5e883b397ff3f2 100644
 --- a/arch/x86/include/asm/pci.h
 +++ b/arch/x86/include/asm/pci.h
-@@ -24,10 +24,11 @@ struct pci_sysdata {
- 	void		*fwnode;	/* IRQ domain for MSI assignment */
- #endif
+@@ -26,6 +26,7 @@ struct pci_sysdata {
  #if IS_ENABLED(CONFIG_VMD)
  	struct pci_dev	*vmd_dev;	/* VMD Device if in Intel VMD domain */
  #endif
@@ -26,11 +62,7 @@ index b3ab80a03365..5e883b397ff3 100644
  };
  
  extern int pci_routeirq;
- extern int noioapicquirk;
- extern int noioapicreroute;
-@@ -67,10 +68,15 @@ static inline bool is_vmd(struct pci_bus *bus)
- }
- #else
+@@ -69,6 +70,11 @@ static inline bool is_vmd(struct pci_bus *bus)
  #define is_vmd(bus)		false
  #endif /* CONFIG_VMD */
  
@@ -42,15 +74,11 @@ index b3ab80a03365..5e883b397ff3 100644
  /* Can be used to override the logic in pci_scan_bus for skipping
     already-configured bus numbers - to be used for buggy BIOSes
     or architectures with incomplete PCI setup by the loader */
- 
- extern unsigned int pcibios_assign_all_busses(void);
 diff --git a/arch/x86/pci/common.c b/arch/x86/pci/common.c
-index ddb798603201..7c20387d8202 100644
+index 63105b29fbf540..3e00fa75e8bf22 100644
 --- a/arch/x86/pci/common.c
 +++ b/arch/x86/pci/common.c
-@@ -721,14 +721,17 @@ int pci_ext_cfg_avail(void)
- 		return 1;
- 	else
+@@ -723,12 +723,15 @@ int pci_ext_cfg_avail(void)
  		return 0;
  }
  
@@ -69,12 +97,10 @@ index ddb798603201..7c20387d8202 100644
  }
 -#endif
 diff --git a/drivers/ata/ahci.c b/drivers/ata/ahci.c
-index 931d0081169b..02ee4c4fa5b7 100644
+index 1d73a53370cf3e..5e77aea2644b15 100644
 --- a/drivers/ata/ahci.c
 +++ b/drivers/ata/ahci.c
-@@ -1670,11 +1670,11 @@ static irqreturn_t ahci_thunderx_irq_handler(int irq, void *dev_instance)
- 
- 	return IRQ_RETVAL(handled);
+@@ -1686,7 +1686,7 @@ static irqreturn_t ahci_thunderx_irq_handler(int irq, void *dev_instance)
  }
  #endif
  
@@ -83,11 +109,7 @@ index 931d0081169b..02ee4c4fa5b7 100644
  		struct ahci_host_priv *hpriv)
  {
  	int i;
- 	u32 cap;
- 
-@@ -1683,11 +1683,11 @@ static void ahci_remap_check(struct pci_dev *pdev, int bar,
- 	 */
- 	if (pdev->vendor != PCI_VENDOR_ID_INTEL ||
+@@ -1699,7 +1699,7 @@ static void ahci_remap_check(struct pci_dev *pdev, int bar,
  	    pci_resource_len(pdev, bar) < SZ_512K ||
  	    bar != AHCI_PCI_BAR_STANDARD ||
  	    !(readl(hpriv->mmio + AHCI_VSCAP) & 1))
@@ -96,11 +118,7 @@ index 931d0081169b..02ee4c4fa5b7 100644
  
  	cap = readq(hpriv->mmio + AHCI_REMAP_CAP);
  	for (i = 0; i < AHCI_MAX_REMAP; i++) {
- 		if ((cap & (1 << i)) == 0)
- 			continue;
-@@ -1698,22 +1698,15 @@ static void ahci_remap_check(struct pci_dev *pdev, int bar,
- 		/* We've found a remapped device */
- 		hpriv->remapped_nvme++;
+@@ -1714,18 +1714,11 @@ static void ahci_remap_check(struct pci_dev *pdev, int bar,
  	}
  
  	if (!hpriv->remapped_nvme)
@@ -123,11 +141,7 @@ index 931d0081169b..02ee4c4fa5b7 100644
  }
  
  static int ahci_get_irq_vector(struct ata_host *host, int port)
- {
- 	return pci_irq_vector(to_pci_dev(host->dev), port);
-@@ -1973,11 +1966,13 @@ static int ahci_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
- 	hpriv->mmio = pcim_iomap(pdev, ahci_pci_bar, 0);
- 	if (!hpriv->mmio)
+@@ -1989,7 +1982,9 @@ static int ahci_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
  		return -ENOMEM;
  
  	/* detect remapped nvme devices */
@@ -138,13 +152,11 @@ index 931d0081169b..02ee4c4fa5b7 100644
  
  	sysfs_add_file_to_group(&pdev->dev.kobj,
  				&dev_attr_remapped_nvme.attr,
- 				NULL);
- 
 diff --git a/drivers/pci/controller/Makefile b/drivers/pci/controller/Makefile
-index 229929a945c2..79811c68a278 100644
+index ac8db283f0fea7..1aaa5b87726628 100644
 --- a/drivers/pci/controller/Makefile
 +++ b/drivers/pci/controller/Makefile
-@@ -1,6 +1,12 @@
+@@ -1,4 +1,10 @@
  # SPDX-License-Identifier: GPL-2.0
 +ifdef CONFIG_X86_64
 +ifdef CONFIG_SATA_AHCI
@@ -155,11 +167,9 @@ index 229929a945c2..79811c68a278 100644
  obj-$(CONFIG_PCIE_CADENCE) += cadence/
  obj-$(CONFIG_PCI_FTPCI100) += pci-ftpci100.o
  obj-$(CONFIG_PCI_IXP4XX) += pci-ixp4xx.o
- obj-$(CONFIG_PCI_HYPERV) += pci-hyperv.o
- obj-$(CONFIG_PCI_HYPERV_INTERFACE) += pci-hyperv-intf.o
 diff --git a/drivers/pci/controller/intel-nvme-remap.c b/drivers/pci/controller/intel-nvme-remap.c
 new file mode 100644
-index 000000000000..e105e6f5cc91
+index 00000000000000..e105e6f5cc91d1
 --- /dev/null
 +++ b/drivers/pci/controller/intel-nvme-remap.c
 @@ -0,0 +1,462 @@
@@ -625,6 +635,3 @@ index 000000000000..e105e6f5cc91
 +
 +MODULE_AUTHOR("Daniel Drake <drake@endlessm.com>");
 +MODULE_LICENSE("GPL v2");
--- 
-2.52.0
-
