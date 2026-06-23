@@ -1,0 +1,37 @@
+From 7f2df99b2f7096c9d5604aaea1a005948329ee82 Mon Sep 17 00:00:00 2001
+From: Steven Barrett <steven@liquorix.net>
+Date: Sat, 5 Mar 2022 11:37:14 -0600
+Subject: [PATCH] ZEN: INTERACTIVE: mm: Disable unevictable compaction
+
+This option is already disabled when CONFIG_PREEMPT_RT is enabled, lets
+turn it off when CONFIG_ZEN_INTERACTIVE is set as well.
+---
+ init/Kconfig | 1 +
+ mm/Kconfig   | 2 +-
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/init/Kconfig b/init/Kconfig
+index 2cfea8380d1fbf..0b4a053646a8ed 100644
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -220,6 +220,7 @@ config ZEN_INTERACTIVE
+ 	  --- Virtual Memory Subsystem ---------------------------
+ 
+ 	    Background-reclaim hugepages...:   no   ->   yes
++	    Compact unevictable............:   yes  ->   no
+ 
+ 	  --- EEVDF CPU Scheduler --------------------------------
+ 
+diff --git a/mm/Kconfig b/mm/Kconfig
+index ebd8ea353687e0..94d0d216e79c3f 100644
+--- a/mm/Kconfig
++++ b/mm/Kconfig
+@@ -617,7 +617,7 @@ config COMPACTION
+ config COMPACT_UNEVICTABLE_DEFAULT
+ 	int
+ 	depends on COMPACTION
+-	default 0 if PREEMPT_RT
++	default 0 if PREEMPT_RT || ZEN_INTERACTIVE
+ 	default 1
+ 
+ #

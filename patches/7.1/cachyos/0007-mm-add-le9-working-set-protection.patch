@@ -1,0 +1,454 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peter Jung <admin@ptr1337.dev>
+Subject: [PATCH] mm: add le9 working set protection
+
+From le9 patchset, via CachyOS kernel-patches.
+
+Signed-off-by: Peter Jung <admin@ptr1337.dev>
+---
+--- a/Documentation/admin-guide/sysctl/vm.rst
++++ b/Documentation/admin-guide/sysctl/vm.rst
+@@ -25,6 +25,9 @@
+ Currently, these files are in /proc/sys/vm:
+ 
+ - admin_reserve_kbytes
++- anon_min_ratio
++- clean_low_ratio
++- clean_min_ratio
+ - compact_memory
+ - compaction_proactiveness
+ - compact_unevictable_allowed
+@@ -110,6 +113,67 @@
+ Changing this takes effect whenever an application requests memory.
+ 
+ 
++anon_min_ratio
++==============
++
++This knob provides *hard* protection of anonymous pages. The anonymous pages
++on the current node won't be reclaimed under any conditions when their amount
++is below vm.anon_min_ratio.
++
++This knob may be used to prevent excessive swap thrashing when anonymous
++memory is low (for example, when memory is going to be overfilled by
++compressed data of zram module).
++
++Setting this value too high (close to 100) can result in inability to
++swap and can lead to early OOM under memory pressure.
++
++The unit of measurement is the percentage of the total memory of the node.
++
++The default value is 1.
++
++
++clean_low_ratio
++================
++
++This knob provides *best-effort* protection of clean file pages. The file pages
++on the current node won't be reclaimed under memory pressure when the amount of
++clean file pages is below vm.clean_low_ratio *unless* we threaten to OOM.
++
++Protection of clean file pages using this knob may be used when swapping is
++still possible to
++  - prevent disk I/O thrashing under memory pressure;
++  - improve performance in disk cache-bound tasks under memory pressure.
++
++Setting it to a high value may result in a early eviction of anonymous pages
++into the swap space by attempting to hold the protected amount of clean file
++pages in memory.
++
++The unit of measurement is the percentage of the total memory of the node.
++
++The default value is 15.
++
++
++clean_min_ratio
++================
++
++This knob provides *hard* protection of clean file pages. The file pages on the
++current node won't be reclaimed under memory pressure when the amount of clean
++file pages is below vm.clean_min_ratio.
++
++Hard protection of clean file pages using this knob may be used to
++  - prevent disk I/O thrashing under memory pressure even with no free swap space;
++  - improve performance in disk cache-bound tasks under memory pressure;
++  - avoid high latency and prevent livelock in near-OOM conditions.
++
++Setting it to a high value may result in a early out-of-memory condition due to
++the inability to reclaim the protected amount of clean file pages when other
++types of pages cannot be reclaimed.
++
++The unit of measurement is the percentage of the total memory of the node.
++
++The default value is 4.
++
++
+ compact_memory
+ ==============
+ 
+@@ -1006,6 +1070,14 @@
+ At 0, the kernel will not initiate swap until the amount of free and
+ file-backed pages is less than the high watermark in a zone.
+ 
++This knob has no effect if the amount of clean file pages on the current
++node is below vm.clean_low_ratio or vm.clean_min_ratio. In this case,
++only anonymous pages can be reclaimed.
++
++If the number of anonymous pages on the current node is below
++vm.anon_min_ratio, then only file pages can be reclaimed with
++any vm.swappiness value.
++
+ 
+ unprivileged_userfaultfd
+ ========================
+--- a/mm/Kconfig
++++ b/mm/Kconfig
+@@ -425,6 +425,69 @@
+ config ARCH_WANT_HUGETLB_VMEMMAP_PREINIT
+ 	bool
+ 
++config ANON_MIN_RATIO
++	int "Default value for vm.anon_min_ratio"
++	depends on SYSCTL
++	range 0 100
++	default 1
++	help
++	  This option sets the default value for vm.anon_min_ratio sysctl knob.
++
++	  The vm.anon_min_ratio sysctl knob provides *hard* protection of
++	  anonymous pages. The anonymous pages on the current node won't be
++	  reclaimed under any conditions when their amount is below
++	  vm.anon_min_ratio. This knob may be used to prevent excessive swap
++	  thrashing when anonymous memory is low (for example, when memory is
++	  going to be overfilled by compressed data of zram module).
++
++	  Setting this value too high (close to MemTotal) can result in
++	  inability to swap and can lead to early OOM under memory pressure.
++
++config CLEAN_LOW_RATIO
++	int "Default value for vm.clean_low_ratio"
++	depends on SYSCTL
++	range 0 100
++	default 15
++	help
++	  This option sets the default value for vm.clean_low_ratio sysctl knob.
++
++	  The vm.clean_low_ratio sysctl knob provides *best-effort*
++	  protection of clean file pages. The file pages on the current node
++	  won't be reclaimed under memory pressure when the amount of clean file
++	  pages is below vm.clean_low_ratio *unless* we threaten to OOM.
++	  Protection of clean file pages using this knob may be used when
++	  swapping is still possible to
++	    - prevent disk I/O thrashing under memory pressure;
++	    - improve performance in disk cache-bound tasks under memory
++	      pressure.
++
++	  Setting it to a high value may result in a early eviction of anonymous
++	  pages into the swap space by attempting to hold the protected amount
++	  of clean file pages in memory.
++
++config CLEAN_MIN_RATIO
++	int "Default value for vm.clean_min_ratio"
++	depends on SYSCTL
++	range 0 100
++	default 4
++	help
++	  This option sets the default value for vm.clean_min_ratio sysctl knob.
++
++	  The vm.clean_min_ratio sysctl knob provides *hard* protection of
++	  clean file pages. The file pages on the current node won't be
++	  reclaimed under memory pressure when the amount of clean file pages is
++	  below vm.clean_min_ratio. Hard protection of clean file pages using
++	  this knob may be used to
++	    - prevent disk I/O thrashing under memory pressure even with no free
++	      swap space;
++	    - improve performance in disk cache-bound tasks under memory
++	      pressure;
++	    - avoid high latency and prevent livelock in near-OOM conditions.
++
++	  Setting it to a high value may result in a early out-of-memory condition
++	  due to the inability to reclaim the protected amount of clean file pages
++	  when other types of pages cannot be reclaimed.
++
+ config HAVE_MEMBLOCK_PHYS_MAP
+ 	bool
+ 
+@@ -616,7 +679,7 @@
+ config COMPACT_UNEVICTABLE_DEFAULT
+ 	int
+ 	depends on COMPACTION
+-	default 0 if PREEMPT_RT || ZEN_INTERACTIVE
++	default 0 if PREEMPT_RT || BUNKER
+ 	default 1
+ 
+ #
+--- a/mm/util.c
++++ b/mm/util.c
+@@ -888,6 +888,40 @@
+ 		.mode		= 0644,
+ 		.proc_handler	= proc_doulongvec_minmax,
+ 	},
++	{
++		.procname	= "workingset_protection",
++		.data		= &sysctl_workingset_protection,
++		.maxlen		= sizeof(bool),
++		.mode		= 0644,
++		.proc_handler	= &proc_dobool,
++	},
++	{
++		.procname	= "anon_min_ratio",
++		.data		= &sysctl_anon_min_ratio,
++		.maxlen		= sizeof(u8),
++		.mode		= 0644,
++		.proc_handler	= &vm_workingset_protection_update_handler,
++		.extra1		= SYSCTL_ZERO,
++		.extra2		= SYSCTL_ONE_HUNDRED,
++	},
++	{
++		.procname	= "clean_low_ratio",
++		.data		= &sysctl_clean_low_ratio,
++		.maxlen		= sizeof(u8),
++		.mode		= 0644,
++		.proc_handler	= &vm_workingset_protection_update_handler,
++		.extra1		= SYSCTL_ZERO,
++		.extra2		= SYSCTL_ONE_HUNDRED,
++	},
++	{
++		.procname	= "clean_min_ratio",
++		.data		= &sysctl_clean_min_ratio,
++		.maxlen		= sizeof(u8),
++		.mode		= 0644,
++		.proc_handler	= &vm_workingset_protection_update_handler,
++		.extra1		= SYSCTL_ZERO,
++		.extra2		= SYSCTL_ONE_HUNDRED,
++	},
+ };
+ 
+ static int __init init_vm_util_sysctls(void)
+--- a/mm/vmscan.c
++++ b/mm/vmscan.c
+@@ -146,6 +146,15 @@
+ 	/* The file folios on the current node are dangerously low */
+ 	unsigned int file_is_tiny:1;
+ 
++	/* The anonymous pages on the current node are below vm.anon_min_ratio */
++	unsigned int anon_below_min:1;
++
++	/* The clean file pages on the current node are below vm.clean_low_ratio */
++	unsigned int clean_below_low:1;
++
++	/* The clean file pages on the current node are below vm.clean_min_ratio */
++	unsigned int clean_below_min:1;
++
+ 	/* Always discard instead of demoting to lower tier memory */
+ 	unsigned int no_demotion:1;
+ 
+@@ -195,10 +204,23 @@
+ #define prefetchw_prev_lru_folio(_folio, _base, _field) do { } while (0)
+ #endif
+ 
++bool sysctl_workingset_protection __read_mostly = true;
++u8 sysctl_anon_min_ratio  __read_mostly = CONFIG_ANON_MIN_RATIO;
++u8 sysctl_clean_low_ratio __read_mostly = CONFIG_CLEAN_LOW_RATIO;
++u8 sysctl_clean_min_ratio __read_mostly = CONFIG_CLEAN_MIN_RATIO;
++static u64 sysctl_anon_min_ratio_kb  __read_mostly = 0;
++static u64 sysctl_clean_low_ratio_kb __read_mostly = 0;
++static u64 sysctl_clean_min_ratio_kb __read_mostly = 0;
++static u64 workingset_protection_prev_totalram __read_mostly = 0;
++
+ /*
+  * From 0 .. MAX_SWAPPINESS.  Higher means more swappy.
+  */
++#ifdef CONFIG_BUNKER
++int vm_swappiness = 100;
++#else
+ int vm_swappiness = 60;
++#endif
+ 
+ #ifdef CONFIG_MEMCG
+ 
+@@ -1117,6 +1139,10 @@
+ 		if (!sc->may_unmap && folio_mapped(folio))
+ 			goto keep_locked;
+ 
++		if (folio_is_file_lru(folio) ? sc->clean_below_min :
++				(sc->anon_below_min && !sc->clean_below_min))
++			goto keep_locked;
++
+ 		/*
+ 		 * The number of dirty pages determines if a node is marked
+ 		 * reclaim_congested. kswapd will stall and start writing
+@@ -2545,6 +2571,15 @@
+ 	}
+ 
+ 	/*
++	 * Force-scan anon if clean file pages is under vm.clean_low_ratio
++	 * or vm.clean_min_ratio.
++	 */
++	if (sc->clean_below_low || sc->clean_below_min) {
++		scan_balance = SCAN_ANON;
++		goto out;
++	}
++
++	/*
+ 	 * If there is enough inactive page cache, we do not reclaim
+ 	 * anything from the anonymous working right now to make sure
+          * a streaming file access pattern doesn't cause swapping.
+@@ -2602,6 +2637,14 @@
+ 			BUG();
+ 		}
+ 
++		/*
++		 * Hard protection of the working set.
++		 * Don't reclaim anon/file pages when the amount is
++		 * below the watermark of the same type.
++		 */
++		if (file ? sc->clean_below_min : sc->anon_below_min)
++			scan = 0;
++
+ 		nr[lru] = scan;
+ 	}
+ }
+@@ -2622,6 +2665,87 @@
+ 			  lruvec_memcg(lruvec));
+ }
+ 
++int vm_workingset_protection_update_handler(const struct ctl_table *table, int write,
++		void __user *buffer, size_t *lenp, loff_t *ppos)
++{
++	int ret = proc_dou8vec_minmax(table, write, buffer, lenp, ppos);
++
++	if (ret || !write)
++		return ret;
++
++	workingset_protection_prev_totalram = 0;
++
++	return 0;
++}
++
++static void prepare_workingset_protection(pg_data_t *pgdat, struct scan_control *sc)
++{
++	unsigned long node_mem_total;
++	struct sysinfo i;
++
++	if (!sysctl_workingset_protection) {
++		sc->anon_below_min = 0;
++		sc->clean_below_low = 0;
++		sc->clean_below_min = 0;
++		return;
++	}
++
++	if (likely(sysctl_anon_min_ratio ||
++		   sysctl_clean_low_ratio ||
++		   sysctl_clean_min_ratio)) {
++#ifdef CONFIG_NUMA
++		si_meminfo_node(&i, pgdat->node_id);
++#else
++		si_meminfo(&i);
++#endif
++		node_mem_total = i.totalram;
++
++		if (unlikely(workingset_protection_prev_totalram != node_mem_total)) {
++			sysctl_anon_min_ratio_kb =
++				node_mem_total * sysctl_anon_min_ratio / 100;
++			sysctl_clean_low_ratio_kb =
++				node_mem_total * sysctl_clean_low_ratio / 100;
++			sysctl_clean_min_ratio_kb =
++				node_mem_total * sysctl_clean_min_ratio / 100;
++			workingset_protection_prev_totalram = node_mem_total;
++		}
++	}
++
++	if (sysctl_anon_min_ratio) {
++		unsigned long reclaimable_anon;
++
++		reclaimable_anon =
++			node_page_state(pgdat, NR_ACTIVE_ANON) +
++			node_page_state(pgdat, NR_INACTIVE_ANON) +
++			node_page_state(pgdat, NR_ISOLATED_ANON);
++
++		sc->anon_below_min = reclaimable_anon < sysctl_anon_min_ratio_kb;
++	} else {
++		sc->anon_below_min = 0;
++	}
++
++	if (sysctl_clean_low_ratio || sysctl_clean_min_ratio) {
++		unsigned long reclaimable_file, dirty, clean;
++
++		reclaimable_file =
++			node_page_state(pgdat, NR_ACTIVE_FILE) +
++			node_page_state(pgdat, NR_INACTIVE_FILE) +
++			node_page_state(pgdat, NR_ISOLATED_FILE);
++		dirty = node_page_state(pgdat, NR_FILE_DIRTY);
++
++		if (likely(reclaimable_file > dirty))
++			clean = reclaimable_file - dirty;
++		else
++			clean = 0;
++
++		sc->clean_below_low = clean < sysctl_clean_low_ratio_kb;
++		sc->clean_below_min = clean < sysctl_clean_min_ratio_kb;
++	} else {
++		sc->clean_below_low = 0;
++		sc->clean_below_min = 0;
++	}
++}
++
+ #ifdef CONFIG_LRU_GEN
+ 
+ DEFINE_STATIC_KEY_FALSE(lru_switch);
+@@ -4777,11 +4901,21 @@
+ 	return tier - 1;
+ }
+ 
+-static int get_type_to_scan(struct lruvec *lruvec, int swappiness)
++static int get_type_to_scan(struct lruvec *lruvec, struct scan_control *sc, int swappiness)
+ {
+ 	struct ctrl_pos sp, pv = {};
+ 
+-	if (swappiness <= MIN_SWAPPINESS + 1)
++	if (swappiness == MIN_SWAPPINESS)
++		return LRU_GEN_FILE;
++
++	if (sc->clean_below_min)
++		return LRU_GEN_ANON;
++	if (sc->anon_below_min)
++		return LRU_GEN_FILE;
++	if (sc->clean_below_low)
++		return LRU_GEN_ANON;
++
++	if (swappiness == MIN_SWAPPINESS + 1)
+ 		return LRU_GEN_FILE;
+ 
+ 	if (swappiness >= MAX_SWAPPINESS)
+@@ -4801,7 +4935,7 @@
+ 			  int *type_scanned, struct list_head *list)
+ {
+ 	int i;
+-	int type = get_type_to_scan(lruvec, swappiness);
++	int type = get_type_to_scan(lruvec, sc, swappiness);
+ 
+ 	for_each_evictable_type(i, swappiness) {
+ 		int scanned;
+@@ -5054,6 +5188,12 @@
+ 	struct mem_cgroup *memcg = lruvec_memcg(lruvec);
+ 	struct pglist_data *pgdat = lruvec_pgdat(lruvec);
+ 
++	prepare_workingset_protection(pgdat, sc);
++
++	if (sysctl_workingset_protection && sc->clean_below_min &&
++			!can_reclaim_anon_pages(memcg, pgdat->node_id, sc))
++		return 0;
++
+ 	/* lru_gen_age_node() called mem_cgroup_calculate_protection() */
+ 	if (mem_cgroup_below_min(NULL, memcg))
+ 		return MEMCG_LRU_YOUNG;
+@@ -6212,6 +6352,8 @@
+ 
+ 	prepare_scan_control(pgdat, sc);
+ 
++	prepare_workingset_protection(pgdat, sc);
++
+ 	shrink_node_memcgs(pgdat, sc);
+ 
+ 	flush_reclaim_state(sc);

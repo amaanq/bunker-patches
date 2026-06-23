@@ -1,0 +1,37 @@
+From 6e449a8e9c2ac523e09a638ebb21e8f6e7576d10 Mon Sep 17 00:00:00 2001
+From: Arjan van de Ven <arjan@linux.intel.com>
+Date: Sun, 18 Feb 2018 23:35:41 +0000
+Subject: [PATCH] locking: rwsem: spin faster
+
+tweak rwsem owner spinning a bit
+
+Signed-off-by: Alexandre Frade <kernel@xanmod.org>
+---
+ kernel/locking/rwsem.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/kernel/locking/rwsem.c b/kernel/locking/rwsem.c
+index 24df4d98f7d2..1d5923996fa5 100644
+--- a/kernel/locking/rwsem.c
++++ b/kernel/locking/rwsem.c
+@@ -746,6 +746,7 @@ rwsem_spin_on_owner(struct rw_semaphore *sem)
+ 	struct task_struct *new, *owner;
+ 	unsigned long flags, new_flags;
+ 	enum owner_state state;
++	int i = 0;
+ 
+ 	lockdep_assert_preemption_disabled();
+ 
+@@ -782,7 +783,8 @@ rwsem_spin_on_owner(struct rw_semaphore *sem)
+ 			break;
+ 		}
+ 
+-		cpu_relax();
++		if (i++ > 1000)
++			cpu_relax();
+ 	}
+ 
+ 	return state;
+-- 
+GitLab
+

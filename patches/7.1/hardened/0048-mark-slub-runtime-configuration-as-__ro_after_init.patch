@@ -1,0 +1,54 @@
+From 3b46a84802fac36297d3fef6e373c931b8e9b3e2 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Sun, 14 May 2017 19:01:58 -0400
+Subject: [PATCH 105/190] mark slub runtime configuration as __ro_after_init
+
+Signed-off-by: Daniel Micay <danielmicay@gmail.com>
+---
+ mm/slub.c | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/mm/slub.c b/mm/slub.c
+index 507f34610225..c6e5c68634d0 100644
+--- a/mm/slub.c
++++ b/mm/slub.c
+@@ -971,15 +971,15 @@ static inline void *restore_red_left(struct kmem_cache *s, void *p)
+ /*
+  * Debug settings:
+  */
+ #if defined(CONFIG_SLUB_DEBUG_ON)
+-static slab_flags_t slub_debug = DEBUG_DEFAULT_FLAGS;
++static slab_flags_t slub_debug __ro_after_init = DEBUG_DEFAULT_FLAGS;
+ #else
+-static slab_flags_t slub_debug;
++static slab_flags_t slub_debug __ro_after_init;
+ #endif
+ 
+ static const char *slub_debug_string __ro_after_init;
+-static int disable_higher_order_debug;
++static int disable_higher_order_debug __ro_after_init;
+ 
+ /*
+  * Object debugging
+  */
+@@ -7552,14 +7552,14 @@ EXPORT_SYMBOL(kmem_cache_alloc_bulk_noprof);
+  * Minimum / Maximum order of slab pages. This influences locking overhead
+  * and slab fragmentation. A higher order reduces the number of partial slabs
+  * and increases the number of allocations possible without having to
+  * take the list_lock.
+  */
+-static unsigned int slub_min_order;
+-static unsigned int slub_max_order =
++static unsigned int slub_min_order __ro_after_init;
++static unsigned int slub_max_order __ro_after_init =
+ 	IS_ENABLED(CONFIG_SLUB_TINY) ? 1 : PAGE_ALLOC_COSTLY_ORDER;
+-static unsigned int slub_min_objects;
++static unsigned int slub_min_objects __ro_after_init;
+ 
+ /*
+  * Calculate the order of allocation given an slab object size.
+  *
+  * The order of allocation has significant impact on performance and other
+-- 
+2.52.0
+

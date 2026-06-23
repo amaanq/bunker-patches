@@ -1,0 +1,400 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Peter Jung <admin@ptr1337.dev>
+Date: Fri, 27 Feb 2026 10:57:22 +0100
+Subject: [PATCH] fixes
+
+Signed-off-by: Peter Jung <admin@ptr1337.dev>
+---
+--- a/arch/arm/include/asm/mmu_context.h
++++ b/arch/arm/include/asm/mmu_context.h
+@@ -80,7 +80,7 @@
+ #ifndef MODULE
+ #define finish_arch_post_lock_switch \
+ 	finish_arch_post_lock_switch
+-static inline void finish_arch_post_lock_switch(void)
++static __always_inline void finish_arch_post_lock_switch(void)
+ {
+ 	struct mm_struct *mm = current->mm;
+ 
+--- a/arch/riscv/include/asm/sync_core.h
++++ b/arch/riscv/include/asm/sync_core.h
+@@ -6,7 +6,7 @@
+  * RISC-V implements return to user-space through an xRET instruction,
+  * which is not core serializing.
+  */
+-static inline void sync_core_before_usermode(void)
++static __always_inline void sync_core_before_usermode(void)
+ {
+ 	asm volatile ("fence.i" ::: "memory");
+ }
+--- a/arch/s390/include/asm/mmu_context.h
++++ b/arch/s390/include/asm/mmu_context.h
+@@ -93,7 +93,7 @@
+ }
+ 
+ #define finish_arch_post_lock_switch finish_arch_post_lock_switch
+-static inline void finish_arch_post_lock_switch(void)
++static __always_inline void finish_arch_post_lock_switch(void)
+ {
+ 	struct task_struct *tsk = current;
+ 	struct mm_struct *mm = tsk->mm;
+--- a/arch/sparc/include/asm/mmu_context_64.h
++++ b/arch/sparc/include/asm/mmu_context_64.h
+@@ -160,7 +160,7 @@
+ }
+ 
+ #define finish_arch_post_lock_switch	finish_arch_post_lock_switch
+-static inline void finish_arch_post_lock_switch(void)
++static __always_inline void finish_arch_post_lock_switch(void)
+ {
+ 	/* Restore the state of MCDPER register for the new process
+ 	 * just switched to.
+--- a/arch/x86/include/asm/sync_core.h
++++ b/arch/x86/include/asm/sync_core.h
+@@ -93,7 +93,7 @@
+  * to user-mode. x86 implements return to user-space through sysexit,
+  * sysrel, and sysretq, which are not core serializing.
+  */
+-static inline void sync_core_before_usermode(void)
++static __always_inline void sync_core_before_usermode(void)
+ {
+ 	/* With PTI, we unconditionally serialize before running user code. */
+ 	if (static_cpu_has(X86_FEATURE_PTI))
+--- a/drivers/bluetooth/btusb.c
++++ b/drivers/bluetooth/btusb.c
+@@ -563,6 +563,8 @@
+ 						     BTUSB_WIDEBAND_SPEECH },
+ 	{ USB_DEVICE(0x13d3, 0x3612), .driver_info = BTUSB_REALTEK |
+ 						     BTUSB_WIDEBAND_SPEECH },
++	{ USB_DEVICE(0x0489, 0xe112), .driver_info = BTUSB_REALTEK |
++						     BTUSB_WIDEBAND_SPEECH },
+ 	{ USB_DEVICE(0x0489, 0xe122), .driver_info = BTUSB_REALTEK |
+ 						     BTUSB_WIDEBAND_SPEECH },
+ 
+@@ -683,6 +685,8 @@
+ 	{ USB_DEVICE(0x13d3, 0x3596), .driver_info = BTUSB_MEDIATEK |
+ 						     BTUSB_WIDEBAND_SPEECH },
+ 	/* MediaTek MT7922 Bluetooth devices */
++	{ USB_DEVICE(0x13d3, 0x3625), .driver_info = BTUSB_MEDIATEK |
++						     BTUSB_WIDEBAND_SPEECH },
+ 	{ USB_DEVICE(0x13d3, 0x3585), .driver_info = BTUSB_MEDIATEK |
+ 						     BTUSB_WIDEBAND_SPEECH },
+ 	{ USB_DEVICE(0x13d3, 0x3610), .driver_info = BTUSB_MEDIATEK |
+--- a/drivers/gpu/drm/i915/gt/intel_rc6.c
++++ b/drivers/gpu/drm/i915/gt/intel_rc6.c
+@@ -2,9 +2,9 @@
+ /*
+  * Copyright © 2019 Intel Corporation
+  */
+-
+ #include <linux/pm_runtime.h>
+ #include <linux/string_helpers.h>
++#include <linux/dmi.h>
+ 
+ #include <drm/drm_print.h>
+ #include <drm/intel/intel_pcode_regs.h>
+@@ -499,6 +499,17 @@
+ 	if (!HAS_RC6(i915))
+ 		return false;
+ 
++	if (dmi_match(DMI_PRODUCT_SKU, "IBP1XI08MK1") ||
++	    dmi_match(DMI_PRODUCT_SKU, "IBP14I08MK2") ||
++	    dmi_match(DMI_PRODUCT_SKU, "IBP1XI08MK2") ||
++	    dmi_match(DMI_PRODUCT_SKU, "IBP16I08MK2") ||
++	    dmi_match(DMI_PRODUCT_SKU, "OMNIA08IMK1") ||
++	    dmi_match(DMI_PRODUCT_SKU, "OMNIA08IMK2")) {
++		drm_notice(&i915->drm,
++			   "RC6 disabled by quirk\n");
++		return false;
++	}
++
+ 	if (intel_vgpu_active(i915))
+ 		return false;
+ 
+--- a/drivers/iommu/iommu.c
++++ b/drivers/iommu/iommu.c
+@@ -1250,6 +1250,11 @@
+ 				ret = iommu_map(domain, addr - map_size,
+ 						addr - map_size, map_size,
+ 						entry->prot, GFP_KERNEL);
++				if (ret == -EADDRINUSE && addr - map_size == 0) {
++					dev_warn_once(dev,
++						"iommu: identity mapping at addr 0x0 already exists, skipping\n");
++					ret = 0;
++				}
+ 				if (ret)
+ 					goto out;
+ 				map_size = 0;
+--- a/drivers/usb/core/quirks.c
++++ b/drivers/usb/core/quirks.c
+@@ -385,6 +385,9 @@
+ 	/* Avermedia Live Gamer Ultra 2.1 (GC553G2) - BOS descriptor fetch hangs at SuperSpeed Plus */
+ 	{ USB_DEVICE(0x07ca, 0x2553), .driver_info = USB_QUIRK_NO_BOS },
+ 
++	/* Avermedia Live Gamer Ultra 2.1 (GC553G2) - BOS descriptor fetch hangs at SuperSpeed Plus */
++	{ USB_DEVICE(0x07ca, 0x2553), .driver_info = USB_QUIRK_NO_BOS },
++
+ 	/* Realforce 87U Keyboard */
+ 	{ USB_DEVICE(0x0853, 0x011b), .driver_info = USB_QUIRK_NO_LPM },
+ 
+@@ -449,6 +452,9 @@
+ 	/* ASUS TUF 4K PRO - BOS descriptor fetch hangs at SuperSpeed Plus */
+ 	{ USB_DEVICE(0x0b05, 0x1ab9), .driver_info = USB_QUIRK_NO_BOS },
+ 
++	/* ASUS TUF 4K PRO - BOS descriptor fetch hangs at SuperSpeed Plus */
++	{ USB_DEVICE(0x0b05, 0x1ab9), .driver_info = USB_QUIRK_NO_BOS },
++
+ 	/* Realtek Semiconductor Corp. Mass Storage Device (Multicard Reader)*/
+ 	{ USB_DEVICE(0x0bda, 0x0151), .driver_info = USB_QUIRK_CONFIG_INTF_STRINGS },
+ 
+@@ -585,6 +591,9 @@
+ 
+ 	/* UGREEN 35871 - BOS descriptor fetch hangs at SuperSpeed Plus */
+ 	{ USB_DEVICE(0x2b89, 0x5871), .driver_info = USB_QUIRK_NO_BOS },
++
++	/* UGREEN 35871 - BOS descriptor fetch hangs at SuperSpeed Plus */
++	{ USB_DEVICE(0x2b89, 0x5871), .driver_info = USB_QUIRK_NO_BOS },
+ 
+ 	/* APTIV AUTOMOTIVE HUB */
+ 	{ USB_DEVICE(0x2c48, 0x0132), .driver_info =
+--- a/include/linux/perf_event.h
++++ b/include/linux/perf_event.h
+@@ -1632,7 +1632,7 @@
+ 		task->sched_migrated = 1;
+ }
+ 
+-static inline void perf_event_task_sched_in(struct task_struct *prev,
++static __always_inline void perf_event_task_sched_in(struct task_struct *prev,
+ 					    struct task_struct *task)
+ {
+ 	if (static_branch_unlikely(&perf_sched_events))
+--- a/include/linux/sched/mm.h
++++ b/include/linux/sched/mm.h
+@@ -44,7 +44,7 @@
+ 
+ extern void __mmdrop(struct mm_struct *mm);
+ 
+-static inline void mmdrop(struct mm_struct *mm)
++static __always_inline void mmdrop(struct mm_struct *mm)
+ {
+ 	/*
+ 	 * The implicit full barrier implied by atomic_dec_and_test() is
+@@ -71,14 +71,14 @@
+  * Invoked from finish_task_switch(). Delegates the heavy lifting on RT
+  * kernels via RCU.
+  */
+-static inline void mmdrop_sched(struct mm_struct *mm)
++static __always_inline void mmdrop_sched(struct mm_struct *mm)
+ {
+ 	/* Provides a full memory barrier. See mmdrop() */
+ 	if (atomic_dec_and_test(&mm->mm_count))
+ 		call_rcu(&mm->delayed_drop, __mmdrop_delayed);
+ }
+ #else
+-static inline void mmdrop_sched(struct mm_struct *mm)
++static __always_inline void mmdrop_sched(struct mm_struct *mm)
+ {
+ 	mmdrop(mm);
+ }
+@@ -104,7 +104,7 @@
+ 	}
+ }
+ 
+-static inline void mmdrop_lazy_tlb_sched(struct mm_struct *mm)
++static __always_inline void mmdrop_lazy_tlb_sched(struct mm_struct *mm)
+ {
+ 	if (IS_ENABLED(CONFIG_MMU_LAZY_TLB_REFCOUNT))
+ 		mmdrop_sched(mm);
+@@ -532,7 +532,7 @@
+ #include <asm/membarrier.h>
+ #endif
+ 
+-static inline void membarrier_mm_sync_core_before_usermode(struct mm_struct *mm)
++static __always_inline void membarrier_mm_sync_core_before_usermode(struct mm_struct *mm)
+ {
+ 	/*
+ 	 * The atomic_read() below prevents CSE. The following should
+--- a/include/linux/tick.h
++++ b/include/linux/tick.h
+@@ -177,7 +177,7 @@
+ #ifdef CONFIG_NO_HZ_FULL
+ extern bool tick_nohz_full_running;
+ 
+-static inline bool tick_nohz_full_enabled(void)
++static __always_inline bool tick_nohz_full_enabled(void)
+ {
+ 	if (!context_tracking_enabled())
+ 		return false;
+@@ -301,7 +301,7 @@
+ static inline void tick_nohz_full_setup(cpumask_var_t cpumask) { }
+ #endif
+ 
+-static inline void tick_nohz_task_switch(void)
++static __always_inline void tick_nohz_task_switch(void)
+ {
+ 	if (tick_nohz_full_enabled())
+ 		__tick_nohz_task_switch();
+--- a/include/linux/vtime.h
++++ b/include/linux/vtime.h
+@@ -67,24 +67,24 @@
+  * For now vtime state is tied to context tracking. We might want to decouple
+  * those later if necessary.
+  */
+-static inline bool vtime_accounting_enabled(void)
++static __always_inline bool vtime_accounting_enabled(void)
+ {
+ 	return context_tracking_enabled();
+ }
+ 
+-static inline bool vtime_accounting_enabled_cpu(int cpu)
++static __always_inline bool vtime_accounting_enabled_cpu(int cpu)
+ {
+ 	return context_tracking_enabled_cpu(cpu);
+ }
+ 
+-static inline bool vtime_accounting_enabled_this_cpu(void)
++static __always_inline bool vtime_accounting_enabled_this_cpu(void)
+ {
+ 	return context_tracking_enabled_this_cpu();
+ }
+ 
+ extern void vtime_task_switch_generic(struct task_struct *prev);
+ 
+-static inline void vtime_task_switch(struct task_struct *prev)
++static __always_inline void vtime_task_switch(struct task_struct *prev)
+ {
+ 	if (vtime_accounting_enabled_this_cpu())
+ 		vtime_task_switch_generic(prev);
+--- a/include/net/netfilter/nf_tables.h
++++ b/include/net/netfilter/nf_tables.h
+@@ -455,6 +455,7 @@
+  *	@elemsize: element private size
+  *
+  *	Operations lookup, update and delete have simpler interfaces, are faster
++ *	Operations lookup, update and delete have simpler interfaces, are faster
+  *	and currently only used in the packet path. All the rest are slower,
+  *	control plane functions.
+  */
+@@ -513,6 +514,7 @@
+ 	unsigned int			elemsize;
+ };
+ 
++
+ /**
+  *      struct nft_set_type - nf_tables set type
+  *
+--- a/kernel/sched/core.c
++++ b/kernel/sched/core.c
+@@ -4958,7 +4957,7 @@
+ 	WRITE_ONCE(next->on_cpu, 1);
+ }
+ 
+-static inline void finish_task(struct task_struct *prev)
++static __always_inline void finish_task(struct task_struct *prev)
+ {
+ 	/*
+ 	 * This must be the very last reference to @prev from this CPU. After
+@@ -5002,7 +5001,7 @@
+ 	rq->balance_callback = found ? &balance_push_callback : NULL;
+ }
+ 
+-static void do_balance_callbacks(struct rq *rq, struct balance_callback *head)
++static __always_inline void do_balance_callbacks(struct rq *rq, struct balance_callback *head)
+ {
+ 	void (*func)(struct rq *rq);
+ 	struct balance_callback *next;
+@@ -5037,7 +5036,7 @@
+ 	.func = balance_push,
+ };
+ 
+-static inline struct balance_callback *
++static __always_inline struct balance_callback *
+ __splice_balance_callbacks(struct rq *rq, bool split)
+ {
+ 	struct balance_callback *head = rq->balance_callback;
+@@ -5067,7 +5066,7 @@
+ 	return __splice_balance_callbacks(rq, true);
+ }
+ 
+-void __balance_callbacks(struct rq *rq, struct rq_flags *rf)
++__always_inline void __balance_callbacks(struct rq *rq, struct rq_flags *rf)
+ {
+ 	if (rf)
+ 		rq_unpin_lock(rq, rf);
+@@ -5111,7 +5110,7 @@
+ 	__acquire(__rq_lockp(this_rq()));
+ }
+ 
+-static inline void finish_lock_switch(struct rq *rq)
++static __always_inline void finish_lock_switch(struct rq *rq)
+ 	__releases(__rq_lockp(rq))
+ {
+ 	/*
+@@ -5145,7 +5144,7 @@
+ #endif
+ }
+ 
+-static inline void kmap_local_sched_in(void)
++static __always_inline void kmap_local_sched_in(void)
+ {
+ #ifdef CONFIG_KMAP_LOCAL
+ 	if (unlikely(current->kmap_ctrl.idx))
+@@ -5199,7 +5198,7 @@
+  * past. 'prev == current' is still correct but we need to recalculate this_rq
+  * because prev may have moved to another CPU.
+  */
+-static struct rq *finish_task_switch(struct task_struct *prev)
++static __always_inline struct rq *finish_task_switch(struct task_struct *prev)
+ 	__releases(__rq_lockp(this_rq()))
+ {
+ 	struct rq *rq = this_rq();
+--- a/kernel/sched/sched.h
++++ b/kernel/sched/sched.h
+@@ -1441,12 +1434,12 @@
+ 
+ DECLARE_STATIC_KEY_FALSE(__sched_core_enabled);
+ 
+-static inline bool sched_core_enabled(struct rq *rq)
++static __always_inline bool sched_core_enabled(struct rq *rq)
+ {
+ 	return static_branch_unlikely(&__sched_core_enabled) && rq->core_enabled;
+ }
+ 
+-static inline bool sched_core_disabled(void)
++static __always_inline bool sched_core_disabled(void)
+ {
+ 	return !static_branch_unlikely(&__sched_core_enabled);
+ }
+@@ -1455,7 +1448,7 @@
+  * Be careful with this function; not for general use. The return value isn't
+  * stable unless you actually hold a relevant rq->__lock.
+  */
+-static inline raw_spinlock_t *rq_lockp(struct rq *rq)
++static __always_inline raw_spinlock_t *rq_lockp(struct rq *rq)
+ {
+ 	if (sched_core_enabled(rq))
+ 		return &rq->core->__lock;
+@@ -1463,7 +1456,7 @@
+ 	return &rq->__lock;
+ }
+ 
+-static inline raw_spinlock_t *__rq_lockp(struct rq *rq)
++static __always_inline raw_spinlock_t *__rq_lockp(struct rq *rq)
+ 	__returns_ctx_lock(rq_lockp(rq)) /* alias them */
+ {
+ 	if (rq->core_enabled)
+@@ -1558,12 +1551,12 @@
+ 	return true;
+ }
+ 
+-static inline raw_spinlock_t *rq_lockp(struct rq *rq)
++static __always_inline raw_spinlock_t *rq_lockp(struct rq *rq)
+ {
+ 	return &rq->__lock;
+ }
+ 
+-static inline raw_spinlock_t *__rq_lockp(struct rq *rq)
++static __always_inline raw_spinlock_t *__rq_lockp(struct rq *rq)
+ 	__returns_ctx_lock(rq_lockp(rq)) /* alias them */
+ {
+ 	return &rq->__lock;

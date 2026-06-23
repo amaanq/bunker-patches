@@ -1,0 +1,29 @@
+From a5253b7c5f90d0f5a9142d60202e45c746f8c1bf Mon Sep 17 00:00:00 2001
+From: Bernhard40 <32568352+Bernhard40@users.noreply.github.com>
+Date: Fri, 6 Oct 2017 10:21:50 +0000
+Subject: [PATCH 77/190] stop hiding AIO behind EXPERT
+
+---
+ init/Kconfig | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/init/Kconfig b/init/Kconfig
+index cab3ad28ca49..5022b44b35f7 100644
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -1825,11 +1825,11 @@ config SHMEM
+ 	  to userspace as tmpfs if TMPFS is enabled. Disabling this
+ 	  option replaces shmem and tmpfs with the much simpler ramfs code,
+ 	  which may be appropriate on small systems without swap.
+ 
+ config AIO
+-	bool "Enable AIO support" if EXPERT
++	bool "Enable AIO support"
+ 	default y
+ 	help
+ 	  This option enables POSIX asynchronous I/O which may by used
+ 	  by some high performance threaded applications. Disabling
+ 	  this option saves about 7k.
+-- 
+2.52.0
+

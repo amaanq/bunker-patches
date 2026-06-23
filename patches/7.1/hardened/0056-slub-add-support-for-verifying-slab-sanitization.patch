@@ -1,0 +1,149 @@
+From 61e1b9a0ad169aaa5a5849bf5a104309bfda3824 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Thu, 4 May 2017 15:58:57 -0400
+Subject: [PATCH 113/190] slub: Add support for verifying slab sanitization
+
+This is an extension to the sanitization feature in PaX for when
+sacricifing more performance for security is acceptable.
+
+The initial version from Daniel Micay was relying on PAGE_SANITIZE. It
+now relies on upstream's init_on_free.
+
+Signed-off-by: Daniel Micay <danielmicay@gmail.com>
+Signed-off-by: Thibaut Sautereau <thibaut.sautereau@ssi.gouv.fr>
+Signed-off-by: Levente Polyak <levente@leventepolyak.net>
+[nicolas.bouchinet@ssi.gouv.fr: Should not conflict with commit 520a688a2edfddba9]
+Signed-off-by: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
+---
+ mm/slub.c                  | 42 ++++++++++++++++++++++++++++++++++----
+ security/Kconfig.hardening |  8 ++++++++
+ 2 files changed, 46 insertions(+), 4 deletions(-)
+
+diff --git a/mm/slub.c b/mm/slub.c
+index bdb56196a228..796028530651 100644
+--- a/mm/slub.c
++++ b/mm/slub.c
+@@ -251,10 +251,16 @@ struct partial_context {
+ static inline bool kmem_cache_debug(struct kmem_cache *s)
+ {
+ 	return kmem_cache_debug_flags(s, SLAB_DEBUG_FLAGS);
+ }
+
++static inline bool has_sanitize_verify(struct kmem_cache *s)
++{
++	return IS_ENABLED(CONFIG_SLAB_SANITIZE_VERIFY) &&
++	       slab_want_init_on_free(s);
++}
++
+ void *fixup_red_left(struct kmem_cache *s, void *p)
+ {
+ 	if (kmem_cache_debug_flags(s, SLAB_RED_ZONE))
+ 		p += s->red_left_pad;
+
+@@ -2654,12 +2660,12 @@ bool slab_free_freelist_hook(struct kmem_cache *s, void **head, void **tail,
+
+ static void *setup_object(struct kmem_cache *s, void *object)
+ {
+ 	setup_object_debug(s, object);
+ 	set_canary(s, object, s->random_inactive);
+ 	object = kasan_init_slab_obj(s, object);
+-	if (unlikely(s->ctor)) {
++	if (unlikely(s->ctor) && !has_sanitize_verify(s)) {
+ 		kasan_unpoison_new_object(s, object);
+ 		s->ctor(object);
+ 		kasan_poison_new_object(s, object);
+ 	}
+ 	return object;
+@@ -5305,6 +5311,18 @@ static __fastpath_inline void *slab_alloc_node(struct kmem_cache *s, struct list
+
+ 	maybe_wipe_obj_freeptr(s, object);
+-	init = slab_want_init_on_alloc(gfpflags, s);
++
++	if (has_sanitize_verify(s) && object) {
++		/* KASAN hasn't unpoisoned the object yet (this is done in the
++		 * post-alloc hook), so let's do it temporarily.
++		 */
++		kasan_unpoison_new_object(s, object);
++		BUG_ON(memchr_inv(object, 0, s->object_size));
++		if (s->ctor)
++			s->ctor(object);
++		kasan_poison_new_object(s, object);
++	} else {
++		init = slab_want_init_on_alloc(gfpflags, s);
++	}
+
+ 	if (object) {
+ 		check_canary(s, object, s->random_inactive);
+@@ -7528,8 +7546,23 @@ int __kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size,
+ 		}
+ 	}
+
++	if (has_sanitize_verify(s)) {
++		int j;
++
++		for (j = 0; j < i; j++) {
++			/* KASAN hasn't unpoisoned the object yet (this is done in the
++			 * post-alloc hook), so let's do it temporarily.
++			 */
++			kasan_unpoison_new_object(s, p[j]);
++			BUG_ON(memchr_inv(p[j], 0, s->object_size));
++			if (s->ctor)
++				s->ctor(p[j]);
++			kasan_poison_new_object(s, p[j]);
++		}
++	}
++
+ 	return i;
+
+ error:
+ 	slub_put_cpu_ptr(s->cpu_slab);
+ 	__kmem_cache_free_bulk(s, i, p);
+@@ -7548,8 +7581,9 @@ int kmem_cache_alloc_bulk_noprof(struct kmem_cache *s, gfp_t flags, size_t size,
+ {
+ 	unsigned int i = 0;
+ 	void *kfence_obj;
++	bool init = false;
+
+ 	if (!size)
+ 		return 0;
+
+ 	s = slab_pre_alloc_hook(s, flags);
+@@ -7599,11 +7633,14 @@ out:
+ 	/*
+ 	 * memcg and kmem_cache debug support and memory initialization.
+ 	 * Done outside of the IRQ disabled fastpath loop.
+ 	 */
++	if (!has_sanitize_verify(s)) {
++		init = slab_want_init_on_alloc(flags, s);
++	}
+ 	if (unlikely(!slab_post_alloc_hook(s, NULL, flags, size, p,
+-		    slab_want_init_on_alloc(flags, s), s->object_size))) {
++		    init, s->object_size))) {
+ 		return 0;
+ 	}
+
+ 	return size;
+ }
+diff --git a/security/Kconfig.hardening b/security/Kconfig.hardening
+index 07f9286f1443..0068460db967 100644
+--- a/security/Kconfig.hardening
++++ b/security/Kconfig.hardening
+@@ -212,7 +212,15 @@ config ZERO_CALL_USED_REGS
+ 	  than 1%, and arm64 grows by about 5%.
+
++config SLAB_SANITIZE_VERIFY
++	bool "Verify sanitized SLAB allocations"
++	default y
++	depends on !KASAN
++	help
++	  When init_on_free is enabled, verify that newly allocated slab
++	  objects are zeroed to detect write-after-free bugs.
++
+ endmenu
+
+ menu "Bounds checking"
+
+ config FORTIFY_SOURCE
+--
+2.52.0
+

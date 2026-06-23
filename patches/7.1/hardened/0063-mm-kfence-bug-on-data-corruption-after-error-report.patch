@@ -1,0 +1,35 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Levente Polyak <levente@leventepolyak.net>
+Subject: [PATCH] mm, kfence: bug on data corruption after error report
+
+Signed-off-by: Levente Polyak <levente@leventepolyak.net>
+---
+--- a/lib/Kconfig.kfence
++++ b/lib/Kconfig.kfence
+@@ -96,4 +96,13 @@
+ 	  during boot; say M if you want the test to build as a module; say N
+ 	  if you are unsure.
+ 
++config KFENCE_BUG_ON_DATA_CORRUPTION
++	bool "Trigger a BUG when data corruption is detected"
++	default y
++	help
++	  Select this option if the kernel should BUG when kfence encounters
++	  data corruption of kfence managed objects after error report.
++
++	  If unsure, say Y.
++
+ endif # KFENCE
+--- a/mm/kfence/report.c
++++ b/mm/kfence/report.c
+@@ -302,6 +302,10 @@
+ 
+ 	lockdep_on();
+ 
++#ifdef CONFIG_KFENCE_BUG_ON_DATA_CORRUPTION
++	BUG();
++#endif
++
+ 	check_panic_on_warn("KFENCE");
+ 
+ 	/* We encountered a memory safety error, taint the kernel! */

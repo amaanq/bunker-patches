@@ -1,0 +1,357 @@
+From e1d1ddbdac73c548cbac1f497902b163cec6dd28 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Wed, 3 May 2017 16:16:58 -0400
+Subject: [PATCH 112/190] slub: add multi-purpose random canaries
+
+Place canaries at the end of kernel slab allocations, sacrificing
+some performance and memory usage for security.
+
+Canaries can detect some forms of heap corruption when allocations
+are freed and as part of the HARDENED_USERCOPY feature. It provides
+basic use-after-free detection for HARDENED_USERCOPY.
+
+Canaries absorb small overflows (rendering them harmless), mitigate
+non-NUL terminated C string overflows on 64-bit via a guaranteed zero
+byte and provide basic double-free detection.
+
+Signed-off-by: Daniel Micay <danielmicay@gmail.com>
+[levente@leventepolyak.net: make canaries work without SLUB_DEBUG]
+[levente@leventepolyak.net: fix compatibility with KFENCE]
+Signed-off-by: Levente Polyak <levente@leventepolyak.net>
+[nicolas.bouchinet@ssi.gouv.fr: Fix conflicts with commit 782f8906f8057efc7]
+Signed-off-by: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
+---
+ mm/Kconfig |  17 +++++++++
+ mm/slab.h  |   5 +++++
+ mm/slub.c  | 112 ++++++++++++++++++++++++++++++++++++++++++++++++++++-----
+ 3 files changed, 123 insertions(+), 11 deletions(-)
+
+diff --git a/mm/Kconfig b/mm/Kconfig
+--- a/mm/Kconfig
+2026-04-13 01:05:33.401497165 -0400
++++ b/mm/Kconfig
+@@ -235,6 +235,23 @@
+ 
+ 	  If unsure, say Y.
+ 
++config SLAB_CANARY
++	depends on SLUB
++	depends on !SLAB_MERGE_DEFAULT
++	bool "SLAB canaries"
++	default y
++	help
++	  Place canaries at the end of kernel slab allocations, sacrificing
++	  some performance and memory usage for security.
++
++	  Canaries can detect some forms of heap corruption when allocations
++	  are freed and as part of the HARDENED_USERCOPY feature. It provides
++	  basic use-after-free detection for HARDENED_USERCOPY.
++
++	  Canaries absorb small overflows (rendering them harmless), mitigate
++	  non-NUL terminated C string overflows on 64-bit via a guaranteed zero
++	  byte and provide basic double-free detection.
++
+ config SLUB_STATS
+ 	default n
+ 	bool "Enable performance statistics"
+
+diff --git a/mm/slab.h b/mm/slab.h
+--- a/mm/slab.h
++++ b/mm/slab.h
+@@ -223,6 +223,11 @@
+ 	unsigned long random;
+ #endif
+ 
++#ifdef CONFIG_SLAB_CANARY
++	unsigned long random_active;
++	unsigned long random_inactive;
++#endif
++
+ #ifdef CONFIG_NUMA
+ 	/*
+ 	 * Defragmentation by allocating from a remote node.
+
+diff --git a/mm/slub.c b/mm/slub.c
+--- a/mm/slub.c
++++ b/mm/slub.c
+@@ -44,6 +44,7 @@
+ #include <linux/memcontrol.h>
+ #include <linux/random.h>
+ #include <linux/prandom.h>
++#include <linux/stackprotector.h>
+ #include <kunit/test.h>
+ #include <kunit/test-bug.h>
+ #include <linux/sort.h>
+@@ -754,9 +755,36 @@
+ 	p += get_info_end(s);
+ 	p += sizeof(struct track) * 2;
+ 
+-	return *(unsigned long *)p;
++	return *(unsigned int *)p;
+ }
+ 
++#ifdef CONFIG_SLAB_CANARY
++static inline unsigned long *get_canary(struct kmem_cache *s, void *object)
++{
++	return object + get_info_end(s);
++}
++
++static inline unsigned long get_canary_value(const void *canary, unsigned long value)
++{
++	return (value ^ (unsigned long)canary) & CANARY_MASK;
++}
++
++static inline void set_canary(struct kmem_cache *s, void *object, unsigned long value)
++{
++	unsigned long *canary = get_canary(s, object);
++	*canary = get_canary_value(canary, value);
++}
++
++static inline void check_canary(struct kmem_cache *s, void *object, unsigned long value)
++{
++	unsigned long *canary = get_canary(s, object);
++	BUG_ON(*canary != get_canary_value(canary, value));
++}
++#else
++#define set_canary(s, object, value)
++#define check_canary(s, object, value)
++#endif
++
+ #ifdef CONFIG_SLAB_OBJ_EXT
+ 
+ /*
+@@ -1020,6 +1048,9 @@
+ 
+ 	p = object + get_info_end(s);
+ 
++	if (IS_ENABLED(CONFIG_SLAB_CANARY))
++		p = (void *)p + sizeof(void *);
++
+ 	return kasan_reset_tag(p + alloc);
+ }
+ 
+@@ -1181,6 +1212,9 @@
+ 
+ 	off = get_info_end(s);
+ 
++	if (IS_ENABLED(CONFIG_SLAB_CANARY))
++		off += sizeof(void *);
++
+ 	if (s->flags & SLAB_STORE_USER)
+ 		off += 2 * sizeof(struct track);
+ 
+@@ -1349,10 +1383,11 @@
+  *
+  * [Metadata starts at object + s->inuse]
+  *   - A. freelist pointer (if freeptr_outside_object)
+- *   - B. alloc tracking (SLAB_STORE_USER)
+- *   - C. free tracking (SLAB_STORE_USER)
+- *   - D. original request size (SLAB_KMALLOC && SLAB_STORE_USER)
+- *   - E. KASAN metadata (if enabled)
++ *   - B. canary (SLAB_CANARY)
++ *   - C. alloc tracking (SLAB_STORE_USER)
++ *   - D. free tracking (SLAB_STORE_USER)
++ *   - E. original request size (SLAB_KMALLOC && SLAB_STORE_USER)
++ *   - F. KASAN metadata (if enabled)
+  *
+  * [Mandatory padding] (if CONFIG_SLUB_DEBUG && SLAB_RED_ZONE)
+  *   - One mandatory debug word to guarantee a minimum poisoned gap
+@@ -1384,6 +1419,9 @@
+ {
+ 	unsigned long off = get_info_end(s);	/* The end of info */
+ 
++	if (IS_ENABLED(CONFIG_SLAB_CANARY))
++		off += sizeof(void *);
++
+ 	if (s->flags & SLAB_STORE_USER) {
+ 		/* We also have user information there */
+ 		off += 2 * sizeof(struct track);
+@@ -2602,11 +2640,19 @@
+  */
+ static __always_inline
+ bool slab_free_hook(struct kmem_cache *s, void *x, bool init,
+-		    bool after_rcu_delay)
++		    bool after_rcu_delay, bool canary)
+ {
+ 	/* Are the object contents still accessible? */
+ 	bool still_accessible = (s->flags & SLAB_TYPESAFE_BY_RCU) && !after_rcu_delay;
+ 
++	/*
++	 * Postpone setting the inactive canary until the metadata
++	 * has potentially been cleared at the end of this function.
++	 */
++	if (canary) {
++		check_canary(s, x, s->random_active);
++	}
++
+ 	kmemleak_free_recursive(x, s->flags);
+ 	kmsan_slab_free(s, x);
+ 
+@@ -2681,6 +2727,11 @@
+ 		set_orig_size(s, x, orig_size);
+ 
+ 	}
++
++	if (canary) {
++		set_canary(s, x, s->random_inactive);
++	}
++
+ 	/* KASAN might put x into memory quarantine, delaying its reuse. */
+ 	return !kasan_slab_free(s, x, init, still_accessible, false);
+ }
+@@ -2696,7 +2747,7 @@
+ 	bool init;
+ 
+ 	if (is_kfence_address(next)) {
+-		slab_free_hook(s, next, false, false);
++		slab_free_hook(s, next, false, false, false);
+ 		return false;
+ 	}
+ 
+@@ -2711,7 +2762,7 @@
+ 		next = get_freepointer(s, object);
+ 
+ 		/* If object's reuse doesn't have to be delayed */
+-		if (likely(slab_free_hook(s, object, init, false))) {
++		if (likely(slab_free_hook(s, object, init, false, true))) {
+ 			/* Move object to the new freelist */
+ 			set_freepointer(s, object, *head);
+ 			*head = object;
+@@ -2732,6 +2783,7 @@
+ static void *setup_object(struct kmem_cache *s, void *object)
+ {
+ 	setup_object_debug(s, object);
++	set_canary(s, object, s->random_inactive);
+ 	object = kasan_init_slab_obj(s, object);
+ 	if (unlikely(s->ctor)) {
+ 		kasan_unpoison_new_object(s, object);
+@@ -4856,6 +4908,11 @@
+ 	maybe_wipe_obj_freeptr(s, object);
+ 	init = slab_want_init_on_alloc(gfpflags, s);
+ 
++	if (object) {
++		check_canary(s, object, s->random_inactive);
++		set_canary(s, object, s->random_active);
++	}
++
+ out:
+ 	/*
+ 	 * When init equals 'true', like for kzalloc() family, only
+@@ -6159,10 +6216,16 @@
+ void slab_free(struct kmem_cache *s, struct slab *slab, void *object,
+ 	       unsigned long addr)
+ {
++	bool canary = true;
++
+ 	memcg_slab_free_hook(s, slab, &object, 1);
+ 	alloc_tagging_slab_free_hook(s, slab, &object, 1);
+ 
+-	if (unlikely(!slab_free_hook(s, object, slab_want_init_on_free(s), false)))
++	/* Make sure canaries are not used on kfence objects. */
++	if (is_kfence_address(object))
++		canary = false;
++
++	if (unlikely(!slab_free_hook(s, object, slab_want_init_on_free(s), false, canary)))
+ 		return;
+ 
+ 	if (likely(!IS_ENABLED(CONFIG_NUMA) || slab_nid(slab) == numa_mem_id())
+@@ -6181,10 +6244,15 @@
+ void memcg_alloc_abort_single(struct kmem_cache *s, void *object)
+ {
+ 	struct slab *slab = virt_to_slab(object);
++	bool canary = true;
+ 
+ 	alloc_tagging_slab_free_hook(s, slab, &object, 1);
+ 
+-	if (likely(slab_free_hook(s, object, slab_want_init_on_free(s), false)))
++	/* Make sure canaries are not used on kfence objects. */
++	if (is_kfence_address(object))
++		canary = false;
++
++	if (likely(slab_free_hook(s, object, slab_want_init_on_free(s), false, canary)))
+ 		__slab_free(s, slab, object, object, 1, _RET_IP_);
+ }
+ #endif
+@@ -6227,7 +6295,7 @@
+ 		return;
+ 
+ 	/* resume freeing */
+-	if (slab_free_hook(s, object, slab_want_init_on_free(s), true)) {
++	if (slab_free_hook(s, object, slab_want_init_on_free(s), true, true)) {
+ 		__slab_free(s, slab, object, object, 1, _THIS_IP_);
+ 		stat(s, FREE_SLOWPATH);
+ 	}
+@@ -6315,7 +6383,7 @@
+ 	 * or any other metadata back there then we can
+ 	 * only use the space before that information.
+ 	 */
+-	if (s->flags & (SLAB_TYPESAFE_BY_RCU | SLAB_STORE_USER))
++	if ((s->flags & (SLAB_TYPESAFE_BY_RCU | SLAB_STORE_USER)) || IS_ENABLED(CONFIG_SLAB_CANARY))
+ 		return s->inuse;
+ 	else if (obj_exts_in_object(s, slab))
+ 		return s->inuse;
+@@ -7196,7 +7264,7 @@
+ int __kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size,
+ 			    void **p)
+ {
+-	int i;
++	int i, k;
+ 
+ 	if (IS_ENABLED(CONFIG_SLUB_TINY) || kmem_cache_debug(s)) {
+ 		for (i = 0; i < size; i++) {
+@@ -7215,6 +7283,13 @@
+ 		stat_add(s, ALLOC_SLOWPATH, i);
+ 	}
+ 
++	for (k = 0; k < i; k++) {
++		if (!is_kfence_address(p[k])) {
++			check_canary(s, p[k], s->random_inactive);
++			set_canary(s, p[k], s->random_active);
++		}
++	}
++
+ 	return i;
+ 
+ error:
+@@ -7531,6 +7606,7 @@
+ #ifdef CONFIG_SLUB_DEBUG
+ 	init_object(kmem_cache_node, n, SLUB_RED_ACTIVE);
+ #endif
++	set_canary(kmem_cache_node, n, kmem_cache_node->random_active);
+ 	n = kasan_slab_alloc(kmem_cache_node, n, GFP_KERNEL, false);
+ 	slab->freelist = get_freepointer(kmem_cache_node, n);
+ 	slab->inuse = 1;
+@@ -7735,6 +7811,9 @@
+ 		s->offset = ALIGN_DOWN(s->object_size / 2, sizeof(void *));
+ 	}
+ 
++	if (IS_ENABLED(CONFIG_SLAB_CANARY))
++		size += sizeof(void *);
++
+ #ifdef CONFIG_SLUB_DEBUG
+ 	if (flags & SLAB_STORE_USER) {
+ 		/*
+@@ -8072,6 +8151,9 @@
+ 		offset -= s->red_left_pad;
+ 	}
+ 
++	if (!is_kfence)
++		check_canary(s, (void *)ptr - offset, s->random_active);
++
+ 	/* Allow address range falling entirely within usercopy region. */
+ 	if (offset >= s->useroffset &&
+ 	    offset - s->useroffset <= s->usersize &&
+@@ -8439,6 +8521,10 @@
+ #ifdef CONFIG_SLAB_FREELIST_HARDENED
+ 	s->random = get_random_long();
+ #endif
++#ifdef CONFIG_SLAB_CANARY
++	s->random_active = get_random_long();
++	s->random_inactive = get_random_long();
++#endif
+ 	s->align = args->align;
+ 	s->ctor = args->ctor;
+ #ifdef CONFIG_HARDENED_USERCOPY
+
+-- 
+2.52.0

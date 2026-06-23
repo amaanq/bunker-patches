@@ -1,0 +1,28 @@
+From 5ea9f15d228d74991b425bddd5a6246102f4221d Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Sat, 27 May 2017 07:28:10 -0400
+Subject: [PATCH 79/190] disable DEVPORT by default
+
+---
+ drivers/char/Kconfig | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/drivers/char/Kconfig b/drivers/char/Kconfig
+index d2cfc584e202..258a33a54e8e 100644
+--- a/drivers/char/Kconfig
++++ b/drivers/char/Kconfig
+@@ -341,11 +341,10 @@ config NVRAM
+ 	  module will be called nvram.
+ 
+ config DEVPORT
+ 	bool "/dev/port character device"
+ 	depends on HAS_IOPORT
+-	default y
+ 	help
+ 	  Say Y here if you want to support the /dev/port device. The /dev/port
+ 	  device is similar to /dev/mem, but for I/O ports.
+ 
+ config HPET
+-- 
+2.52.0
+

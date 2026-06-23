@@ -1,0 +1,29 @@
+From 09a06dfc2fd2d722f99db067399c610f8d2f2bee Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Thu, 4 May 2017 18:11:52 -0400
+Subject: [PATCH 73/190] disable X86_16BIT by default
+
+Signed-off-by: Daniel Micay <danielmicay@gmail.com>
+---
+ arch/x86/Kconfig | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
+index 3198f268bb73..70093461e969 100644
+--- a/arch/x86/Kconfig
++++ b/arch/x86/Kconfig
+@@ -1229,11 +1229,10 @@ config VM86
+ 	bool
+ 	default X86_LEGACY_VM86
+ 
+ config X86_16BIT
+ 	bool "Enable support for 16-bit segments"
+-	default y
+ 	depends on MODIFY_LDT_SYSCALL
+ 	help
+ 	  This option is required by programs like Wine to run 16-bit
+ 	  protected mode legacy code on x86 processors.  Disabling
+ 	  this option saves about 300 bytes on i386, or around 6K text
+-- 
+2.52.0
+

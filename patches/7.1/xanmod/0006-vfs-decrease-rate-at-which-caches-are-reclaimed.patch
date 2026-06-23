@@ -1,0 +1,26 @@
+From 1cf73d1c7cafff5e387bcfd718b52d3b593379fc Mon Sep 17 00:00:00 2001
+From: Alexandre Frade <kernel@xanmod.org>
+Date: Mon, 28 Jul 2025 17:20:16 +0000
+Subject: [PATCH] XANMOD: vfs: Decrease rate at which vfs caches are reclaimed
+
+Signed-off-by: Alexandre Frade <kernel@xanmod.org>
+---
+ fs/dcache.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/fs/dcache.c b/fs/dcache.c
+index 7ba1801d8132..d934a3aec08b 100644
+--- a/fs/dcache.c
++++ b/fs/dcache.c
+@@ -73,7 +73,7 @@
+  * If no ancestor relationship:
+  * arbitrary, since it's serialized on rename_lock
+  */
+-static int sysctl_vfs_cache_pressure __read_mostly = 100;
++static int sysctl_vfs_cache_pressure __read_mostly = 50;
+ static int sysctl_vfs_cache_pressure_denom __read_mostly = 100;
+ 
+ unsigned long vfs_pressure_ratio(unsigned long val)
+-- 
+GitLab
+

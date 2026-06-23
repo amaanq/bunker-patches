@@ -1,0 +1,28 @@
+From 46a1b6c111929b08862e5dc578960711aba81171 Mon Sep 17 00:00:00 2001
+From: Levente Polyak <levente@leventepolyak.net>
+Date: Thu, 19 Sep 2019 19:02:23 +0200
+Subject: [PATCH 95/190] enable INIT_ON_ALLOC_DEFAULT_ON by default
+
+---
+ security/Kconfig.hardening | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/security/Kconfig.hardening b/security/Kconfig.hardening
+index e42e319485ae..226193bf5ebc 100644
+--- a/security/Kconfig.hardening
++++ b/security/Kconfig.hardening
+@@ -156,10 +156,11 @@ config KSTACK_ERASE_RUNTIME_DISABLE
+ 	  runtime to control kernel stack erasing for kernels built with
+ 	  CONFIG_KSTACK_ERASE.
+ 
+ config INIT_ON_ALLOC_DEFAULT_ON
+ 	bool "Enable heap memory zeroing on allocation by default"
++	default yes
+ 	depends on !KMSAN
+ 	help
+ 	  This has the effect of setting "init_on_alloc=1" on the kernel
+ 	  command line. This can be disabled with "init_on_alloc=0".
+ 	  When "init_on_alloc" is enabled, all page allocator and slab
+-- 
+2.52.0
+

@@ -1,0 +1,132 @@
+From 83342e1a8454e4381c301aaa8b153578b69cd450 Mon Sep 17 00:00:00 2001
+From: Levente Polyak <levente@leventepolyak.net>
+Date: Sun, 6 Sep 2020 20:28:32 +0200
+Subject: [PATCH 136/190] sysctl: expose proc_dointvec_minmax_sysadmin as API function
+
+Orthogonal to the other sysctl proc functions expose the variant that is
+checking CAP_SYS_ADMIN on write for consumption in external subsystem's
+sysctl tables.
+
+Signed-off-by: Levente Polyak <levente@leventepolyak.net>
+[nicolas.bouchinet@ssi.gouv.fr: Constify the ctl_table argument as in commit 78eb4ea25cd5fd]
+Signed-off-by: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
+---
+ include/linux/sysctl.h |  2 ++
+ kernel/printk/sysctl.c |  9 ---------
+ kernel/sysctl.c        | 36 ++++++++++++++++++++++++++++++++++++
+ 3 files changed, 38 insertions(+), 9 deletions(-)
+
+diff --git a/include/linux/sysctl.h b/include/linux/sysctl.h
+index 92e9146b1104..3d99b6bdb80a 100644
+--- a/include/linux/sysctl.h
++++ b/include/linux/sysctl.h
+@@ -103,9 +103,11 @@ int proc_douintvec_conv(const struct ctl_table *table, int write, void *buffer,
+ int proc_douintvec_conv(const struct ctl_table *table, int write, void *buffer,
+ 			size_t *lenp, loff_t *ppos,
+ 			int (*conv)(unsigned long *lvalp, unsigned int *valp,
+ 				    int write, const struct ctl_table *table));
++int proc_dointvec_minmax_sysadmin(const struct ctl_table *table, int write,
++				  void *buffer, size_t *lenp, loff_t *ppos);
+ int proc_uint_k2u_conv(ulong *u_ptr, const uint *k_ptr);
+ int proc_uint_u2k_conv_uop(const ulong *u_ptr, uint *k_ptr,
+ 			   ulong (*u_ptr_op)(const ulong));
+ int proc_uint_conv(ulong *u_ptr, uint *k_ptr, int dir,
+ 			   const struct ctl_table *tbl, bool k_ptr_range_check,
+diff --git a/kernel/printk/sysctl.c b/kernel/printk/sysctl.c
+index da77f3f5c1fe..1418fc33ed1f 100644
+--- a/kernel/printk/sysctl.c
++++ b/kernel/printk/sysctl.c
+@@ -9,19 +9,10 @@
+ #include <linux/ratelimit.h>
+ #include "internal.h"
+ 
+ static const int ten_thousand = 10000;
+ 
+-static int proc_dointvec_minmax_sysadmin(const struct ctl_table *table, int write,
+-				void *buffer, size_t *lenp, loff_t *ppos)
+-{
+-	if (write && !capable(CAP_SYS_ADMIN))
+-		return -EPERM;
+-
+-	return proc_dointvec_minmax(table, write, buffer, lenp, ppos);
+-}
+-
+ static const struct ctl_table printk_sysctls[] = {
+ 	{
+ 		.procname	= "printk",
+ 		.data		= &console_loglevel,
+ 		.maxlen		= 4*sizeof(int),
+diff --git a/kernel/sysctl.c b/kernel/sysctl.c
+index 5b44614b3802..1b1ab180ba4d 100644
+--- a/kernel/sysctl.c
++++ b/kernel/sysctl.c
+@@ -654,10 +654,39 @@ int proc_douintvec(const struct ctl_table *table, int dir, void *buffer,
+ {
+ 	return do_proc_douintvec(table, dir, buffer, lenp, ppos,
+ 				 do_proc_uint_conv);
+ }
+ 
++/**
++ * proc_dointvec_minmax_sysadmin - read a vector of integers with min/max values
++ * checking CAP_SYS_ADMIN on write
++ * @table: the sysctl table
++ * @write: %TRUE if this is a write to the sysctl file
++ * @buffer: the user buffer
++ * @lenp: the size of the user buffer
++ * @ppos: file position
++ *
++ * Reads/writes up to table->maxlen/sizeof(unsigned int) integer
++ * values from/to the user buffer, treated as an ASCII string.
++ *
++ * This routine will ensure the values are within the range specified by
++ * table->extra1 (min) and table->extra2 (max).
++ *
++ * Writing is only allowed when the current task has CAP_SYS_ADMIN.
++ *
++ * Returns 0 on success, -EPERM on permission failure or -EINVAL on write
++ * when the range check fails.
++ */
++int proc_dointvec_minmax_sysadmin(const struct ctl_table *table, int write,
++				  void *buffer, size_t *lenp, loff_t *ppos)
++{
++	if (write && !capable(CAP_SYS_ADMIN))
++		return -EPERM;
++
++	return proc_dointvec_minmax(table, write, buffer, lenp, ppos);
++}
++
+ /**
+  * proc_dointvec_minmax - read a vector of integers with min/max values
+  * @table: the sysctl table
+  * @dir: %TRUE if this is a write to the sysctl file
+  * @buffer: the user buffer
+@@ -1058,10 +1087,16 @@ int proc_dou8vec_minmax(const struct ctl_table *table, int dir,
+ 			void *buffer, size_t *lenp, loff_t *ppos)
+ {
+ 	return -ENOSYS;
+ }
+ 
++int proc_dointvec_minmax_sysadmin(const struct ctl_table *table, int write,
++				  void *buffer, size_t *lenp, loff_t *ppos)
++{
++	return -ENOSYS;
++}
++
+ int proc_doulongvec_minmax(const struct ctl_table *table, int dir,
+ 		    void *buffer, size_t *lenp, loff_t *ppos)
+ {
+ 	return -ENOSYS;
+ }
+@@ -1181,8 +1216,9 @@ int proc_do_static_key(const struct ctl_table *table, int dir,
+ EXPORT_SYMBOL(proc_dobool);
+ EXPORT_SYMBOL(proc_dointvec);
+ EXPORT_SYMBOL(proc_douintvec);
+ EXPORT_SYMBOL(proc_dointvec_minmax);
+ EXPORT_SYMBOL_GPL(proc_douintvec_minmax);
++EXPORT_SYMBOL(proc_dointvec_minmax_sysadmin);
+ EXPORT_SYMBOL(proc_dostring);
+ EXPORT_SYMBOL(proc_doulongvec_minmax);
+ EXPORT_SYMBOL(proc_do_large_bitmap);
+-- 
+2.52.0
+

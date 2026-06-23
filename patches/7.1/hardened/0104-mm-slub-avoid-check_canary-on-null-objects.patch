@@ -1,0 +1,23 @@
+From 10927052204741ba9aabec8c5ba617e7b698ce0b Mon Sep 17 00:00:00 2001
+From: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
+Date: Mon, 20 Apr 2026 10:30:32 +0200
+Subject: [PATCH] mm/slub: Avoid check_canary on null objects
+
+Signed-off-by: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
+---
+ mm/slub.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/mm/slub.c b/mm/slub.c
+index 6829996ccae9..6e1f19be937e 100644
+--- a/mm/slub.c
++++ b/mm/slub.c
+@@ -966,7 +966,7 @@ static inline void check_canary(struct kmem_cache *s, void *object, unsigned lon
+ 
+ static inline void check_set_canary(struct kmem_cache *s, void *object, unsigned long check_value, unsigned long set_value)
+ {
+-	if (!is_kfence_address(object)) {
++	if (object && !is_kfence_address(object)) {
+ 		check_canary(s, object, check_value);
+ 		set_canary(s, object, set_value);
+ 	}

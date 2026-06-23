@@ -1,0 +1,28 @@
+From ec3e74fd6e15214534ab53348ba9093e290cc0f9 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Sat, 6 Jan 2018 13:41:11 -0500
+Subject: [PATCH 94/190] enable SYN_COOKIES by default
+
+---
+ net/ipv4/Kconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/net/ipv4/Kconfig b/net/ipv4/Kconfig
+index 12850a277251..ff7a4b67eeb3 100644
+--- a/net/ipv4/Kconfig
++++ b/net/ipv4/Kconfig
+@@ -265,10 +265,11 @@ config IP_PIMSM_V2
+ 	  gated-5). This routing protocol is not used widely, so say N unless
+ 	  you want to play with it.
+ 
+ config SYN_COOKIES
+ 	bool "IP: TCP syncookie support"
++	default y
+ 	help
+ 	  Normal TCP/IP networking is open to an attack known as "SYN
+ 	  flooding". This denial-of-service attack prevents legitimate remote
+ 	  users from being able to connect to your computer during an ongoing
+ 	  attack and requires very little work from the attacker, who can
+-- 
+2.52.0
+

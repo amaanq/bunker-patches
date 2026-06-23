@@ -1,0 +1,157 @@
+From b528e2699a38bc0b4ca98f7de57daa3189185684 Mon Sep 17 00:00:00 2001
+From: Levente Polyak <levente@leventepolyak.net>
+Date: Sun, 6 Sep 2020 21:08:16 +0200
+Subject: [PATCH 138/190] usb: implement dedicated subsystem sysctl tables
+
+This moves the usb related sysctl knobs to an own usb local sysctl table
+in order to clean up the global sysctl as well as allow the knob to be
+exported and referenced appropriately when building the usb components
+as dedicated modules.
+
+Signed-off-by: Levente Polyak <levente@leventepolyak.net>
+---
+ drivers/usb/core/Makefile |  1 +
+ drivers/usb/core/sysctl.c | 35 +++++++++++++++++++++++++++++++++++
+ drivers/usb/core/usb.c    |  9 +++++++++
+ include/linux/usb.h       | 12 ++++++++++++
+ 4 files changed, 57 insertions(+)
+ create mode 100644 drivers/usb/core/sysctl.c
+
+diff --git a/drivers/usb/core/Makefile b/drivers/usb/core/Makefile
+index 766000b4939e..8bd89b25f8c4 100644
+--- a/drivers/usb/core/Makefile
++++ b/drivers/usb/core/Makefile
+@@ -10,10 +10,11 @@ usbcore-y += phy.o port.o
+ 
+ usbcore-$(CONFIG_OF)		+= of.o
+ usbcore-$(CONFIG_USB_XHCI_SIDEBAND)	+= offload.o
+ usbcore-$(CONFIG_USB_PCI)		+= hcd-pci.o
+ usbcore-$(CONFIG_ACPI)		+= usb-acpi.o
++usbcore-$(CONFIG_SYSCTL)		+= sysctl.o
+ 
+ ifdef CONFIG_USB_ONBOARD_DEV
+ usbcore-y			+= ../misc/onboard_usb_dev_pdevs.o
+ endif
+ 
+diff --git a/drivers/usb/core/sysctl.c b/drivers/usb/core/sysctl.c
+new file mode 100644
+index 000000000000..813db3f0b1cb
+--- /dev/null
++++ b/drivers/usb/core/sysctl.c
+@@ -0,0 +1,35 @@
++#include <linux/errno.h>
++#include <linux/printk.h>
++#include <linux/init.h>
++#include <linux/sysctl.h>
++#include <linux/usb.h>
++
++static struct ctl_table usb_sysctls[] = {
++	{
++		.procname	= "deny_new_usb",
++		.data		= &deny_new_usb,
++		.maxlen		= sizeof(int),
++		.mode		= 0644,
++		.proc_handler	= proc_dointvec_minmax_sysadmin,
++		.extra1		= SYSCTL_ZERO,
++		.extra2		= SYSCTL_ONE,
++	},
++};
++
++static struct ctl_table_header *usb_sysctl_table;
++
++int usb_register_sysctl(void)
++{
++	usb_sysctl_table = register_sysctl("kernel", usb_sysctls);
++	if (!usb_sysctl_table) {
++		pr_warn("usb: sysctl registration failed\n");
++		return -ENOMEM;
++	}
++	return 0;
++}
++
++void usb_unregister_sysctl(void)
++{
++	unregister_sysctl_table(usb_sysctl_table);
++	usb_sysctl_table = NULL;
++}
+diff --git a/drivers/usb/core/usb.c b/drivers/usb/core/usb.c
+index b6b0b8489523..82d2202d22a5 100644
+--- a/drivers/usb/core/usb.c
++++ b/drivers/usb/core/usb.c
+@@ -70,10 +70,13 @@ MODULE_PARM_DESC(autosuspend, "default autosuspend delay");
+ 
+ #else
+ #define usb_autosuspend_delay		0
+ #endif
+ 
++int deny_new_usb __read_mostly = 0;
++EXPORT_SYMBOL(deny_new_usb);
++
+ static bool match_endpoint(struct usb_endpoint_descriptor *epd,
+ 		struct usb_endpoint_descriptor **bulk_in,
+ 		struct usb_endpoint_descriptor **bulk_out,
+ 		struct usb_endpoint_descriptor **int_in,
+ 		struct usb_endpoint_descriptor **int_out)
+@@ -1215,10 +1218,13 @@ static int __init usb_init(void)
+ 	usb_init_pool_max();
+ 
+ 	usb_debugfs_init();
+ 
+ 	usb_acpi_register();
++	retval = usb_register_sysctl();
++	if (retval)
++		goto sysctl_init_failed;
+ 	retval = bus_register(&usb_bus_type);
+ 	if (retval)
+ 		goto bus_register_failed;
+ 	retval = bus_register_notifier(&usb_bus_type, &usb_bus_nb);
+ 	if (retval)
+@@ -1254,10 +1260,12 @@ static int __init usb_init(void)
+ major_init_failed:
+ 	bus_unregister_notifier(&usb_bus_type, &usb_bus_nb);
+ bus_notifier_failed:
+ 	bus_unregister(&usb_bus_type);
+ bus_register_failed:
++	usb_unregister_sysctl();
++sysctl_init_failed:
+ 	usb_acpi_unregister();
+ 	usb_debugfs_cleanup();
+ out:
+ 	return retval;
+ }
+@@ -1278,10 +1286,11 @@ static void __exit usb_exit(void)
+ 	usb_devio_cleanup();
+ 	usb_hub_cleanup();
+ 	class_unregister(&usbmisc_class);
+ 	bus_unregister_notifier(&usb_bus_type, &usb_bus_nb);
+ 	bus_unregister(&usb_bus_type);
++	usb_unregister_sysctl();
+ 	usb_acpi_unregister();
+ 	usb_debugfs_cleanup();
+ 	idr_destroy(&usb_bus_idr);
+ }
+ 
+diff --git a/include/linux/usb.h b/include/linux/usb.h
+index e85105939af8..18d2d7bb4e9f 100644
+--- a/include/linux/usb.h
++++ b/include/linux/usb.h
+@@ -2101,5 +2101,16 @@ static inline void usb_led_activity(enum usb_led_event ev) {}
+ #endif
+ 
++/* sysctl.c */
++extern int deny_new_usb;
++#ifdef CONFIG_SYSCTL
++extern int usb_register_sysctl(void);
++extern void usb_unregister_sysctl(void);
++#else
++static inline int usb_register_sysctl(void) { return 0; }
++static inline void usb_unregister_sysctl(void) { }
++#endif /* CONFIG_SYSCTL */
++
++
+ #endif  /* __KERNEL__ */
+ 
+ #endif
+-- 
+2.52.0
+

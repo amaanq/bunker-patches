@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Fri, 25 Apr 2026 00:00:00 +0000
+Subject: [PATCH] x86/bugs: speculation barrier after VMSCAPE static call
+
+cachyos/0014 removes the trailing lfence inside clear_bhb_loop and
+pushes the speculation barrier to call sites: the asm wrappers gain
+"call clear_bhb_loop; lfence", and entry_64.S adds a comment noting
+"callers should use a speculation barrier like LFENCE immediately after
+a call to this function".
+
+The C call site introduced by the same patch in
+arch_exit_to_user_mode_prepare() does not. When vmscape_apply_mitigation
+points the static call at clear_bhb_loop (VMSCAPE_MITIGATION_BHB_LOOP
+path), the BHB clear is followed by speculation through the entry path
+with no barrier between, defeating the mitigation.
+
+Add barrier_nospec() immediately after the static call to match the
+guarantee provided by the asm wrappers.
+
+---
+ arch/x86/include/asm/entry-common.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/arch/x86/include/asm/entry-common.h b/arch/x86/include/asm/entry-common.h
+--- a/arch/x86/include/asm/entry-common.h
++++ b/arch/x86/include/asm/entry-common.h
+@@ -2,6 +2,7 @@
+ #ifndef _ASM_X86_ENTRY_COMMON_H
+ #define _ASM_X86_ENTRY_COMMON_H
+
++#include <linux/nospec.h>
+ #include <linux/randomize_kstack.h>
+ #include <linux/user-return-notifier.h>
+ #include <linux/static_call_types.h>
+@@ -96,6 +97,7 @@ static inline void arch_exit_to_user_mode_prepare(struct pt_regs *regs,
+
+ 	if (unlikely(this_cpu_read(x86_predictor_flush_exit_to_user))) {
+ 		static_call_cond(vmscape_predictor_flush)();
++		barrier_nospec();
+ 		this_cpu_write(x86_predictor_flush_exit_to_user, false);
+ 	}
+ }
+--
+2.52.0

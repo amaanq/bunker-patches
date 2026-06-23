@@ -1,0 +1,34 @@
+From 7f17e78d7a575445087e72ebca66eb3e35e7d8bb Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Tue, 17 Sep 2019 18:00:54 +0200
+Subject: [PATCH 117/190] mm: slab: BUG on page type confusion under
+ BUG_ON_DATA_CORRUPTION
+
+This change was extracted from PaX.
+
+Signed-off-by: Daniel Micay <danielmicay@gmail.com>
+Signed-off-by: Levente Polyak <levente@leventepolyak.net>
+Signed-off-by: Thibaut Sautereau <thibaut.sautereau@ssi.gouv.fr>
+[nicolas.bouchinet@ssi.gouv.fr: memcg related functions moved from mm/slab.h to mm/slub.c (see 0bedcc66d2a43a50a)]
+Signed-off-by: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
+---
+ mm/slub.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/mm/slub.c b/mm/slub.c
+--- a/mm/slub.c
++++ b/mm/slub.c
+@@ -6356,6 +6356,10 @@ void kmem_cache_free_debug(struct kmem_c
+ 	slab = virt_to_slab(obj);
++#ifdef CONFIG_BUG_ON_DATA_CORRUPTION
++	BUG_ON(!slab);
++#else
+ 	if (WARN_ONCE(!slab,
+ 			"kmem_cache_free(%s, %p): object is not in a slab page\n",
+ 			s->name, obj))
+ 		return;
++#endif
+ 
+ 	cachep = slab->slab_cache;
+-- 
+2.52.0

@@ -50,6 +50,7 @@ let
   stableRelease = {
     "6.19" = "6.19.12";
     "7.0" = "7.0.13";
+    "7.1" = "7.1.1";
   };
 
   resolvedVersion =
@@ -236,6 +237,7 @@ let
       ];
     };
     "7.0" = { };
+    "7.1" = { };
   };
 
   vg = versionGroups.${majorMinor};
@@ -302,6 +304,7 @@ let
     {
       "6.19.12" = "sha256-zlxPEgX5cpKGtWmwN2SVkVVfMcoeA8xQS9O3C45YqNU=";
       "7.0.13" = "sha256-PIHt0PcWrKPdSN/2kWgYJ1gMxT01qO7DvkfTRtH4mRM=";
+      "7.1.1" = "sha256-UhX6NUHcfn9bzVG/flfxac7G/OUIylTj3IX97hQ3HX0=";
     }
     .${resolvedVersion};
 
@@ -560,7 +563,8 @@ let
     CODA_FS = option no; # Coda distributed filesystem
     ROMFS_FS = option no; # ROM filesystem (embedded)
     UBIFS_FS = option no; # UBI flash filesystem (embedded)
-    NTFS_FS = option no; # Old NTFS driver (NTFS3 supersedes)
+    NTFS_FS = option no; # prefer NTFS3 over 7.1's revived classic driver
+    NTFS_FS_POSIX_ACL = option no; # child of NTFS_FS; nixpkgs forces =y on 7.1+, but parent is off
     MSDOS_FS = option no; # 8.3 FAT (VFAT supersedes)
 
     # --- Dead subsystems ---
@@ -1286,8 +1290,9 @@ in
       type = types.enum [
         "6.19"
         "7.0"
+        "7.1"
       ];
-      default = "7.0";
+      default = "7.1";
       description = "Linux kernel major.minor version. Automatically resolves to the latest stable point release.";
     };
 
