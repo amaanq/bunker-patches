@@ -1026,14 +1026,7 @@ let
       // rustLtoConfig
       // ltoConfig
       // cpuArchConfig
-      // bigEndianConfig
-      # Disable slab canary on 7.0 — the sheaves rework introduced call paths
-      # (kfree_nolock, alloc_from_pcs_bulk) that bypass slab_free_hook, leaving
-      # canaries in inconsistent states.  Upstream linux-hardened hasn't ported
-      # to 7.0 yet; re-enable when they do.
-      // optionalAttrs (cfg.hardened && lib.versionAtLeast majorMinor "7.0") {
-        SLAB_CANARY = mkForce no;
-      };
+      // bigEndianConfig;
 
     extraMeta = {
       branch = majorMinor;
