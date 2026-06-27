@@ -1,12 +1,17 @@
 {
   description = "Bunker kernel";
 
-  inputs.nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz";
-
   outputs =
-    { self, nixpkgs, ... }:
+    { self, ... }@args:
+    let
+      inputs = (import ./.tack) { overrides = args.tackOverrides or { }; };
+      inherit (inputs) nixpkgs;
+      flake = self // {
+        inputs = { inherit nixpkgs; };
+      };
+    in
     {
-      nixosModules.default = import ./module.nix self;
+      nixosModules.default = import ./module.nix flake;
 
       checks.x86_64-linux.boot = nixpkgs.legacyPackages.x86_64-linux.testers.runNixOSTest {
         name = "bunkernel-boot";

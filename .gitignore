@@ -2,8 +2,12 @@
 
 !.gitignore
 !flake.nix
-!flake.lock
 !module.nix
+
+!.tack/
+!.tack/default.nix
+!.tack/pins.toml
+!.tack/pins.lock.json
 
 !patches/
 !patches/*/
