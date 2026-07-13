@@ -1256,21 +1256,28 @@ let
     }
     // lib.optionalAttrs (prev ? bcachefs) {
       bcachefs =
-        pkgsKernel.runCommand "${prev.bcachefs.name}-stripped"
+        let
+          bcachefs = prev.bcachefs.overrideAttrs (old: {
+            patches = (old.patches or [ ]) ++ [
+              ./patches/userspace/bcachefs-btree-cache-dirty-throttle-half.patch
+            ];
+          });
+        in
+        pkgsKernel.runCommand "${bcachefs.name}-stripped"
           {
             nativeBuildInputs = [
               pkgsKernel.nukeReferences
               pkgsKernel.buildPackages.zstd
               pkgsKernel.stdenv.cc.bintools
             ];
-            inherit (prev.bcachefs) meta;
+            inherit (bcachefs) meta;
             # `strip` from a cross binutils wrapper is exposed as
             # `${targetPrefix}strip`, not bare `strip`. Plumb the prefix
             # through so the script works under both native and cross.
             targetPrefix = pkgsKernel.stdenv.cc.targetPrefix;
           }
           ''
-            cp -r --no-preserve=mode ${prev.bcachefs} $out
+            cp -r --no-preserve=mode ${bcachefs} $out
             find $out -name '*.ko.zst' | while read -r f; do
               zstd -d --rm "$f"
               ko="''${f%.zst}"
