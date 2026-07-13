@@ -258,6 +258,13 @@ let
 
   patchDir = "${flake}/patches/${majorMinor}";
 
+  patchFile =
+    p:
+    builtins.path {
+      path = p;
+      name = builtins.unsafeDiscardStringContext (baseNameOf (toString p));
+    };
+
   # Patch keys are "subdir/NNNN", derived from the filename prefix.
   collectPatches =
     dir: subdir:
@@ -268,7 +275,7 @@ let
       localPrefix = n: builtins.substring 0 4 n;
       patchEntries = map (n: {
         name = n;
-        patch = "${dir}/${n}";
+        patch = patchFile "${dir}/${n}";
         key = if subdir == "" then localPrefix n else "${subdir}/${localPrefix n}";
       }) (lib.attrNames patches);
       subPatches = lib.concatMap (d: collectPatches "${dir}/${d}" d) (lib.attrNames subdirs);
@@ -1228,7 +1235,7 @@ let
       # so substituteInPlace never runs.
       bcachefs-tools = prev.bcachefs-tools.overrideAttrs (old: {
         patches = (old.patches or [ ]) ++ [
-          ./patches/userspace/bcachefs-tools-disable-layout-tests.patch
+          (patchFile ./patches/userspace/bcachefs-tools-disable-layout-tests.patch)
           # Diagnostic: WARN_ONCE on bch2_folio() being called without
           # PG_private set (folio->private aliases folio->swap), and on
           # bch2_set_folio_undirty() entered without the folio lock. The
@@ -1236,7 +1243,7 @@ let
           # kernel-virtual address with no direct-map backing; this patch
           # is here to localize the offending caller — remove once root
           # cause is identified.
-          ./patches/userspace/bcachefs-tools-diag-folio-uaf.patch
+          (patchFile ./patches/userspace/bcachefs-tools-diag-folio-uaf.patch)
         ];
         unsafeDiscardReferences = (old.unsafeDiscardReferences or { }) // {
           out = true;
@@ -1259,7 +1266,7 @@ let
         let
           bcachefs = prev.bcachefs.overrideAttrs (old: {
             patches = (old.patches or [ ]) ++ [
-              ./patches/userspace/bcachefs-btree-cache-dirty-throttle-half.patch
+              (patchFile ./patches/userspace/bcachefs-btree-cache-dirty-throttle-half.patch)
             ];
           });
         in
