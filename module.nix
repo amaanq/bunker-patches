@@ -1205,6 +1205,9 @@ let
     '';
   });
 
+  # TILE-Gx bypasses the bunkernel machinery.
+  tilegxKernelPackage = pkgs.linuxKernel.packagesFor pkgs.linux-tilegx;
+
   # Out-of-tree kernel modules embed KBUILD_OUTPUT (kernel.dev store path)
   # in DWARF debug info.  zstd may store these paths verbatim in literal
   # blocks.  NixOS's modules-closure.sh runs nuke-refs on the compressed
@@ -1353,6 +1356,12 @@ in
         Cavium Octeon III support. This adds the PKO3 and BGX octeon3-ethernet
         driver, the cvmx SDK headers and executive, and the AR8033 RJ45 PHY.
       '';
+    };
+
+    tilegx = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Tilera TILE-Gx support.";
     };
 
     framework = mkOption {
@@ -1505,7 +1514,7 @@ in
         package set, or pin MODULE_SIG_KEY to a non-ephemeral PEM and sign manually.
       '';
 
-      boot.kernelPackages = kernelPackage;
+      boot.kernelPackages = if cfg.tilegx then tilegxKernelPackage else kernelPackage;
 
       # NixOS's bcachefs module creates its own module instance via
       # callPackage, bypassing our kernel packages overlay.  Point it
