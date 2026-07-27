@@ -1199,8 +1199,56 @@ let
 
     postInstall =
       builtins.replaceStrings
-        [ "# Keep whole scripts dir" ]
         [
+          ''
+            cp $buildRoot/{.config,Module.symvers} $dev/lib/modules/${bunkernel.modDirVersion}/build
+            make modules_prepare "''${makeFlags[@]}" O=$dev/lib/modules/${bunkernel.modDirVersion}/build''
+          "# Keep whole scripts dir"
+        ]
+        [
+          ''
+            devBuild=$dev/lib/modules/${bunkernel.modDirVersion}/build
+            devSource=$dev/lib/modules/${bunkernel.modDirVersion}/source
+            sourceRoot="$(dirname "$buildRoot")"
+
+            # The build tree already has everything modules_prepare would rebuild.
+            rsync --archive --prune-empty-dirs \
+              --include='/.config' \
+              --include='/Module.symvers' \
+              --include='/Makefile' \
+              --include='/.gitignore' \
+              --include='/.missing-syscalls.d' \
+              --include='/.*checked*' \
+              --include='/arch/' \
+              --include='/arch/*/' \
+              --include='/arch/*/include/' \
+              --include='/arch/*/include/generated/***' \
+              --include='/arch/*/kernel/' \
+              --include='/arch/*/kernel/*offsets.s' \
+              --include='/arch/*/kernel/.*offsets.s.cmd' \
+              --include='/arch/*/tools/***' \
+              --include='/include/***' \
+              --include='/kernel/' \
+              --include='/kernel/*.s' \
+              --include='/kernel/.*.cmd' \
+              --include='/kernel/sched/' \
+              --include='/kernel/sched/*.s' \
+              --include='/kernel/sched/.*.cmd' \
+              --include='/rust/***' \
+              --include='/scripts/***' \
+              --include='/tools/***' \
+              --exclude='*' \
+              "$buildRoot/" "$devBuild/"
+
+            grep -IrlZ -e "$buildRoot" -e "$sourceRoot" "$devBuild" |
+              while IFS= read -r -d "" metadata; do
+                if grep -IqF "$buildRoot" "$metadata"; then
+                  substituteInPlace "$metadata" --replace-fail "$buildRoot" "$devBuild"
+                fi
+                if grep -IqF "$sourceRoot" "$metadata"; then
+                  substituteInPlace "$metadata" --replace-fail "$sourceRoot" "$devSource"
+                fi
+              done''
           ''
             # Keep rust Makefile and source files for rust-analyzer support
                       [ -f rust/Makefile ] && chmod u-w rust/Makefile
