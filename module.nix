@@ -330,6 +330,7 @@ let
   baseConfig = {
     BUNKER = yes;
     LOCALVERSION = freeform "-bunker";
+    RUST = mkForce (if cfg.rust then option yes else option no);
     MODULE_DECOMPRESS = option yes; # in-kernel module decompression
     FW_LOADER_COMPRESS_ZSTD = option yes; # zstd firmware compression
 
