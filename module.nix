@@ -495,6 +495,7 @@ let
     FDDI = option no; # 1980s fiber ring
     HIPPI = option no; # 1990s supercomputer interconnect
     PLIP = option no; # Parallel Line IP
+    WAN = option no; # Leased-line WAN cards and HDLC
     EQUALIZER = option no; # Serial/PLIP link load balancer
 
     # --- Dead network protocols ---
@@ -547,6 +548,10 @@ let
     EROFS_FS = option no;
     EROFS_FS_ZIP_DEFLATE = option no;
     EROFS_FS_ZIP_ZSTD = option no;
+    EXT2_FS = option no; # Ext4 supports ext2 filesystems
+    EXT2_FS_POSIX_ACL = option no;
+    EXT2_FS_SECURITY = option no;
+    EXT2_FS_XATTR = option no;
     F2FS_FS = option no;
     GFS2_FS = option no;
     HFS_FS = option no;
@@ -668,6 +673,7 @@ let
     SND_VIA82XX = option no;
     SND_VIRTUOSO = option no;
     SND_YMFPCI = option no;
+    SND_HDA_CODEC_HDMI_NVIDIA_MCP = option no;
     SND_MPU401 = option no; # standalone MPU-401 driver
     SND_OPL3_LIB = option no;
     SND_OPL4_LIB = option no;
@@ -704,6 +710,8 @@ let
     BLK_DEV_UMEM = option no; # Micro Memory MM5415 RAM card
     BLK_DEV_NULL_BLK = option no; # Null block device (testing only)
     CRYPTO_842 = option no; # 842 compression algorithm (rarely used)
+    SATA_INIC162X = option no;
+    SATA_SX4 = option no;
 
     # --- Dead cpufreq drivers ---
     X86_SPEEDSTEP_CENTRINO = option no; # Pentium M/Centrino
@@ -731,10 +739,16 @@ let
     REMOTEPROC = option no; # Remote Processor framework (ARM)
 
     # --- Dead media ---
+    MEDIA_SUPPORT_FILTER = yes;
+    MEDIA_SUBDRV_AUTOSELECT = yes;
+    MEDIA_CAMERA_SUPPORT = yes;
+    MEDIA_PLATFORM_SUPPORT = yes;
     MEDIA_ANALOG_TV_SUPPORT = option no; # Analog TV (shut off globally)
     MEDIA_DIGITAL_TV_SUPPORT = option no; # DVB digital TV tuners
+    MEDIA_RADIO_SUPPORT = option no; # AM/FM receiver cards
     DVB_CORE = option no; # Digital Video Broadcasting
     MEDIA_SDR_SUPPORT = option no; # Software defined radio
+    VIDEO_ZORAN = option no; # Deprecated PCI MJPEG capture cards
 
     # --- Dead network transports ---
     SLIP = option no; # Serial Line IP (dialup)
@@ -755,8 +769,11 @@ let
     IP_VS = option no; # IPVS load balancer (~30k LOC, only k8s IPVS mode)
     NFSD = option no; # NFS server (~25k LOC, client kept via NFS_FS)
     QUOTA = option no; # Disk quotas (~10k LOC, multi-user server feature)
+    MD_BITMAP_FILE = option no; # Deprecated external MD bitmap files
 
     # --- Legacy/deprecated hardware & interfaces ---
+    NET_KEY = option no; # Deprecated PF_KEY, maintained IKE uses XFRM netlink
+    NF_CONNTRACK_PROCFS = option no; # Superseded by conntrack netlink
     PCSPKR_PLATFORM = option no; # PC speaker
     CDROM_PKTCDVD = option no; # Packet writing to CD/DVDs
     EFI_VARS = option no; # Old sysfs EFI vars (EFIVAR_FS supersedes)
@@ -769,6 +786,7 @@ let
     REROUTE_FOR_BROKEN_BOOT_IRQS = option no; # Workaround for ancient BIOS IRQ routing
     MSDOS_PARTITION = option no; # MBR partition table (GPT era)
     ACCESSIBILITY = option no; # Speakup screen reader
+    TRACEFS_AUTOMOUNT_DEPRECATED = option no;
 
     # --- Unused platform drivers ---
     CHROME_PLATFORMS = option no; # ChromeOS platform drivers
@@ -822,6 +840,7 @@ let
     SCSI_WD719X = option no; # Western Digital WD719x - 1990s SCSI controller
     SCSI_PMCRAID = option no; # PMC-Sierra RAID - Legacy RAID
     SCSI_PM8001 = option no; # PMC-Sierra 8001 SAS - Old SAS controller
+    MEGARAID_LEGACY = option no;
 
     # Legacy PATA/IDE Controllers (pre-SATA era)
     PATA_ALI = option no; # ALI PATA - Legacy chipset IDE
@@ -838,6 +857,9 @@ let
     PATA_IT821X = option no; # IT821X PATA - Legacy IDE RAID
     PATA_NETCELL = option no; # NetCell PATA - Obsolete IDE
     PATA_OLDPIIX = option no; # Intel PIIX1/2 PATA - Ancient IDE (pre-2000)
+    PATA_CMD640_PCI = option no;
+    PATA_OPTI = option no;
+    PATA_OPTIDMA = option no;
     PATA_PDC2027X = option no; # Promise PDC2027x - Legacy IDE RAID
     PATA_PDC_OLD = option no; # Promise old PATA - Old IDE RAID
     PATA_RADISYS = option no; # Radisys PATA - Obsolete IDE
@@ -903,8 +925,63 @@ let
     USB_VL600 = option no; # Samsung VL600 - Old LTE modem
     USB_NET_CH9200 = option no; # QinHeng CH9200 - Obsolete USB NIC
 
-    # --- Virtual test drivers ---
+    # --- Test-only drivers ---
+    ACPI_APEI_EINJ = option no;
+    ACPI_APEI_ERST_DEBUG = option no;
+    BLK_DEV_RUST_NULL = option no;
+    CRYPTO_BENCHMARK = option no;
+    DMABUF_SELFTESTS = option no;
+    DMAPOOL_TEST = option no;
+    DMATEST = option no;
+    DM_DELAY = option no;
+    DM_DUST = option no;
+    DUMMY_IRQ = option no;
+    FB_VIRTUAL = option no;
+    FIREWIRE_NOSY = option no;
+    GPIO_MOCKUP = option no;
+    GPIO_VIRTUSER = option no;
+    HWPOISON_INJECT = option no;
+    I2C_STUB = option no;
+    I2C_SLAVE_TESTUNIT = option no;
+    IIO_SIMPLE_DUMMY = option no;
+    IO_URING_MOCK_FILE = option no;
+    KPROBE_EVENT_GEN_TEST = option no;
+    MAC80211_HWSIM = option no;
+    MAILBOX_TEST = option no;
+    MEDIA_TEST_SUPPORT = option no;
+    MMC_TEST = option no;
+    PCI_ENDPOINT_TEST = option no;
+    PCIEAER_INJECT = option no;
+    PKCS7_TEST_KEY = option no;
+    PPS_CLIENT_KTIMER = option no;
+    PPS_GENERATOR_DUMMY = option no;
+    PREEMPTIRQ_DELAY_TEST = option no;
+    PRIME_NUMBERS = option no;
+    RC_LOOPBACK = option no;
+    RCU_REF_SCALE_TEST = option no;
+    RTC_DRV_TEST = option no;
+    SCF_TORTURE_TEST = option no;
+    SCSI_DEBUG = option no;
+    SCSI_UFS_DWC_TC_PCI = option no;
+    SCSI_UFS_DWC_TC_PLATFORM = option no;
+    SND_PCMTEST = option no;
+    SND_SOC_INTEL_AVS_MACH_I2S_TEST = option no;
+    SND_SOC_SDW_MOCKUP = option no;
+    SND_TEST_COMPONENT = option no;
+    SPI_LOOPBACK_TEST = option no;
+    STM_DUMMY = option no;
+    TEST_LOCKUP = option no;
+    TEST_POWER = option no;
+    THERMAL_CORE_TESTING = option no;
+    TRACE_REMOTE_TEST = option no;
+    USB4_DMA_TEST = option no;
+    USB_DUMMY_HCD = option no;
+    USB_EHSET_TEST_FIXTURE = option no;
+    USB_LINK_LAYER_TEST = option no;
+    USB_TEST = option no;
+    USB_ZERO = option no;
     VIDEO_VIVID = option no; # Virtual video test driver
+    X86_AMD_PSTATE_UT = option no;
 
     # --- Child options of disabled parents ---
     # When a parent config is forced off, its children vanish from kconfig.
@@ -963,7 +1040,52 @@ let
     HID_BPF = option no;
     MEDIA_ATTACH = option no;
     PM_TRACE_RTC = option no;
-  });
+  } // optionalAttrs isX86 (forceAll {
+    # Keep EFI/VESA fallback and fbcon; drop pre-DRM hardware drivers.
+    FB_3DFX = option no;
+    FB_3DFX_ACCEL = option no;
+    FB_ARC = option no;
+    FB_ATY = option no;
+    FB_ATY128 = option no;
+    FB_ATY_CT = option no;
+    FB_ATY_GX = option no;
+    FB_CARMINE = option no;
+    FB_CIRRUS = option no;
+    FB_CYBER2000 = option no;
+    FB_HECUBA = option no;
+    FB_HGA = option no;
+    FB_I740 = option no;
+    FB_IBM_GXT4500 = option no;
+    FB_KYRO = option no;
+    FB_MB862XX = option no;
+    FB_METRONOME = option no;
+    FB_N411 = option no;
+    FB_NEOMAGIC = option no;
+    FB_NVIDIA = option no;
+    FB_NVIDIA_I2C = option no;
+    FB_OPENCORES = option no;
+    FB_PM2 = option no;
+    FB_PM3 = option no;
+    FB_RADEON = option no;
+    FB_RIVA = option no;
+    FB_RIVA_I2C = option no;
+    FB_S1D13XXX = option no;
+    FB_SAVAGE = option no;
+    FB_SAVAGE_ACCEL = option no;
+    FB_SAVAGE_I2C = option no;
+    FB_SIS = option no;
+    FB_SIS_300 = option no;
+    FB_SIS_315 = option no;
+    FB_SM501 = option no;
+    FB_SM712 = option no;
+    FB_SMSCUFX = option no;
+    FB_SSD1307 = option no;
+    FB_TRIDENT = option no;
+    FB_UVESA = option no;
+    FB_VGA16 = option no;
+    FB_VIA = option no;
+    FB_VOODOO1 = option no;
+  }));
 
   networkingConfig = optionalAttrs cfg.networking {
     TCP_CONG_BBR = option yes;
