@@ -1498,7 +1498,7 @@ in
         "thin"
         "none"
       ];
-      default = "full";
+      default = "thin";
       description = "LTO mode for Clang.";
     };
 
