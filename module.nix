@@ -990,6 +990,17 @@ let
     MODVERSIONS = no;
   });
 
+  # nixpkgs keeps DEBUG_INFO=yes for BTF and crashkernel, but BTF is already
+  # off under rust+LTO, hardened disables kdump, and preFixup strips vmlinux
+  # and the modules anyway, so DWARF info makes no sense to add.
+  debugInfoConfig = optionalAttrs (!cfg.debugInfo) (forceAll {
+    DEBUG_INFO = option no;
+    DEBUG_INFO_NONE = yes;
+    DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT = no;
+    DEBUG_INFO_BTF = option no;
+    MODULE_ALLOW_BTF_MISMATCH = option no;
+  });
+
   ltoConfig =
     {
       "full" = {
@@ -1146,6 +1157,7 @@ let
         // driversConfig
         // openrgbSmbusConfig
         // rustLtoConfig
+        // debugInfoConfig
         // ltoConfig
         // cpuArchConfig
         // bigEndianConfig
@@ -1494,6 +1506,18 @@ in
       type = types.bool;
       default = true;
       description = "Enable Rust support in the kernel.";
+    };
+
+    debugInfo = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Build with DWARF debug info. This is off by default because BTF is
+        already off under the default rust + LTO combo and the build strips
+        vmlinux and the modules anyway, so the DWARF only slows the build down.
+        Enable it for eBPF/CO-RE tooling or kernel debugging, together with
+        `lto = "none"` if you want BTF back.
+      '';
     };
   };
 
