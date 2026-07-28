@@ -1,0 +1,17 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Tue, 28 Jul 2026 00:00:00 +0000
+Subject: [PATCH] powerpc: drop KUNIT from ppc64_defconfig
+
+---
+--- a/arch/powerpc/configs/ppc64_defconfig
++++ b/arch/powerpc/configs/ppc64_defconfig
+@@ -422,8 +422,6 @@
+ CONFIG_MSI_BITMAP_SELFTEST=y
+ CONFIG_XMON=y
+ CONFIG_BOOTX_TEXT=y
+-CONFIG_KUNIT=m
+-CONFIG_KUNIT_ALL_TESTS=m
+ CONFIG_LKDTM=m
+ CONFIG_TEST_DIV64=m
+ CONFIG_BACKTRACE_SELF_TEST=m

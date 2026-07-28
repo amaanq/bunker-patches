@@ -66,7 +66,10 @@ let
 
   # Shared keys are stable; upstream/ numbering is version-specific.
   sharedGroups = {
-    base = [ "bunker/0001" ];
+    base = [
+      "bunker/0001"
+      "bunker/0016"
+    ];
     interactive = [
       # zen: mm tuning, preempt, BFQ/Kyber, EEVDF, swap/watermark/compaction
       "zen/0009"
