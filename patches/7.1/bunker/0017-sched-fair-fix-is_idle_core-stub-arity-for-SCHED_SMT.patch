@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Subject: [PATCH] sched/fair: fix is_idle_core stub arity for !SCHED_SMT
+
+The "Prefer the previous cpu for wakeup" prerequisite bundled into
+cachyos/0012 declares is_idle_core(cpu, p) under CONFIG_SCHED_SMT and
+every caller passes two arguments, but the !CONFIG_SCHED_SMT stub kept
+the old single-argument form. CachyOS only ships SMT-enabled x86_64
+configs so the breakage is invisible upstream; our mips (Octeon) and
+any SMT-less config fail to compile. Match the stub to the SMT
+version's !sched_smt_active() branch.
+
+---
+ kernel/sched/fair.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
+--- a/kernel/sched/fair.c
++++ b/kernel/sched/fair.c
+@@ -7960,9 +7960,9 @@
+ 	return false;
+ }
+ 
+-static inline bool is_idle_core(int cpu)
++static inline bool is_idle_core(int cpu, struct task_struct *p)
+ {
+-	return (available_idle_cpu(cpu) || sched_idle_rq(cpu_rq(cpu)));
++	return choose_idle_cpu(cpu, p);
+ }
+ 
+ static inline int select_idle_core(struct task_struct *p, int core, struct cpumask *cpus, int *idle_cpu)

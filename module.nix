@@ -91,7 +91,6 @@ let
       "cachyos/0009"
       "cachyos/0010"
       "cachyos/0012"
-      "bunker/0012" # POC: tighten affinity gate (must follow cachyos/0012)
       "cachyos/0013"
       "cachyos/0019"
       # xanmod: sched latency, yield, block/mq-deadline, vfs, rwsem, accept LIFO, dm-crypt
@@ -219,6 +218,7 @@ let
         # Limit accept-LIFO to pre-7.1 kernels because it can stall rtw89
         # association (CachyOS/linux-cachyos#921).
         "xanmod/0013"
+        "bunker/0012"
       ];
       hardened = [
         "upstream/0022"
@@ -245,9 +245,16 @@ let
       ];
     };
     "7.0" = {
-      interactive = [ "xanmod/0013" ];
+      # POC 2.6.3 filters candidates by p->cpus_ptr, so 7.1 no longer needs
+      # bunker/0012's affinity-gate fix for POC 1.6.
+      interactive = [
+        "xanmod/0013"
+        "bunker/0012"
+      ];
     };
-    "7.1" = { };
+    "7.1" = {
+      interactive = [ "bunker/0017" ]; # is_idle_core stub arity (must follow cachyos/0012)
+    };
   };
 
   vg = versionGroups.${majorMinor};
