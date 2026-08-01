@@ -50,7 +50,7 @@ let
   stableRelease = {
     "6.19" = "6.19.12";
     "7.0" = "7.0.13";
-    "7.1" = "7.1.1";
+    "7.1" = "7.1.5";
   };
 
   resolvedVersion =
@@ -318,7 +318,7 @@ let
     {
       "6.19.12" = "sha256-zlxPEgX5cpKGtWmwN2SVkVVfMcoeA8xQS9O3C45YqNU=";
       "7.0.13" = "sha256-PIHt0PcWrKPdSN/2kWgYJ1gMxT01qO7DvkfTRtH4mRM=";
-      "7.1.1" = "sha256-UhX6NUHcfn9bzVG/flfxac7G/OUIylTj3IX97hQ3HX0=";
+      "7.1.5" = "sha256-IqAZazy83zTcJ7d1YfTQQFhf00R+3JqzUxoax54wQec=";
     }
     .${resolvedVersion};
 
