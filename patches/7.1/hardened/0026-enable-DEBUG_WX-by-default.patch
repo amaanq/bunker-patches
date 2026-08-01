@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Mon, 29 May 2017 12:11:11 -0400
+Subject: [PATCH 026/103] enable DEBUG_WX by default
+
+Signed-off-by: Daniel Micay <danielmicay@gmail.com>
+---
+ mm/Kconfig.debug | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/mm/Kconfig.debug b/mm/Kconfig.debug
+index fe46f89663e7c..44d4d859796f3 100644
+--- a/mm/Kconfig.debug
++++ b/mm/Kconfig.debug
+@@ -187,10 +187,11 @@ config DEBUG_WX
+ 	bool "Warn on W+X mappings at boot"
+ 	depends on ARCH_HAS_DEBUG_WX
+ 	depends on ARCH_HAS_PTDUMP
+ 	depends on MMU
+ 	select PTDUMP
++	default y
+ 	help
+ 	  Generate a warning if any W+X mappings are found at boot.
+ 
+ 	  This is useful for discovering cases where the kernel is leaving W+X
+ 	  mappings after applying NX, as such mappings are a security risk.
+-- 
+2.55.0
+

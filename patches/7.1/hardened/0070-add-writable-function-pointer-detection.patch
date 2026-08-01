@@ -1,7 +1,7 @@
-From 814506df5664a9e8010d68b0dfa1b44d76858340 Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Sun, 9 Jul 2017 17:53:23 -0400
-Subject: [PATCH 127/190] add writable function pointer detection
+Subject: [PATCH 070/103] add writable function pointer detection
 
 Taken from the public PaX patches.
 
@@ -12,7 +12,7 @@ Signed-off-by: Levente Polyak <levente@leventepolyak.net>
  1 file changed, 21 insertions(+), 1 deletion(-)
 
 diff --git a/scripts/mod/modpost.c b/scripts/mod/modpost.c
-index 47c8aa2a6939..4d024f395644 100644
+index abbcd3fc13949..75bc10879096f 100644
 --- a/scripts/mod/modpost.c
 +++ b/scripts/mod/modpost.c
 @@ -47,10 +47,11 @@ static bool warn_unresolved;
@@ -27,7 +27,7 @@ index 47c8aa2a6939..4d024f395644 100644
  /* If set to 1, only warn (instead of error) about missing ns imports */
  static bool allow_missing_ns_imports;
  
-@@ -803,10 +804,11 @@ enum mismatch {
+@@ -817,10 +818,11 @@ enum mismatch {
  	TEXTDATA_TO_ANY_INIT_EXIT,
  	XXXINIT_TO_SOME_INIT,
  	ANY_INIT_TO_ANY_EXIT,
@@ -39,7 +39,7 @@ index 47c8aa2a6939..4d024f395644 100644
  /**
   * Describe how to match sections on different criteria:
   *
-@@ -859,10 +861,16 @@ static const struct sectioncheck sectioncheck[] = {
+@@ -873,10 +875,16 @@ static const struct sectioncheck sectioncheck[] = {
  	 * adding a special 'printer' for them in scripts/check_extable.
  	 */
  	.bad_tosec = { ".altinstr_replacement", NULL },
@@ -56,7 +56,7 @@ index 47c8aa2a6939..4d024f395644 100644
  
  static const struct sectioncheck *section_mismatch(
  		const char *fromsec, const char *tosec)
-@@ -1024,11 +1032,14 @@ static void default_mismatch_handler(const char *modname, struct elf_info *elf,
+@@ -1038,11 +1046,14 @@ static void default_mismatch_handler(const char *modname, struct elf_info *elf,
  
  	/* check whitelist - we may ignore it */
  	if (!secref_whitelist(fromsec, fromsym, tosec, tosym))
@@ -72,7 +72,7 @@ index 47c8aa2a6939..4d024f395644 100644
  		snprintf(taddr_str, sizeof(taddr_str), "0x%x", (unsigned int)taddr);
  
  	/*
-@@ -1058,10 +1069,15 @@ static void default_mismatch_handler(const char *modname, struct elf_info *elf,
+@@ -1072,10 +1083,15 @@ static void default_mismatch_handler(const char *modname, struct elf_info *elf,
  			     "OTHER_TEXT_SECTIONS in scripts/mod/modpost.c.\n",
  			     fromsec, (long)faddr, tosec, tosec, tosec);
  		else
@@ -88,7 +88,7 @@ index 47c8aa2a6939..4d024f395644 100644
  
  static void check_export_symbol(struct module *mod, struct elf_info *elf,
  				Elf_Addr faddr, const char *secname,
-@@ -2376,7 +2392,11 @@ int main(int argc, char **argv)
+@@ -2393,7 +2409,11 @@ int main(int argc, char **argv)
  
  	if (nr_unresolved > MAX_UNRESOLVED_REPORTS)
  		warn("suppressed %u unresolved symbol warnings because there were too many)\n",
@@ -101,5 +101,5 @@ index 47c8aa2a6939..4d024f395644 100644
  	return error_occurred ? 1 : 0;
  }
 -- 
-2.52.0
+2.55.0
 

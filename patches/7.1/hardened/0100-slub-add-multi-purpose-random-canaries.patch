@@ -1,0 +1,984 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
+Date: Fri, 26 Jun 2026 20:21:47 +0200
+Subject: [PATCH 101/103] slub: add multi-purpose random canaries
+
+Place canaries at the end of kernel slab objects, sacrificing some
+performance and memory usage for security.
+
+Canaries are build from random values stored in its cache. Their value
+are checked upon allocation and free of those objects.
+
+With the introduction of barn and sheaves, slab objects are used to
+prefill or refill sheaves, which are cache of small objects taking the
+form of an array of pointers to slab objects. Sheaves are then used for
+quick allocation and freeing, which consist of shrinking and growing the
+array index. Thus, there are two variants of free state for those
+objects. While they are seen as allocated by the slab allocator, the
+sheaf allocator see them as free and then allocates them. With sheaves,
+slab canaries can thus have three states:
+
+1. random_active          The object is allocated.
+2. random_inactive        The object is in a free state and is stored in
+                          a slab.
+3. sheaf_random_inactive  The object is in a free state and is stored in
+                          a slab, backed by a sheaf.
+
+When an object is freed, its active (random_active) state is checked and
+then set to an inactive state whose value depends on whether it is freed
+back to a sheaf or a slab. Upon allocation, the inverse transition
+occurs.
+
+Canaries can detect some forms of heap corruption when allocations
+are freed and as part of the HARDENED_USERCOPY feature. They provide
+basic use-after-free detection for HARDENED_USERCOPY.
+
+Canaries absorb small overflows (rendering them harmless), mitigate
+non-NUL terminated C string overflows on 64-bit via a guaranteed zero
+byte and provide basic double-free detection.
+
+This patch was originally written by Daniel Micay.
+
+[danielmicay@gmail.com: Introduce slab canaries]
+[levente@leventepolyak.net: make canaries work without SLUB_DEBUG]
+[levente@leventepolyak.net: fix compatibility with KFENCE]
+[nicolas.bouchinet@ssi.gouv.fr: Fix conflicts with commit 782f8906f8057efc7]
+[nicolas.bouchinet@ssi.gouv.fr: Take slab canary in account for object size]
+[nicolas.bouchinet@ssi.gouv.fr: Add sheaf support]
+[nicolas.bouchinet@ssi.gouv.fr: Complete canaries revamp]
+[levente@leventepolyak.net: mm/slub: Fix swapped canary booleans in rcu_free_sheaf_nobarn()]
+[levente@leventepolyak.net: mm/slub: Fix canary on alloc_from_pcs() in kmalloc_nolock_noprof()]
+
+Signed-off-by: Levente Polyak <levente@leventepolyak.net>
+Signed-off-by: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
+---
+ mm/Kconfig |  17 ++++
+ mm/slab.h  |   6 ++
+ mm/slub.c  | 247 ++++++++++++++++++++++++++++++++++++++++++++++-------
+ 3 files changed, 240 insertions(+), 30 deletions(-)
+
+diff --git a/mm/Kconfig b/mm/Kconfig
+index ae5920e87ef9f..aa805503dda3b 100644
+--- a/mm/Kconfig
++++ b/mm/Kconfig
+@@ -234,10 +234,27 @@ config SLAB_BUCKETS
+ 	  of extra pages since the bulk of user-controlled allocations
+ 	  are relatively long-lived.
+ 
+ 	  If unsure, say Y.
+ 
++config SLAB_CANARY
++	depends on SLUB
++	depends on !SLAB_MERGE_DEFAULT
++	bool "SLAB canaries"
++	default y
++	help
++	  Place canaries at the end of kernel slab allocations, sacrificing
++	  some performance and memory usage for security.
++
++	  Canaries can detect some forms of heap corruption when allocations
++	  are freed and as part of the HARDENED_USERCOPY feature. It provides
++	  basic use-after-free detection for HARDENED_USERCOPY.
++
++	  Canaries absorb small overflows (rendering them harmless), mitigate
++	  non-NUL terminated C string overflows on 64-bit via a guaranteed zero
++	  byte and provide basic double-free detection.
++
+ config SLUB_STATS
+ 	default n
+ 	bool "Enable performance statistics"
+ 	depends on SYSFS && !SLUB_TINY
+ 	help
+diff --git a/mm/slab.h b/mm/slab.h
+index 7ed221dfe572c..3a2d3050da40e 100644
+--- a/mm/slab.h
++++ b/mm/slab.h
+@@ -222,10 +222,16 @@ struct kmem_cache {
+ #endif
+ #ifdef CONFIG_SLAB_FREELIST_HARDENED
+ 	unsigned long random;
+ #endif
+ 
++#ifdef CONFIG_SLAB_CANARY
++	unsigned long random_active;
++	unsigned long random_inactive;
++	unsigned long sheaf_random_inactive;
++#endif
++
+ #ifdef CONFIG_NUMA
+ 	/*
+ 	 * Defragmentation by allocating from a remote node.
+ 	 */
+ 	unsigned int remote_node_defrag_ratio;
+diff --git a/mm/slub.c b/mm/slub.c
+index 6e9bc54b5948a..8caa30508fec0 100644
+--- a/mm/slub.c
++++ b/mm/slub.c
+@@ -42,10 +42,11 @@
+ #include <linux/stacktrace.h>
+ #include <linux/prefetch.h>
+ #include <linux/memcontrol.h>
+ #include <linux/random.h>
+ #include <linux/prandom.h>
++#include <linux/stackprotector.h>
+ #include <kunit/test.h>
+ #include <kunit/test-bug.h>
+ #include <linux/sort.h>
+ #include <linux/irq_work.h>
+ #include <linux/kprobes.h>
+@@ -744,10 +745,12 @@ static inline void set_orig_size(struct kmem_cache *s,
+ 
+ 	if (!slub_debug_orig_size(s))
+ 		return;
+ 
+ 	p += get_info_end(s);
++	if (IS_ENABLED(CONFIG_SLAB_CANARY))
++		p = (void *)p + sizeof(void *);
+ 	p += sizeof(struct track) * 2;
+ 
+ 	*(unsigned long *)p = orig_size;
+ }
+ 
+@@ -760,10 +763,12 @@ static inline unsigned long get_orig_size(struct kmem_cache *s, void *object)
+ 
+ 	if (!slub_debug_orig_size(s))
+ 		return s->object_size;
+ 
+ 	p += get_info_end(s);
++	if (IS_ENABLED(CONFIG_SLAB_CANARY))
++		p = (void *)p + sizeof(void *);
+ 	p += sizeof(struct track) * 2;
+ 
+ 	return *(unsigned long *)p;
+ }
+ 
+@@ -883,10 +888,14 @@ static unsigned int obj_exts_offset_in_object(struct kmem_cache *s)
+ 		offset += sizeof(struct track) * 2;
+ 
+ 	if (slub_debug_orig_size(s))
+ 		offset += sizeof(unsigned long);
+ 
++#ifdef CONFIG_SLAB_CANARY
++	offset += sizeof(void *);
++#endif
++
+ 	offset += kasan_metadata_size(s, false);
+ 
+ 	return offset;
+ }
+ #else
+@@ -899,10 +908,54 @@ static inline unsigned int obj_exts_offset_in_object(struct kmem_cache *s)
+ {
+ 	return 0;
+ }
+ #endif
+ 
++#ifdef CONFIG_SLAB_CANARY
++static inline unsigned long *get_canary(struct kmem_cache *s, void *object)
++{
++	return object + get_info_end(s);
++}
++
++static inline unsigned long get_canary_value(const void *canary, unsigned long value)
++{
++	return (value ^ (unsigned long)canary) & CANARY_MASK;
++}
++
++static inline void set_canary(struct kmem_cache *s, void *object, unsigned long value)
++{
++	unsigned long *canary = get_canary(s, object);
++	*canary = get_canary_value(canary, value);
++}
++
++static inline void check_canary(struct kmem_cache *s, void *object, unsigned long value)
++{
++	unsigned long *canary = get_canary(s, object);
++	BUG_ON(*canary != get_canary_value(canary, value));
++}
++
++static inline void check_set_canary(struct kmem_cache *s, void *object, unsigned long check_value, unsigned long set_value)
++{
++	if (object && !is_kfence_address(object)) {
++		check_canary(s, object, check_value);
++		set_canary(s, object, set_value);
++	}
++}
++
++static inline void check_set_canary_bulk(struct kmem_cache *s, unsigned int size, void **objects, unsigned long check_value, unsigned long set_value)
++{
++	for (int i = 0; i < size; i++)
++		check_set_canary(s, objects[i], check_value, set_value);
++}
++
++#else
++#define set_canary(s, object, value)
++#define check_canary(s, object, value)
++#define check_set_canary(s, object, check_value, set_value)
++#define check_set_canary_bulk(s, size, objects, check_value, set_value)
++#endif
++
+ #ifdef CONFIG_SLUB_DEBUG
+ 
+ /*
+  * For debugging context when we want to check if the struct slab pointer
+  * appears to be valid.
+@@ -1028,10 +1081,13 @@ static struct track *get_track(struct kmem_cache *s, void *object,
+ {
+ 	struct track *p;
+ 
+ 	p = object + get_info_end(s);
+ 
++	if (IS_ENABLED(CONFIG_SLAB_CANARY))
++		p = (void *)p + sizeof(void *);
++
+ 	return kasan_reset_tag(p + alloc);
+ }
+ 
+ #ifdef CONFIG_STACKDEPOT
+ static noinline depot_stack_handle_t set_track_prepare(gfp_t gfp_flags)
+@@ -1189,10 +1245,13 @@ static void print_trailer(struct kmem_cache *s, struct slab *slab, u8 *p)
+ 		print_section(KERN_ERR, "Redzone  ", p + s->object_size,
+ 			s->inuse - s->object_size);
+ 
+ 	off = get_info_end(s);
+ 
++	if (IS_ENABLED(CONFIG_SLAB_CANARY))
++		off += sizeof(void *);
++
+ 	if (s->flags & SLAB_STORE_USER)
+ 		off += 2 * sizeof(struct track);
+ 
+ 	if (slub_debug_orig_size(s))
+ 		off += sizeof(unsigned long);
+@@ -1357,14 +1416,15 @@ check_bytes_and_report(struct kmem_cache *s, struct slab *slab,
+  *   - Filled with 0xbb (SLUB_RED_INACTIVE) for inactive objects and
+  *     0xcc (SLUB_RED_ACTIVE) for objects in use when SLAB_RED_ZONE.
+  *
+  * [Metadata starts at object + s->inuse]
+  *   - A. freelist pointer (if freeptr_outside_object)
+- *   - B. alloc tracking (SLAB_STORE_USER)
+- *   - C. free tracking (SLAB_STORE_USER)
+- *   - D. original request size (SLAB_KMALLOC && SLAB_STORE_USER)
+- *   - E. KASAN metadata (if enabled)
++ *   - B. Canary for SLAB_CANARY
++ *   - C. alloc tracking (SLAB_STORE_USER)
++ *   - D. free tracking (SLAB_STORE_USER)
++ *   - E. original request size (SLAB_KMALLOC && SLAB_STORE_USER)
++ *   - F. KASAN metadata (if enabled)
+  *
+  * [Mandatory padding] (if CONFIG_SLUB_DEBUG && SLAB_RED_ZONE)
+  *   - One mandatory debug word to guarantee a minimum poisoned gap
+  *     between metadata and the next object, independent of alignment.
+  *   - Filled with 0x5a (POISON_INUSE) when SLAB_POISON is set.
+@@ -1392,10 +1452,13 @@ check_bytes_and_report(struct kmem_cache *s, struct slab *slab,
+  */
+ static int check_pad_bytes(struct kmem_cache *s, struct slab *slab, u8 *p)
+ {
+ 	unsigned long off = get_info_end(s);	/* The end of info */
+ 
++	if (IS_ENABLED(CONFIG_SLAB_CANARY))
++		off += sizeof(void *);
++
+ 	if (s->flags & SLAB_STORE_USER) {
+ 		/* We also have user information there */
+ 		off += 2 * sizeof(struct track);
+ 
+ 		if (s->flags & SLAB_KMALLOC)
+@@ -2610,15 +2673,23 @@ struct rcu_delayed_free {
+  * - debug_check_no_obj_freed()
+  * - __kcsan_check_access()
+  */
+ static __always_inline
+ bool slab_free_hook(struct kmem_cache *s, void *x, bool init,
+-		    bool after_rcu_delay)
++		    bool after_rcu_delay, bool canary)
+ {
+ 	/* Are the object contents still accessible? */
+ 	bool still_accessible = (s->flags & SLAB_TYPESAFE_BY_RCU) && !after_rcu_delay;
+ 
++	/*
++	 * Postpone setting the inactive canary until the metadata
++	 * has potentially been cleared at the end of this function.
++	 */
++	if (canary) {
++		check_canary(s, x, s->random_active);
++	}
++
+ 	kmemleak_free_recursive(x, s->flags);
+ 	kmsan_slab_free(s, x);
+ 
+ 	debug_check_no_locks_freed(x, s->object_size);
+ 
+@@ -2680,21 +2751,32 @@ bool slab_free_hook(struct kmem_cache *s, void *x, bool init,
+ 		inuse = get_info_end(s);
+ 		orig_size = get_orig_size(s, x);
+ 		if (!kasan_has_integrated_init())
+ 			memset(kasan_reset_tag(x), 0, orig_size);
+ 		rsize = (s->flags & SLAB_RED_ZONE) ? s->red_left_pad : 0;
++
++#ifdef CONFIG_SLAB_CANARY
++		memset((char *)kasan_reset_tag(x) + inuse + sizeof(void *), 0,
++		       s->size - inuse - sizeof(void *) - rsize);
++#else
+ 		memset((char *)kasan_reset_tag(x) + inuse, 0,
+ 		       s->size - inuse - rsize);
++#endif
+ 		/*
+ 		 * Restore orig_size, otherwise kmalloc redzone overwritten
+ 		 * would be reported
+ 		 */
+ 		set_orig_size(s, x, orig_size);
+ 
+ 		if (!IS_ENABLED(CONFIG_SLAB_SANITIZE_VERIFY) && s->ctor)
+ 			s->ctor(x);
+ 	}
++
++	if (canary) {
++		set_canary(s, x, s->random_inactive);
++	}
++
+ 	/* KASAN might put x into memory quarantine, delaying its reuse. */
+ 	return !kasan_slab_free(s, x, init, still_accessible, false);
+ }
+ 
+ static __fastpath_inline
+@@ -2706,11 +2788,11 @@ bool slab_free_freelist_hook(struct kmem_cache *s, void **head, void **tail,
+ 	void *next = *head;
+ 	void *old_tail = *tail;
+ 	bool init;
+ 
+ 	if (is_kfence_address(next)) {
+-		slab_free_hook(s, next, false, false);
++		slab_free_hook(s, next, false, false, false);
+ 		return false;
+ 	}
+ 
+ 	/* Head and tail of the reconstructed freelist */
+ 	*head = NULL;
+@@ -2721,11 +2803,11 @@ bool slab_free_freelist_hook(struct kmem_cache *s, void **head, void **tail,
+ 	do {
+ 		object = next;
+ 		next = get_freepointer(s, object);
+ 
+ 		/* If object's reuse doesn't have to be delayed */
+-		if (likely(slab_free_hook(s, object, init, false))) {
++		if (likely(slab_free_hook(s, object, init, false, true))) {
+ 			/* Move object to the new freelist */
+ 			set_freepointer(s, object, *head);
+ 			*head = object;
+ 			if (!*tail)
+ 				*tail = object;
+@@ -2758,10 +2840,11 @@ bool slab_free_freelist_hook(struct kmem_cache *s, void **head, void **tail,
+ }
+ 
+ static void *setup_object(struct kmem_cache *s, void *object)
+ {
+ 	setup_object_debug(s, object);
++	set_canary(s, object, s->random_inactive);
+ 	object = kasan_init_slab_obj(s, object);
+ 	if (unlikely(s->ctor) && !has_sanitize_verify(s)) {
+ 		kasan_unpoison_new_object(s, object);
+ 		s->ctor(object);
+ 		kasan_poison_new_object(s, object);
+@@ -2838,10 +2921,17 @@ static int refill_sheaf(struct kmem_cache *s, struct slab_sheaf *sheaf,
+ 		return 0;
+ 
+ 	filled = refill_objects(s, &sheaf->objects[sheaf->size], gfp, to_fill,
+ 				to_fill);
+ 
++	/*
++	 * linux-hardened: refill_objects() fills inactive objects into the sheaf
++	 * straight from the slab freelist. As they are going into a sheaf
++	 * instead of to the caller, transition them to the sheaf-inactive state.
++	 */
++	check_set_canary_bulk(s, filled, &sheaf->objects[sheaf->size], s->random_inactive, s->sheaf_random_inactive);
++
+ 	sheaf->size += filled;
+ 
+ 	stat_add(s, SHEAF_REFILL, filled);
+ 
+ 	if (filled < to_fill)
+@@ -2888,10 +2978,11 @@ static unsigned int __sheaf_flush_main_batch(struct kmem_cache *s)
+ 
+ 	remaining = sheaf->size;
+ 
+ 	local_unlock(&s->cpu_sheaves->lock);
+ 
++	check_set_canary_bulk(s, batch, &objects[0], s->sheaf_random_inactive, s->random_inactive);
+ 	__kmem_cache_free_bulk(s, batch, &objects[0]);
+ 
+ 	stat_add(s, SHEAF_FLUSH, batch);
+ 
+ 	return remaining;
+@@ -2933,24 +3024,28 @@ static bool sheaf_try_flush_main(struct kmem_cache *s)
+  * Free all objects from a sheaf that's unused, i.e. not linked to any
+  * cpu_sheaves, so we need no locking and batching. The locking is also not
+  * necessary when flushing cpu's sheaves (both spare and main) during cpu
+  * hotremove as the cpu is not executing anymore.
+  */
+-static void sheaf_flush_unused(struct kmem_cache *s, struct slab_sheaf *sheaf)
++static void sheaf_flush_unused(struct kmem_cache *s, struct slab_sheaf *sheaf, bool canary)
+ {
+ 	if (!sheaf->size)
+ 		return;
+ 
+ 	stat_add(s, SHEAF_FLUSH, sheaf->size);
+ 
++	if (canary) {
++		check_set_canary_bulk(s, sheaf->size, &sheaf->objects[0], s->sheaf_random_inactive, s->random_inactive);
++	}
+ 	__kmem_cache_free_bulk(s, sheaf->size, &sheaf->objects[0]);
+ 
+ 	sheaf->size = 0;
+ }
+ 
+ static bool __rcu_free_sheaf_prepare(struct kmem_cache *s,
+-				     struct slab_sheaf *sheaf)
++				     struct slab_sheaf *sheaf,
++				     bool canary)
+ {
+ 	bool init = slab_want_init_on_free(s);
+ 	void **p = &sheaf->objects[0];
+ 	unsigned int i = 0;
+ 	bool pfmemalloc = false;
+@@ -2959,11 +3054,11 @@ static bool __rcu_free_sheaf_prepare(struct kmem_cache *s,
+ 		struct slab *slab = virt_to_slab(p[i]);
+ 
+ 		memcg_slab_free_hook(s, slab, p + i, 1);
+ 		alloc_tagging_slab_free_hook(s, slab, p + i, 1);
+ 
+-		if (unlikely(!slab_free_hook(s, p[i], init, true))) {
++		if (unlikely(!slab_free_hook(s, p[i], init, true, canary))) {
+ 			p[i] = p[--sheaf->size];
+ 			continue;
+ 		}
+ 
+ 		if (slab_test_pfmemalloc(slab))
+@@ -2981,13 +3076,17 @@ static void rcu_free_sheaf_nobarn(struct rcu_head *head)
+ 	struct kmem_cache *s;
+ 
+ 	sheaf = container_of(head, struct slab_sheaf, rcu_head);
+ 	s = sheaf->cache;
+ 
+-	__rcu_free_sheaf_prepare(s, sheaf);
++	/*
++	 * linux-hardened: Sheaf flushing, sheaf object canaries
++	 * goes from sheaf_random_inactive to random_inactive.
++	 */
++	__rcu_free_sheaf_prepare(s, sheaf, false);
+ 
+-	sheaf_flush_unused(s, sheaf);
++	sheaf_flush_unused(s, sheaf, true);
+ 
+ 	free_empty_sheaf(s, sheaf);
+ }
+ 
+ /*
+@@ -3014,11 +3113,11 @@ static void pcs_flush_all(struct kmem_cache *s)
+ 	pcs->rcu_free = NULL;
+ 
+ 	local_unlock(&s->cpu_sheaves->lock);
+ 
+ 	if (spare) {
+-		sheaf_flush_unused(s, spare);
++		sheaf_flush_unused(s, spare, true);
+ 		free_empty_sheaf(s, spare);
+ 	}
+ 
+ 	if (rcu_free)
+ 		call_rcu(&rcu_free->rcu_head, rcu_free_sheaf_nobarn);
+@@ -3031,13 +3130,13 @@ static void __pcs_flush_all_cpu(struct kmem_cache *s, unsigned int cpu)
+ 	struct slub_percpu_sheaves *pcs;
+ 
+ 	pcs = per_cpu_ptr(s->cpu_sheaves, cpu);
+ 
+ 	/* The cpu is not executing anymore so we don't need pcs->lock */
+-	sheaf_flush_unused(s, pcs->main);
++	sheaf_flush_unused(s, pcs->main, true);
+ 	if (pcs->spare) {
+-		sheaf_flush_unused(s, pcs->spare);
++		sheaf_flush_unused(s, pcs->spare, true);
+ 		free_empty_sheaf(s, pcs->spare);
+ 		pcs->spare = NULL;
+ 	}
+ 
+ 	if (pcs->rcu_free) {
+@@ -3272,11 +3371,11 @@ static void barn_shrink(struct kmem_cache *s, struct node_barn *barn)
+ 	barn->nr_empty = 0;
+ 
+ 	spin_unlock_irqrestore(&barn->lock, flags);
+ 
+ 	list_for_each_entry_safe(sheaf, sheaf2, &full_list, barn_list) {
+-		sheaf_flush_unused(s, sheaf);
++		sheaf_flush_unused(s, sheaf, true);
+ 		free_empty_sheaf(s, sheaf);
+ 	}
+ 
+ 	list_for_each_entry_safe(sheaf, sheaf2, &empty_list, barn_list)
+ 		free_empty_sheaf(s, sheaf);
+@@ -4680,11 +4779,11 @@ __pcs_replace_empty_main(struct kmem_cache *s, struct slub_percpu_sheaves *pcs,
+ 	if (refill_sheaf(s, empty, gfp | __GFP_NOMEMALLOC | __GFP_NOWARN)) {
+ 		/*
+ 		 * we must be very low on memory so don't bother
+ 		 * with the barn
+ 		 */
+-		sheaf_flush_unused(s, empty);
++		sheaf_flush_unused(s, empty, true);
+ 		free_empty_sheaf(s, empty);
+ 
+ 		return NULL;
+ 	}
+ 
+@@ -4795,10 +4894,12 @@ void *alloc_from_pcs(struct kmem_cache *s, gfp_t gfp, int node)
+ 		}
+ 	}
+ 
+ 	pcs->main->size--;
+ 
++	check_set_canary(s, object, s->sheaf_random_inactive, s->random_active);
++
+ 	local_unlock(&s->cpu_sheaves->lock);
+ 
+ 	stat(s, ALLOC_FASTPATH);
+ 
+ 	return object;
+@@ -4867,10 +4968,12 @@ unsigned int alloc_from_pcs_bulk(struct kmem_cache *s, gfp_t gfp, size_t size,
+ 	batch = min(size, main->size);
+ 
+ 	main->size -= batch;
+ 	memcpy(p, main->objects + main->size, batch * sizeof(void *));
+ 
++	check_set_canary_bulk(s, batch, p, s->sheaf_random_inactive, s->random_active);
++
+ 	local_unlock(&s->cpu_sheaves->lock);
+ 
+ 	stat_add(s, ALLOC_FASTPATH, batch);
+ 
+ 	allocated += batch;
+@@ -4909,12 +5012,19 @@ static __fastpath_inline void *slab_alloc_node(struct kmem_cache *s, struct list
+ 	if (unlikely(object))
+ 		goto out;
+ 
+ 	object = alloc_from_pcs(s, gfpflags, node);
+ 
+-	if (!object)
++	if (!object) {
+ 		object = __slab_alloc_node(s, gfpflags, node, addr, orig_size);
++		/*
++		 * linux-hardened: object taken from the slab freelist are
++		 * transitioned from slab-inactive to active state. Objects
++		 * returned by alloc_from_pcs() are already transitioned there.
++		 */
++		check_set_canary(s, object, s->random_inactive, s->random_active);
++	}
+ 
+ 	maybe_wipe_obj_freeptr(s, object);
+ 
+ 	if (has_sanitize_verify(s) && object) {
+ 		/* KASAN hasn't unpoisoned the object yet (this is done in the
+@@ -5058,10 +5168,16 @@ kmem_cache_prefill_sheaf(struct kmem_cache *s, gfp_t gfp, unsigned int size)
+ 					     &sheaf->objects[0])) {
+ 			kfree(sheaf);
+ 			return NULL;
+ 		}
+ 
++		/*
++		 * linux-hardened: objects came back active from the slab freelist,
++		 * transition them to the sheaf-inactive state as we prefill a sheaf.
++		 */
++		check_set_canary_bulk(s, size, &sheaf->objects[0], s->random_active, s->sheaf_random_inactive);
++
+ 		sheaf->size = size;
+ 
+ 		return sheaf;
+ 	}
+ 
+@@ -5094,11 +5210,11 @@ kmem_cache_prefill_sheaf(struct kmem_cache *s, gfp_t gfp, unsigned int size)
+ 		sheaf->capacity = s->sheaf_capacity;
+ 		sheaf->pfmemalloc = false;
+ 
+ 		if (sheaf->size < size &&
+ 		    __prefill_sheaf_pfmemalloc(s, sheaf, gfp)) {
+-			sheaf_flush_unused(s, sheaf);
++			sheaf_flush_unused(s, sheaf, true);
+ 			free_empty_sheaf(s, sheaf);
+ 			sheaf = NULL;
+ 		}
+ 	}
+ 
+@@ -5121,11 +5237,11 @@ void kmem_cache_return_sheaf(struct kmem_cache *s, gfp_t gfp,
+ 	struct slub_percpu_sheaves *pcs;
+ 	struct node_barn *barn;
+ 
+ 	if (unlikely((sheaf->capacity != s->sheaf_capacity)
+ 		     || sheaf->pfmemalloc)) {
+-		sheaf_flush_unused(s, sheaf);
++		sheaf_flush_unused(s, sheaf, true);
+ 		kfree(sheaf);
+ 		return;
+ 	}
+ 
+ 	local_lock(&s->cpu_sheaves->lock);
+@@ -5149,11 +5265,11 @@ void kmem_cache_return_sheaf(struct kmem_cache *s, gfp_t gfp,
+ 	 * If the barn has too many full sheaves or we fail to refill the sheaf,
+ 	 * simply flush and free it.
+ 	 */
+ 	if (!barn || data_race(barn->nr_full) >= MAX_FULL_SHEAVES ||
+ 	    refill_sheaf(s, sheaf, gfp)) {
+-		sheaf_flush_unused(s, sheaf);
++		sheaf_flush_unused(s, sheaf, true);
+ 		free_empty_sheaf(s, sheaf);
+ 		return;
+ 	}
+ 
+ 	barn_put_full_sheaf(barn, sheaf);
+@@ -5195,10 +5311,17 @@ int kmem_cache_refill_sheaf(struct kmem_cache *s, gfp_t gfp,
+ 
+ 		if (!__kmem_cache_alloc_bulk(s, gfp, sheaf->capacity - sheaf->size,
+ 					     &sheaf->objects[sheaf->size])) {
+ 			return -ENOMEM;
+ 		}
++
++		/*
++		 * linux-hardened: objects came back active from the slab freelist,
++		 * transition them to the sheaf-inactive state as we refill a sheaf.
++		 */
++		check_set_canary_bulk(s, sheaf->capacity - sheaf->size, &sheaf->objects[sheaf->size], s->random_active, s->sheaf_random_inactive);
++
+ 		sheaf->size = sheaf->capacity;
+ 
+ 		return 0;
+ 	}
+ 
+@@ -5241,10 +5364,12 @@ kmem_cache_alloc_from_sheaf_noprof(struct kmem_cache *s, gfp_t gfp,
+ 	ret = kfence_alloc(s, s->object_size, gfp);
+ 
+ 	if (likely(!ret))
+ 		ret = sheaf->objects[--sheaf->size];
+ 
++	check_set_canary(s, ret, s->sheaf_random_inactive, s->random_active);
++
+ 	init = slab_want_init_on_alloc(gfp, s);
+ 
+ 	/* add __GFP_NOFAIL to force successful memcg charging */
+ 	slab_post_alloc_hook(s, NULL, gfp | __GFP_NOFAIL, 1, &ret, init, s->object_size);
+ out:
+@@ -5431,10 +5556,18 @@ void *kmalloc_nolock_noprof(size_t size, gfp_t gfp_flags, int node)
+ 		 */
+ 		can_retry = false;
+ 		goto retry;
+ 	}
+ 
++	/*
++	 * linux-hardened: only reachable from the slab path where the object
++	 * comes from the freelist.
++	 * The percpu-sheaf path checks and transitions the canary within
++	 * alloc_from_pcs() and skips this call via a goto success.
++	 */
++	check_set_canary(s, ret, s->random_inactive, s->random_active);
++
+ success:
+ 	maybe_wipe_obj_freeptr(s, ret);
+ 	slab_post_alloc_hook(s, NULL, alloc_gfp, 1, &ret,
+ 			     slab_want_init_on_alloc(alloc_gfp, s), orig_size);
+ 
+@@ -5774,11 +5907,11 @@ __pcs_replace_full_main(struct kmem_cache *s, struct slub_percpu_sheaves *pcs,
+ 		stat(s, BARN_PUT_FAIL);
+ 
+ 		pcs->spare = NULL;
+ 		local_unlock(&s->cpu_sheaves->lock);
+ 
+-		sheaf_flush_unused(s, to_flush);
++		sheaf_flush_unused(s, to_flush, true);
+ 		empty = to_flush;
+ 		goto got_empty;
+ 	}
+ 
+ 	/*
+@@ -5856,10 +5989,11 @@ bool free_to_pcs(struct kmem_cache *s, void *object, bool allow_spin)
+ 		pcs = __pcs_replace_full_main(s, pcs, allow_spin);
+ 		if (unlikely(!pcs))
+ 			return false;
+ 	}
+ 
++	check_set_canary(s, object, s->random_active, s->sheaf_random_inactive);
+ 	pcs->main->objects[pcs->main->size++] = object;
+ 
+ 	local_unlock(&s->cpu_sheaves->lock);
+ 
+ 	stat(s, FREE_FASTPATH);
+@@ -5886,11 +6020,11 @@ static void rcu_free_sheaf(struct rcu_head *head)
+ 	 * performance hit anyway.
+ 	 *
+ 	 * If it returns true, there was at least one object from pfmemalloc
+ 	 * slab so simply flush everything.
+ 	 */
+-	if (__rcu_free_sheaf_prepare(s, sheaf))
++	if (__rcu_free_sheaf_prepare(s, sheaf, false))
+ 		goto flush;
+ 
+ 	barn = get_barn_node(s, sheaf->node);
+ 	if (!barn)
+ 		goto flush;
+@@ -5911,11 +6045,11 @@ static void rcu_free_sheaf(struct rcu_head *head)
+ 		return;
+ 	}
+ 
+ flush:
+ 	stat(s, BARN_PUT_FAIL);
+-	sheaf_flush_unused(s, sheaf);
++	sheaf_flush_unused(s, sheaf, true);
+ 
+ empty:
+ 	if (barn && data_race(barn->nr_empty) < MAX_EMPTY_SHEAVES) {
+ 		barn_put_empty_sheaf(barn, sheaf);
+ 		return;
+@@ -6008,10 +6142,12 @@ bool __kfree_rcu_sheaf(struct kmem_cache *s, void *obj)
+ 
+ 	/*
+ 	 * Since we flush immediately when size reaches capacity, we never reach
+ 	 * this with size already at capacity, so no OOB write is possible.
+ 	 */
++
++	check_set_canary(s, obj, s->random_active, s->sheaf_random_inactive);
+ 	rcu_sheaf->objects[rcu_sheaf->size++] = obj;
+ 
+ 	if (likely(rcu_sheaf->size < s->sheaf_capacity)) {
+ 		rcu_sheaf = NULL;
+ 	} else {
+@@ -6109,11 +6245,11 @@ static void free_to_pcs_bulk(struct kmem_cache *s, size_t size, void **p)
+ 		struct slab *slab = virt_to_slab(p[i]);
+ 
+ 		memcg_slab_free_hook(s, slab, p + i, 1);
+ 		alloc_tagging_slab_free_hook(s, slab, p + i, 1);
+ 
+-		if (unlikely(!slab_free_hook(s, p[i], init, false))) {
++		if (unlikely(!slab_free_hook(s, p[i], init, false, false))) {
+ 			p[i] = p[--size];
+ 			continue;
+ 		}
+ 
+ 		if (unlikely(!can_free_to_pcs(slab))) {
+@@ -6169,10 +6305,18 @@ static void free_to_pcs_bulk(struct kmem_cache *s, size_t size, void **p)
+ 
+ do_free:
+ 	main = pcs->main;
+ 	batch = min(size, s->sheaf_capacity - main->size);
+ 
++	/*
++	 * linux-hardened: these active (allocated) objects are being parked in
++	 * a sheaf, transition them to the sheaf-inactive state. Objects that
++	 * instead go to the slab freelist (via fallback / flush_remote below)
++	 * keep the active state and are transitioned to slab-inactive there.
++	 */
++	check_set_canary_bulk(s, batch, p, s->random_active, s->sheaf_random_inactive);
++
+ 	memcpy(main->objects + main->size, p, batch * sizeof(void *));
+ 	main->size += batch;
+ 
+ 	local_unlock(&s->cpu_sheaves->lock);
+ 
+@@ -6195,15 +6339,17 @@ static void free_to_pcs_bulk(struct kmem_cache *s, size_t size, void **p)
+ 	/*
+ 	 * if we depleted all empty sheaves in the barn or there are too
+ 	 * many full sheaves, free the rest to slab pages
+ 	 */
+ fallback:
++	check_set_canary_bulk(s, size, p, s->random_active, s->random_inactive);
+ 	__kmem_cache_free_bulk(s, size, p);
+ 	stat_add(s, FREE_SLOWPATH, size);
+ 
+ flush_remote:
+ 	if (remote_nr) {
++		check_set_canary_bulk(s, remote_nr, &remote_objects[0], s->random_active, s->random_inactive);
+ 		__kmem_cache_free_bulk(s, remote_nr, &remote_objects[0]);
+ 		stat_add(s, FREE_SLOWPATH, remote_nr);
+ 		if (i < size) {
+ 			remote_nr = 0;
+ 			goto next_remote_batch;
+@@ -6254,10 +6400,11 @@ static void free_deferred_objects(struct irq_work *work)
+ 		 * Clear it to NULL to avoid false positive detection
+ 		 * of "Freepointer corruption".
+ 		 */
+ 		set_freepointer(s, x, NULL);
+ 
++		check_set_canary(s, x, s->random_active, s->random_inactive);
+ 		__slab_free(s, slab, x, x, 1, _THIS_IP_);
+ 		stat(s, FREE_SLOWPATH);
+ 	}
+ }
+ 
+@@ -6284,33 +6431,56 @@ void defer_free_barrier(void)
+ 
+ static __fastpath_inline
+ void slab_free(struct kmem_cache *s, struct slab *slab, void *object,
+ 	       unsigned long addr)
+ {
++	bool canary = true;
++
+ 	memcg_slab_free_hook(s, slab, &object, 1);
+ 	alloc_tagging_slab_free_hook(s, slab, &object, 1);
+ 
+-	if (unlikely(!slab_free_hook(s, object, slab_want_init_on_free(s), false)))
++	/*
++	 * Make sure canaries are not used on kfence objects.
++	 * Defer canary checking if the object is freed back to pcs.
++	 */
++	if (is_kfence_address(object) || cache_has_sheaves(s))
++		canary = false;
++
++	if (unlikely(!slab_free_hook(s, object, slab_want_init_on_free(s), false, canary)))
+ 		return;
+ 
+ 	if (likely(can_free_to_pcs(slab)) && likely(free_to_pcs(s, object, true)))
+ 		return;
+ 
++	/*
++	 * linux-hardened: the object's canary transition was deferred in
++	 * slab_free_hook() because it was meant to be freed to a sheaf, but
++	 * free_to_pcs() failed. It is now freed straight to the slab freelist,
++	 * so transition from active to slab-inactive state.
++	 */
++	if (unlikely(!canary))
++		check_set_canary(s, object, s->random_active, s->random_inactive);
++
+ 	__slab_free(s, slab, object, object, 1, addr);
+ 	stat(s, FREE_SLOWPATH);
+ }
+ 
+ #ifdef CONFIG_MEMCG
+ /* Do not inline the rare memcg charging failed path into the allocation path */
+ static noinline
+ void memcg_alloc_abort_single(struct kmem_cache *s, void *object)
+ {
++	bool canary = true;
+ 	struct slab *slab = virt_to_slab(object);
+ 
+ 	alloc_tagging_slab_free_hook(s, slab, &object, 1);
+ 
+-	if (likely(slab_free_hook(s, object, slab_want_init_on_free(s), false)))
++	/* Make sure canaries are not used on kfence objects. */
++	if (is_kfence_address(object))
++		canary = false;
++
++	if (likely(slab_free_hook(s, object, slab_want_init_on_free(s), false, canary)))
+ 		__slab_free(s, slab, object, object, 1, _RET_IP_);
+ }
+ #endif
+ 
+ static __fastpath_inline
+@@ -6349,11 +6519,11 @@ static void slab_free_after_rcu_debug(struct rcu_head *rcu_head)
+ 	s = slab->slab_cache;
+ 	if (WARN_ON(!(s->flags & SLAB_TYPESAFE_BY_RCU)))
+ 		return;
+ 
+ 	/* resume freeing */
+-	if (slab_free_hook(s, object, slab_want_init_on_free(s), true)) {
++	if (slab_free_hook(s, object, slab_want_init_on_free(s), true, true)) {
+ 		__slab_free(s, slab, object, object, 1, _THIS_IP_);
+ 		stat(s, FREE_SLOWPATH);
+ 	}
+ }
+ #endif /* CONFIG_SLUB_RCU_DEBUG */
+@@ -6445,11 +6615,11 @@ static inline size_t slab_ksize(struct slab *slab)
+ 	/*
+ 	 * If we have the need to store the freelist pointer
+ 	 * or any other metadata back there then we can
+ 	 * only use the space before that information.
+ 	 */
+-	if (s->flags & (SLAB_TYPESAFE_BY_RCU | SLAB_STORE_USER))
++	if ((s->flags & (SLAB_TYPESAFE_BY_RCU | SLAB_STORE_USER)) || IS_ENABLED(CONFIG_SLAB_CANARY))
+ 		return s->inuse;
+ 	else if (obj_exts_in_object(s, slab))
+ 		return s->inuse;
+ 	/*
+ 	 * Else we can use all the padding etc for the allocation
+@@ -7378,10 +7548,12 @@ int __kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size,
+ 				s->ctor(p[j]);
+ 			kasan_poison_new_object(s, p[j]);
+ 		}
+ 	}
+ 
++	check_set_canary_bulk(s, i, p, s->random_inactive, s->random_active);
++
+ 	return i;
+ 
+ error:
+ 	__kmem_cache_free_bulk(s, i, p);
+ 	return 0;
+@@ -7426,12 +7598,14 @@ int kmem_cache_alloc_bulk_noprof(struct kmem_cache *s, gfp_t flags, size_t size,
+ 		/*
+ 		 * If we ran out of memory, don't bother with freeing back to
+ 		 * the percpu sheaves, we have bigger problems.
+ 		 */
+ 		if (unlikely(__kmem_cache_alloc_bulk(s, flags, size - i, p + i) == 0)) {
+-			if (i > 0)
++			if (i > 0) {
++				check_set_canary_bulk(s, i, p, s->random_active, s->random_inactive);
+ 				__kmem_cache_free_bulk(s, i, p);
++			}
+ 			if (kfence_obj)
+ 				__kfence_free(kfence_obj);
+ 			return 0;
+ 		}
+ 	}
+@@ -7695,10 +7869,11 @@ static void early_kmem_cache_node_alloc(int node)
+ 	n = slab->freelist;
+ 	BUG_ON(!n);
+ #ifdef CONFIG_SLUB_DEBUG
+ 	init_object(kmem_cache_node, n, SLUB_RED_ACTIVE);
+ #endif
++	set_canary(kmem_cache_node, n, kmem_cache_node->random_active);
+ 	n = kasan_slab_alloc(kmem_cache_node, n, GFP_KERNEL, false);
+ 	slab->freelist = get_freepointer(kmem_cache_node, n);
+ 	slab->inuse = 1;
+ 	kmem_cache_node->per_node[node].node = n;
+ 	init_kmem_cache_node(n);
+@@ -7909,10 +8084,13 @@ static int calculate_sizes(struct kmem_cache_args *args, struct kmem_cache *s)
+ 		 * sized over/underflows from neighboring allocations.
+ 		 */
+ 		s->offset = ALIGN_DOWN(s->object_size / 2, sizeof(void *));
+ 	}
+ 
++	if (IS_ENABLED(CONFIG_SLAB_CANARY))
++		size += sizeof(void *);
++
+ #ifdef CONFIG_SLUB_DEBUG
+ 	if (flags & SLAB_STORE_USER) {
+ 		/*
+ 		 * Need to store information about allocs and frees after
+ 		 * the object.
+@@ -8251,10 +8429,14 @@ void __check_heap_object(const void *ptr, unsigned long n,
+ 			usercopy_abort("SLUB object in left red zone",
+ 				       s->name, to_user, offset, n);
+ 		offset -= s->red_left_pad;
+ 	}
+ 
++	if (!is_kfence) {
++		check_canary(s, (void *)ptr - offset, s->random_active);
++	}
++
+ 	/* Allow address range falling entirely within usercopy region. */
+ 	if (offset >= s->useroffset &&
+ 	    offset - s->useroffset <= s->usersize &&
+ 	    n <= s->useroffset - offset + s->usersize)
+ 		return;
+@@ -8630,10 +8812,15 @@ int do_kmem_cache_create(struct kmem_cache *s, const char *name,
+ 	s->size = s->object_size = size;
+ 
+ 	s->flags = kmem_cache_flags(flags, s->name);
+ #ifdef CONFIG_SLAB_FREELIST_HARDENED
+ 	s->random = get_random_long();
++#endif
++#ifdef CONFIG_SLAB_CANARY
++	s->random_active = get_random_long();
++	s->random_inactive = get_random_long();
++	s->sheaf_random_inactive = get_random_long();
+ #endif
+ 	s->align = args->align;
+ 	s->ctor = args->ctor;
+ #ifdef CONFIG_HARDENED_USERCOPY
+ 	s->useroffset = args->useroffset;
+-- 
+2.55.0
+

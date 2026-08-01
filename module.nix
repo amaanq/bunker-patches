@@ -115,7 +115,10 @@ let
       "bunker/0005"
     ];
     hardened =
-      (lib.genList (i: "hardened/${lib.fixedWidthString 4 "0" (toString (i + 1))}") 105)
+      # 7.1 uses anthraxx's 101-patch series and adds three GrapheneOS patches.
+      (lib.genList (i: "hardened/${lib.fixedWidthString 4 "0" (toString (i + 1))}") (
+        if majorMinor == "7.1" then 101 else 105
+      ))
       ++ (lib.genList (i: "grapheneos/${lib.fixedWidthString 4 "0" (toString (i + 1))}") 5)
       ++ [
         "cachyos/0014" # VMSCAPE/BHB clear mitigation
@@ -421,6 +424,7 @@ let
       SECURITY_SAFESETID = yes;
       BUG_ON_DATA_CORRUPTION = yes; # panic on slab/list corruption
       SECURITY_DMESG_RESTRICT = yes; # restrict dmesg before sysctl runs
+      USER_NS_UNPRIVILEGED = option yes; # upstream default n breaks bwrap/rootless
       # --- ASLR maximization ---
       RANDOMIZE_KSTACK_OFFSET_DEFAULT = yes; # randomize kernel stack per syscall
 

@@ -1,0 +1,160 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Serge Hallyn <serge.hallyn@canonical.com>
+Date: Fri, 31 May 2013 19:12:12 +0100
+Subject: [PATCH 064/103] userns: add sysctl to disallow unprivileged
+ CLONE_NEWUSER by default
+
+Signed-off-by: Serge Hallyn <serge.hallyn@ubuntu.com>
+[bwh: Remove unneeded binary sysctl bits]
+Signed-off-by: Daniel Micay <danielmicay@gmail.com>
+[thibaut.sautereau@ssi.gouv.fr: Adapt to sysctl code refactoring]
+[nicolas.bouchinet@ssi.gouv.fr: Adapt proc_handler with an allowed range value between 0 and 1]
+Signed-off-by: Thibaut Sautereau <thibaut.sautereau@ssi.gouv.fr>
+Signed-off-by: Levente Polyak <levente@leventepolyak.net>
+---
+ include/linux/user_namespace.h |  4 ++++
+ kernel/fork.c                  | 11 +++++++++++
+ kernel/sysctl.c                | 15 +++++++++++++++
+ kernel/user_namespace.c        |  3 +++
+ 4 files changed, 33 insertions(+)
+
+diff --git a/include/linux/user_namespace.h b/include/linux/user_namespace.h
+index 9c3be157397e0..bb05d4a07c46a 100644
+--- a/include/linux/user_namespace.h
++++ b/include/linux/user_namespace.h
+@@ -171,10 +171,12 @@ static inline struct user_namespace *to_user_ns(struct ns_common *ns)
+ 	return container_of(ns, struct user_namespace, ns);
+ }
+ 
+ #ifdef CONFIG_USER_NS
+ 
++extern int unprivileged_userns_clone;
++
+ static inline struct user_namespace *get_user_ns(struct user_namespace *ns)
+ {
+ 	if (ns)
+ 		ns_ref_inc(ns);
+ 	return ns;
+@@ -204,10 +206,12 @@ extern bool in_userns(const struct user_namespace *ancestor,
+ 		       const struct user_namespace *child);
+ extern bool current_in_userns(const struct user_namespace *target_ns);
+ struct ns_common *ns_get_owner(struct ns_common *ns);
+ #else
+ 
++#define unprivileged_userns_clone 0
++
+ static inline struct user_namespace *get_user_ns(struct user_namespace *ns)
+ {
+ 	return &init_user_ns;
+ }
+ 
+diff --git a/kernel/fork.c b/kernel/fork.c
+index 5a4623b058a20..54b3600aad2ac 100644
+--- a/kernel/fork.c
++++ b/kernel/fork.c
+@@ -82,10 +82,11 @@
+ #include <linux/fs_struct.h>
+ #include <linux/magic.h>
+ #include <linux/perf_event.h>
+ #include <linux/posix-timers.h>
+ #include <linux/user-return-notifier.h>
++#include <linux/user_namespace.h>
+ #include <linux/oom.h>
+ #include <linux/khugepaged.h>
+ #include <linux/signalfd.h>
+ #include <linux/uprobes.h>
+ #include <linux/aio.h>
+@@ -1992,10 +1993,14 @@ __latent_entropy struct task_struct *copy_process(
+ 		return ERR_PTR(-EINVAL);
+ 
+ 	if ((clone_flags & (CLONE_NEWUSER|CLONE_FS)) == (CLONE_NEWUSER|CLONE_FS))
+ 		return ERR_PTR(-EINVAL);
+ 
++	if ((clone_flags & CLONE_NEWUSER) && !unprivileged_userns_clone)
++		if (!capable(CAP_SYS_ADMIN))
++			return ERR_PTR(-EPERM);
++
+ 	/*
+ 	 * Thread groups must share signals as well, and detached threads
+ 	 * can only be started up within the thread group.
+ 	 */
+ 	if ((clone_flags & CLONE_THREAD) && !(clone_flags & CLONE_SIGHAND))
+@@ -3220,10 +3225,16 @@ int ksys_unshare(unsigned long unshare_flags)
+ 	if (unshare_flags & UNSHARE_EMPTY_MNTNS)
+ 		unshare_flags |= CLONE_NEWNS;
+ 	if (unshare_flags & CLONE_NEWNS)
+ 		unshare_flags |= CLONE_FS;
+ 
++	if ((unshare_flags & CLONE_NEWUSER) && !unprivileged_userns_clone) {
++		err = -EPERM;
++		if (!capable(CAP_SYS_ADMIN))
++			goto bad_unshare_out;
++	}
++
+ 	err = check_unshare_flags(unshare_flags);
+ 	if (err)
+ 		goto bad_unshare_out;
+ 	/*
+ 	 * CLONE_NEWIPC must also detach from the undolist: after switching
+diff --git a/kernel/sysctl.c b/kernel/sysctl.c
+index c9efb17cc255c..57613459d7d09 100644
+--- a/kernel/sysctl.c
++++ b/kernel/sysctl.c
+@@ -20,10 +20,14 @@
+ #include "../lib/kstrtox.h"
+ 
+ #include <linux/uaccess.h>
+ #include <asm/processor.h>
+ 
++#ifdef CONFIG_USER_NS
++#include <linux/user_namespace.h>
++#endif
++
+ /* shared constants to be used in various sysctls */
+ const int sysctl_vals[] = { 0, 1, 2, 3, 4, 100, 200, 1000, 3000, INT_MAX, 65535, -1 };
+ EXPORT_SYMBOL(sysctl_vals);
+ 
+ const unsigned long sysctl_long_vals[] = { 0, 1, LONG_MAX };
+@@ -1370,10 +1374,21 @@ int proc_do_static_key(const struct ctl_table *table, int dir,
+ 	mutex_unlock(&static_key_mutex);
+ 	return ret;
+ }
+ 
+ static const struct ctl_table sysctl_subsys_table[] = {
++#ifdef CONFIG_USER_NS
++	{
++		.procname	= "unprivileged_userns_clone",
++		.data		= &unprivileged_userns_clone,
++		.maxlen		= sizeof(int),
++		.mode		= 0644,
++		.proc_handler	= proc_dointvec_minmax,
++		.extra1         = SYSCTL_ZERO,
++		.extra2         = SYSCTL_ONE,
++	},
++#endif
+ 	{
+ 		.procname	= "yield_type",
+ 		.data		= &sysctl_sched_yield_type,
+ 		.maxlen		= sizeof (int),
+ 		.mode		= 0644,
+diff --git a/kernel/user_namespace.c b/kernel/user_namespace.c
+index 0bed462e9b2a2..c84977d660bec 100644
+--- a/kernel/user_namespace.c
++++ b/kernel/user_namespace.c
+@@ -21,10 +21,13 @@
+ #include <linux/fs_struct.h>
+ #include <linux/bsearch.h>
+ #include <linux/sort.h>
+ #include <linux/nstree.h>
+ 
++/* sysctl */
++int unprivileged_userns_clone;
++
+ static struct kmem_cache *user_ns_cachep __ro_after_init;
+ static DEFINE_MUTEX(userns_state_mutex);
+ 
+ static bool new_idmap_permitted(const struct file *file,
+ 				struct user_namespace *ns, int cap_setid,
+-- 
+2.55.0
+

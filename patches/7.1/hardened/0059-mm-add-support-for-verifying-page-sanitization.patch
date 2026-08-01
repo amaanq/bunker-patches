@@ -1,7 +1,7 @@
-From 0c4e52e1f68c575a19cd1392e04a9828fc35c227 Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Wed, 3 May 2017 21:54:56 -0400
-Subject: [PATCH 116/190] mm: add support for verifying page sanitization
+Subject: [PATCH 059/103] mm: add support for verifying page sanitization
 
 Signed-off-by: Daniel Micay <danielmicay@gmail.com>
 Signed-off-by: Thibaut Sautereau <thibaut.sautereau@ssi.gouv.fr>
@@ -13,11 +13,11 @@ Signed-off-by: Levente Polyak <levente@leventepolyak.net>
  3 files changed, 20 insertions(+)
 
 diff --git a/include/linux/highmem.h b/include/linux/highmem.h
-index abc20f9810fd..548a9d608d58 100644
+index d7aac9de1c8a4..e998775fcac0f 100644
 --- a/include/linux/highmem.h
 +++ b/include/linux/highmem.h
-@@ -257,10 +257,17 @@ static inline bool tag_clear_highpages(struct page *page, int numpages)
- 	return false;
+@@ -354,10 +354,17 @@ static inline bool tag_clear_highpages(struct page *page, int numpages,
+ 	return clear_pages;
  }
  
  #endif
@@ -35,10 +35,10 @@ index abc20f9810fd..548a9d608d58 100644
   */
  #ifdef CONFIG_HIGHMEM
 diff --git a/mm/page_alloc.c b/mm/page_alloc.c
-index 6e644f2744c2..2b86eadeb6c6 100644
+index d49c254174da7..b77714b359951 100644
 --- a/mm/page_alloc.c
 +++ b/mm/page_alloc.c
-@@ -1863,10 +1863,16 @@ inline void post_alloc_hook(struct page *page, unsigned int order,
+@@ -1818,10 +1818,16 @@ inline void post_alloc_hook(struct page *page, unsigned int order,
  	 * Otherwise, the poison pattern will be overwritten for __GFP_ZERO
  	 * allocations and the page unpoisoning code will complain.
  	 */
@@ -56,13 +56,15 @@ index 6e644f2744c2..2b86eadeb6c6 100644
  	 * kept together to avoid discrepancies in behavior.
  	 */
 diff --git a/security/Kconfig.hardening b/security/Kconfig.hardening
-index 07f9286f1443..b728851fec14 100644
+index 07f9286f1443d..b728851fec14c 100644
 --- a/security/Kconfig.hardening
 +++ b/security/Kconfig.hardening
-@@ -219,8 +219,15 @@ config SLAB_SANITIZE_VERIFY
- 	  When init_on_free is enabled, verify that newly allocated slab
- 	  objects are zeroed to detect write-after-free bugs.
-
+@@ -209,10 +209,17 @@ config ZERO_CALL_USED_REGS
+ 	  image. This has a less than 1% performance impact on most
+ 	  workloads. Image size growth depends on architecture, and should
+ 	  be evaluated for suitability. For example, x86_64 grows by less
+ 	  than 1%, and arm64 grows by about 5%.
+ 
 +config PAGE_SANITIZE_VERIFY
 +	bool "Verify sanitized pages"
 +	default y
@@ -71,10 +73,10 @@ index 07f9286f1443..b728851fec14 100644
 +	  are zeroed to detect write-after-free bugs.
 +
  endmenu
-
+ 
  menu "Bounds checking"
-
+ 
  config FORTIFY_SOURCE
 -- 
-2.52.0
+2.55.0
 

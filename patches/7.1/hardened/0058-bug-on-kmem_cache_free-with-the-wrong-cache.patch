@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Wed, 3 May 2017 11:50:53 -0400
+Subject: [PATCH 058/103] bug on kmem_cache_free with the wrong cache
+
+At least when CONFIG_BUG_ON_DATA_CORRUPTION is enabled.
+
+Signed-off-by: Daniel Micay <danielmicay@gmail.com>
+Signed-off-by: Thibaut Sautereau <thibaut.sautereau@ssi.gouv.fr>
+Signed-off-by: Levente Polyak <levente@leventepolyak.net>
+[nicolas.bouchinet@ssi.gouv.fr: memcg related functions moved from mm/slab.h to mm/slub.c (see 0bedcc66d2a43a50a)]
+Signed-off-by: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
+---
+ mm/slub.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/mm/slub.c b/mm/slub.c
+index 8c57f07af8695..661fb994092d3 100644
+--- a/mm/slub.c
++++ b/mm/slub.c
+@@ -6343,17 +6343,21 @@ static noinline void warn_free_bad_obj(struct kmem_cache *s, void *obj)
+ 		return;
+ #endif
+ 
+ 	cachep = slab->slab_cache;
+ 
++#ifdef CONFIG_BUG_ON_DATA_CORRUPTION
++	BUG_ON(cachep != s);
++#else
+ 	if (WARN_ONCE(cachep != s,
+ 			"kmem_cache_free(%s, %p): object belongs to different cache %s\n",
+ 			s->name, obj, cachep ? cachep->name : "(NULL)")) {
+ 		if (cachep)
+ 			print_tracking(cachep, obj);
+ 		return;
+ 	}
++#endif
+ }
+ 
+ /**
+  * kmem_cache_free - Deallocate an object
+  * @s: The cache the allocation was from.
+-- 
+2.55.0
+

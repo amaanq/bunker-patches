@@ -1,0 +1,43 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Tue, 17 Sep 2019 18:00:54 +0200
+Subject: [PATCH 057/103] mm: slab: BUG on page type confusion under
+ BUG_ON_DATA_CORRUPTION
+
+This change was extracted from PaX.
+
+Signed-off-by: Daniel Micay <danielmicay@gmail.com>
+Signed-off-by: Levente Polyak <levente@leventepolyak.net>
+Signed-off-by: Thibaut Sautereau <thibaut.sautereau@ssi.gouv.fr>
+[nicolas.bouchinet@ssi.gouv.fr: memcg related functions moved from mm/slab.h to mm/slub.c (see 0bedcc66d2a43a50a)]
+Signed-off-by: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
+---
+ mm/slub.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/mm/slub.c b/mm/slub.c
+index 497d058061f6b..8c57f07af8695 100644
+--- a/mm/slub.c
++++ b/mm/slub.c
+@@ -6332,14 +6332,18 @@ static noinline void warn_free_bad_obj(struct kmem_cache *s, void *obj)
+ {
+ 	struct kmem_cache *cachep;
+ 	struct slab *slab;
+ 
+ 	slab = virt_to_slab(obj);
++#ifdef CONFIG_BUG_ON_DATA_CORRUPTION
++	BUG_ON(!slab);
++#else
+ 	if (WARN_ONCE(!slab,
+ 			"kmem_cache_free(%s, %p): object is not in a slab page\n",
+ 			s->name, obj))
+ 		return;
++#endif
+ 
+ 	cachep = slab->slab_cache;
+ 
+ 	if (WARN_ONCE(cachep != s,
+ 			"kmem_cache_free(%s, %p): object belongs to different cache %s\n",
+-- 
+2.55.0
+
