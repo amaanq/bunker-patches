@@ -102,7 +102,6 @@ let
       "xanmod/0005"
       "xanmod/0006"
       "xanmod/0007"
-      "xanmod/0013"
       "xanmod/0014"
       # clear: sched/fair cpu, timer slack, mmput, memcg, compaction, branch hints
       "clear/0005"
@@ -214,6 +213,9 @@ let
         "upstream/0035"
         "upstream/0036"
         "upstream/0037"
+        # Limit accept-LIFO to pre-7.1 kernels because it can stall rtw89
+        # association (CachyOS/linux-cachyos#921).
+        "xanmod/0013"
       ];
       hardened = [
         "upstream/0022"
@@ -239,7 +241,9 @@ let
         "xanmod/0015"
       ];
     };
-    "7.0" = { };
+    "7.0" = {
+      interactive = [ "xanmod/0013" ];
+    };
     "7.1" = { };
   };
 
