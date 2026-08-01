@@ -1101,12 +1101,23 @@ let
     })
   );
 
-  networkingConfig = optionalAttrs cfg.networking {
-    TCP_CONG_BBR = option yes;
-    DEFAULT_BBR = option yes;
-    NET_SCH_DEFAULT = yes;
-    DEFAULT_FQ_CODEL = option yes;
-  };
+  networkingConfig = optionalAttrs cfg.networking (
+    {
+      TCP_CONG_BBR = option yes;
+      NET_SCH_DEFAULT = yes;
+      DEFAULT_FQ_CODEL = option yes;
+    }
+    // (
+      # 7.1 exposes BBRv3 as "bbr3", while older patch sets expose it as "bbr".
+      if majorMinor == "7.1" then
+        {
+          TCP_CONG_BBR3 = option yes;
+          DEFAULT_BBR3 = option yes;
+        }
+      else
+        { DEFAULT_BBR = option yes; }
+    )
+  );
 
   driversConfig = optionalAttrs cfg.drivers {
     # r8169 loses these IDs when the vendor driver patch is enabled.
