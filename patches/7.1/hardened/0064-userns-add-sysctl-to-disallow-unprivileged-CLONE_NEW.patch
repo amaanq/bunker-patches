@@ -132,11 +132,11 @@ index c9efb17cc255c..57613459d7d09 100644
 +		.extra2         = SYSCTL_ONE,
 +	},
 +#endif
+ #ifdef CONFIG_PROC_SYSCTL
  	{
- 		.procname	= "yield_type",
- 		.data		= &sysctl_sched_yield_type,
- 		.maxlen		= sizeof (int),
- 		.mode		= 0644,
+ 		.procname	= "sysctl_writes_strict",
+ 		.data		= &sysctl_writes_strict,
+ 		.maxlen		= sizeof(int),
 diff --git a/kernel/user_namespace.c b/kernel/user_namespace.c
 index 0bed462e9b2a2..c84977d660bec 100644
 --- a/kernel/user_namespace.c

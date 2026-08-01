@@ -65,13 +65,10 @@ index 2cd767b9680e..aa738e6b6535 100644
  static const int cap_last_cap = CAP_LAST_CAP;
  
  #ifdef CONFIG_PROC_SYSCTL
-@@ -1120,10 +1122,19 @@ int proc_do_static_key(const struct ctl_table *table, int dir,
- 	mutex_unlock(&static_key_mutex);
- 	return ret;
- }
- 
- static const struct ctl_table sysctl_subsys_table[] = {
-+	{
+@@ -1391,6 +1391,15 @@
+ 		.proc_handler	= proc_dointvec,
+ 	},
+ 	{
 +		.procname	= "yield_type",
 +		.data		= &sysctl_sched_yield_type,
 +		.maxlen		= sizeof (int),
@@ -80,10 +77,9 @@ index 2cd767b9680e..aa738e6b6535 100644
 +		.extra1		= SYSCTL_ZERO,
 +		.extra2		= SYSCTL_TWO,
 +	},
- #ifdef CONFIG_PROC_SYSCTL
- 	{
- 		.procname	= "sysctl_writes_strict",
- 		.data		= &sysctl_writes_strict,
++	{
+ 		.procname	= "cap_last_cap",
+ 		.data		= (void *)&cap_last_cap,
  		.maxlen		= sizeof(int),
 -- 
 2.52.0
