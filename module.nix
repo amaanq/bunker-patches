@@ -451,6 +451,9 @@ let
       ARCH_MMAP_RND_BITS = freeform "32"; # max ASLR entropy for mmap (default 28)
       ARCH_MMAP_RND_COMPAT_BITS = freeform "16"; # max ASLR for 32-bit compat
     }
+    // optionalAttrs (cfg.hardened && isAarch64) {
+      ARM64_BTI_KERNEL = option yes; # branch target identification for kernel code
+    }
     // forceAll {
       # --- Disabled features — attack surface reduction, debug infra, etc. ---
       STRICT_DEVMEM = option no;
