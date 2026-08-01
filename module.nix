@@ -254,6 +254,7 @@ let
     };
     "7.1" = {
       interactive = [ "bunker/0017" ]; # is_idle_core stub arity (must follow cachyos/0012)
+      extras = [ "cachyos/0020" ];
     };
   };
 
