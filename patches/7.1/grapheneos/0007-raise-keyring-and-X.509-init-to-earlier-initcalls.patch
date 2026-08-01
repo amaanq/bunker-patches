@@ -1,0 +1,83 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: maade93791 <70593890+maade69@users.noreply.github.com>
+Date: Fri, 6 Feb 2026 20:00:26 +0300
+Subject: [PATCH] raise keyring and X.509 init to earlier initcalls
+
+This is needed to enable forced module for signing with pKVM protected
+modules, which are loaded at device_initcall_sync(), before the trusted
+system keyring could be initialized and populated.
+---
+ certs/system_keyring.c                   | 4 ++--
+ crypto/asymmetric_keys/asymmetric_type.c | 4 ++++
+ crypto/asymmetric_keys/x509_public_key.c | 4 ++++
+ 3 files changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/certs/system_keyring.c b/certs/system_keyring.c
+index 9de610bf1f4b2..71b00d78e4ddd 100644
+--- a/certs/system_keyring.c
++++ b/certs/system_keyring.c
+@@ -258,11 +258,11 @@ static __init int system_trusted_keyring_init(void)
+ }
+ 
+ /*
+  * Must be initialised before we try and load the keys into the keyring.
+  */
+-device_initcall(system_trusted_keyring_init);
++subsys_initcall(system_trusted_keyring_init);
+ 
+ __init int load_module_cert(struct key *keyring)
+ {
+ 	if (!IS_ENABLED(CONFIG_IMA_APPRAISE_MODSIG))
+ 		return 0;
+@@ -291,11 +291,11 @@ static __init int load_system_certificate_list(void)
+ 	size = system_certificate_list_size - module_cert_size;
+ #endif
+ 
+ 	return x509_load_certificate_list(p, size, builtin_trusted_keys);
+ }
+-late_initcall(load_system_certificate_list);
++subsys_initcall_sync(load_system_certificate_list);
+ 
+ #ifdef CONFIG_SYSTEM_DATA_VERIFICATION
+ 
+ /**
+  * verify_pkcs7_message_sig - Verify a PKCS#7-based signature on system data.
+diff --git a/crypto/asymmetric_keys/asymmetric_type.c b/crypto/asymmetric_keys/asymmetric_type.c
+index 7859b0692b42b..8750cb3b9219a 100644
+--- a/crypto/asymmetric_keys/asymmetric_type.c
++++ b/crypto/asymmetric_keys/asymmetric_type.c
+@@ -685,7 +685,11 @@ static int __init asymmetric_key_init(void)
+ static void __exit asymmetric_key_cleanup(void)
+ {
+ 	unregister_key_type(&key_type_asymmetric);
+ }
+ 
++#if IS_BUILTIN(CONFIG_ASYMMETRIC_KEY_TYPE)
++core_initcall(asymmetric_key_init);
++#else
+ module_init(asymmetric_key_init);
++#endif
+ module_exit(asymmetric_key_cleanup);
+diff --git a/crypto/asymmetric_keys/x509_public_key.c b/crypto/asymmetric_keys/x509_public_key.c
+index 8409d7d36cb4f..b056793eb2c71 100644
+--- a/crypto/asymmetric_keys/x509_public_key.c
++++ b/crypto/asymmetric_keys/x509_public_key.c
+@@ -244,11 +244,15 @@ static int __init x509_key_init(void)
+ static void __exit x509_key_exit(void)
+ {
+ 	unregister_asymmetric_key_parser(&x509_key_parser);
+ }
+ 
++#if IS_BUILTIN(CONFIG_X509_CERTIFICATE_PARSER)
++postcore_initcall(x509_key_init);
++#else
+ module_init(x509_key_init);
++#endif
+ module_exit(x509_key_exit);
+ 
+ MODULE_DESCRIPTION("X.509 certificate parser");
+ MODULE_AUTHOR("Red Hat, Inc.");
+ MODULE_LICENSE("GPL");
+-- 
+2.55.0
+

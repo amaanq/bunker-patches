@@ -1,0 +1,124 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <daniel.micay@grapheneos.org>
+Date: Thu, 6 Feb 2025 07:32:14 -0500
+Subject: [PATCH] zero memory in early boot
+
+---
+ arch/arm/mm/init.c       |  2 ++
+ arch/arm64/mm/init.c     |  1 +
+ arch/x86/mm/init.c       |  1 +
+ include/linux/memblock.h |  2 ++
+ mm/Makefile              |  2 +-
+ mm/memzero.c             | 23 +++++++++++++++++++++++
+ 6 files changed, 30 insertions(+), 1 deletion(-)
+ create mode 100644 mm/memzero.c
+
+diff --git a/arch/arm/mm/init.c b/arch/arm/mm/init.c
+index 5345d218899a8..7782314192869 100644
+--- a/arch/arm/mm/init.c
++++ b/arch/arm/mm/init.c
+@@ -204,8 +204,10 @@ void __init bootmem_init(void)
+ 
+ 	find_limits(&min_low_pfn, &max_low_pfn, &max_pfn);
+ 
++	early_memzero((phys_addr_t)min_low_pfn << PAGE_SHIFT,
++		      (phys_addr_t)max_low_pfn << PAGE_SHIFT);
+ 	early_memtest((phys_addr_t)min_low_pfn << PAGE_SHIFT,
+ 		      (phys_addr_t)max_low_pfn << PAGE_SHIFT);
+ }
+ 
+ /*
+diff --git a/arch/arm64/mm/init.c b/arch/arm64/mm/init.c
+index 2c46c1dd4d9d8..73cdd2197985f 100644
+--- a/arch/arm64/mm/init.c
++++ b/arch/arm64/mm/init.c
+@@ -337,10 +337,11 @@ void __init bootmem_init(void)
+ 	unsigned long min, max;
+ 
+ 	min = PFN_UP(memblock_start_of_DRAM());
+ 	max = PFN_DOWN(memblock_end_of_DRAM());
+ 
++	early_memzero(min << PAGE_SHIFT, max << PAGE_SHIFT);
+ 	early_memtest(min << PAGE_SHIFT, max << PAGE_SHIFT);
+ 
+ 	max_pfn = max_low_pfn = max;
+ 	min_low_pfn = min;
+ 
+diff --git a/arch/x86/mm/init.c b/arch/x86/mm/init.c
+index 31e844cc65e67..ca167284a8c10 100644
+--- a/arch/x86/mm/init.c
++++ b/arch/x86/mm/init.c
+@@ -816,10 +816,11 @@ void __init init_mem_mapping(void)
+ 	load_cr3(swapper_pg_dir);
+ 	__flush_tlb_all();
+ 
+ 	x86_init.hyper.init_mem_mapping();
+ 
++	early_memzero(0, max_pfn_mapped << PAGE_SHIFT);
+ 	early_memtest(0, max_pfn_mapped << PAGE_SHIFT);
+ }
+ 
+ /*
+  * Initialize an mm_struct to be used during poking and a pointer to be used
+diff --git a/include/linux/memblock.h b/include/linux/memblock.h
+index deff12cc7a2a9..535401ea5ec29 100644
+--- a/include/linux/memblock.h
++++ b/include/linux/memblock.h
+@@ -610,6 +610,8 @@
+ static inline void memtest_report_meminfo(struct seq_file *m) { }
+ #endif
+ 
++extern void early_memzero(phys_addr_t start, phys_addr_t end);
++
+ #ifdef CONFIG_MEMBLOCK_KHO_SCRATCH
+ void memblock_set_kho_scratch_only(void);
+ void memblock_clear_kho_scratch_only(void);
+diff --git a/mm/Makefile b/mm/Makefile
+index b876e1970eb9c..a068396bf47e9 100644
+--- a/mm/Makefile
++++ b/mm/Makefile
+@@ -46,11 +46,11 @@ endif
+ 
+ ifdef CONFIG_64BIT
+ mmu-$(CONFIG_MMU)	+= mseal.o
+ endif
+ 
+-obj-y			:= filemap.o mempool.o oom_kill.o fadvise.o \
++obj-y			:= memzero.o filemap.o mempool.o oom_kill.o fadvise.o \
+ 			   maccess.o page-writeback.o folio-compat.o \
+ 			   readahead.o swap.o truncate.o vmscan.o shrinker.o \
+ 			   shmem.o util.o mmzone.o vmstat.o backing-dev.o \
+ 			   mm_init.o percpu.o slab_common.o \
+ 			   compaction.o show_mem.o \
+diff --git a/mm/memzero.c b/mm/memzero.c
+new file mode 100644
+index 0000000000000..c7a88ee89b81b
+--- /dev/null
++++ b/mm/memzero.c
+@@ -0,0 +1,23 @@
++// SPDX-License-Identifier: GPL-2.0
++#include <linux/kernel.h>
++#include <linux/types.h>
++#include <linux/init.h>
++#include <linux/memblock.h>
++#include <linux/string.h>
++
++void __init early_memzero(phys_addr_t start, phys_addr_t end)
++{
++	u64 i;
++	phys_addr_t this_start, this_end;
++
++	pr_info("Early memory zeroing");
++	for_each_free_mem_range(i, NUMA_NO_NODE, MEMBLOCK_NONE, &this_start,
++				&this_end, NULL) {
++		this_start = clamp(this_start, start, end);
++		this_end = clamp(this_end, start, end);
++		if (this_start < this_end) {
++			pr_info("  zero %pa - %pa\n", &this_start, &this_end);
++			memzero_explicit(__va(this_start), this_end - this_start);
++		}
++	}
++}
+-- 
+2.55.0
+

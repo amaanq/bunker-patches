@@ -118,7 +118,9 @@ let
       (lib.genList (i: "hardened/${lib.fixedWidthString 4 "0" (toString (i + 1))}") (
         if majorMinor == "7.1" then 101 else 105
       ))
-      ++ (lib.genList (i: "grapheneos/${lib.fixedWidthString 4 "0" (toString (i + 1))}") 5)
+      ++ (lib.genList (i: "grapheneos/${lib.fixedWidthString 4 "0" (toString (i + 1))}") (
+        if majorMinor == "7.1" then 8 else 5
+      ))
       ++ [
         "cachyos/0014" # VMSCAPE/BHB clear mitigation
         "bunker/0011" # VMSCAPE: barrier_nospec after static call (must follow cachyos/0014)
