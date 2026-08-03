@@ -810,6 +810,7 @@ let
       GART_IOMMU = option no; # AMD K8-era GART IOMMU (modern uses AMD-Vi)
       REROUTE_FOR_BROKEN_BOOT_IRQS = option no; # Workaround for ancient BIOS IRQ routing
       MSDOS_PARTITION = option no; # MBR partition table (GPT era)
+      BSD_DISKLABEL = option no; # nixpkgs forces this for some reason
       ACCESSIBILITY = option no; # Speakup screen reader
       TRACEFS_AUTOMOUNT_DEPRECATED = option no;
 
