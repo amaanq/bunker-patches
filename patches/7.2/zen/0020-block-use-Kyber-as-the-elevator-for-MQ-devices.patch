@@ -1,0 +1,43 @@
+From f6e7e6667f7bfc57a77f25fe15e6b20ea94500a1 Mon Sep 17 00:00:00 2001
+From: "Jan Alexander Steffens (heftig)" <heftig@archlinux.org>
+Date: Mon, 12 Dec 2022 00:03:03 +0100
+Subject: [PATCH] ZEN: INTERACTIVE: Use Kyber as the elevator for MQ devices
+
+Fall back straight to none instead of mq-deadline. Some benchmarks in a
+[recent paper][1] suggest that mq-deadline has too much lock contention,
+hurting throughput and eating CPU waiting for spinlocks.
+
+[1]: https://research.spec.org/icpe_proceedings/2024/proceedings/p154.pdf
+---
+ block/elevator.c | 4 ++++
+ init/Kconfig     | 1 +
+ 2 files changed, 5 insertions(+)
+
+diff --git a/block/elevator.c b/block/elevator.c
+index 3f831b69e7c48a..1e7ec7c1dd160b 100644
+--- a/block/elevator.c
++++ b/block/elevator.c
+@@ -750,7 +750,11 @@ void elevator_set_default(struct request_queue *q)
+ 	 * to "none".
+ 	 */
+ 	if (q->nr_hw_queues != 1 && !blk_mq_is_shared_tags(q->tag_set->flags))
++#if defined(CONFIG_ZEN_INTERACTIVE) && defined(CONFIG_MQ_IOSCHED_KYBER)
++		ctx.name = "kyber";
++#else
+ 		return;
++#endif
+ 
+ 	ctx.type = elevator_find_get(ctx.name);
+ 	if (!ctx.type)
+diff --git a/init/Kconfig b/init/Kconfig
+index 876ee5ae949b1a..7e7a71088a1d8a 100644
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -215,6 +215,7 @@ config ZEN_INTERACTIVE
+ 	  --- Block Layer ----------------------------------------
+ 
+ 	    Default scheduler for SQ..: mq-deadline ->   bfq
++	    Default scheduler for MQ..:        none ->   kyber
+ 
+ config BROKEN
+ 	bool

@@ -1,0 +1,154 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Fri, 12 Jun 2026 00:00:00 -0400
+Subject: [PATCH 4/14] octeon: reconcile the cvmx headers with mainline
+
+The ported cvmx headers now declare the arch symbols extern and define
+octeon_ciu_chip_data and the CN73XX gpio_bit_cfg union, so unstatic those
+symbols, fix the cvmx_bootmem_init signature, and drop the now-duplicate locals.
+
+Signed-off-by: Amaan Qureshi <git@amaanq.com>
+---
+ arch/mips/cavium-octeon/setup.c           |     6 +++---
+ arch/mips/cavium-octeon/octeon-irq.c      |    23 ++++-------------------
+ arch/mips/cavium-octeon/octeon-platform.c |     3 ++-
+ drivers/usb/dwc3/dwc3-octeon.c            |     6 +++---
+ 4 files changed, 12 insertions(+), 26 deletions(-)
+
+diff --git a/arch/mips/cavium-octeon/setup.c b/arch/mips/cavium-octeon/setup.c
+--- a/arch/mips/cavium-octeon/setup.c
++++ b/arch/mips/cavium-octeon/setup.c
+@@ -353,7 +353,7 @@
+  * This display exists on most Cavium evaluation boards. If it doesn't exist,
+  * then this function doesn't do anything.
+  */
+-static void octeon_write_lcd(const char *s)
++void octeon_write_lcd(const char *s)
+ {
+ 	if (octeon_bootinfo->led_display_base_addr) {
+ 		void __iomem *lcd_address =
+@@ -375,7 +375,7 @@
+  *
+  * Return: uart number (0 or 1)
+  */
+-static int octeon_get_boot_uart(void)
++int octeon_get_boot_uart(void)
+ {
+ 	return (octeon_boot_desc_ptr->flags & OCTEON_BL_FLAG_CONSOLE_UART1) ?
+ 		1 : 0;
+@@ -671,7 +671,7 @@
+ 	octeon_boot_desc_ptr = (struct octeon_boot_descriptor *)fw_arg3;
+ 	octeon_bootinfo =
+ 		cvmx_phys_to_ptr(octeon_boot_desc_ptr->cvmx_desc_vaddr);
+-	cvmx_bootmem_init(cvmx_phys_to_ptr(octeon_bootinfo->phy_mem_desc_addr));
++	cvmx_bootmem_init(octeon_bootinfo->phy_mem_desc_addr);
+ 
+ 	sysinfo = cvmx_sysinfo_get();
+ 	memset(sysinfo, 0, sizeof(*sysinfo));
+diff --git a/arch/mips/cavium-octeon/octeon-irq.c b/arch/mips/cavium-octeon/octeon-irq.c
+--- a/arch/mips/cavium-octeon/octeon-irq.c
++++ b/arch/mips/cavium-octeon/octeon-irq.c
+@@ -67,21 +67,6 @@
+ 
+ static __read_mostly int octeon_irq_ciu_to_irq[8][64];
+ 
+-struct octeon_ciu_chip_data {
+-	union {
+-		struct {		/* only used for ciu3 */
+-			u64 ciu3_addr;
+-			unsigned int intsn;
+-		};
+-		struct {		/* only used for ciu/ciu2 */
+-			u8 line;
+-			u8 bit;
+-		};
+-	};
+-	int gpio_line;
+-	int current_cpu;	/* Next CPU expected to take this irq */
+-	int ciu_node; /* NUMA node number of the CIU */
+-};
+ 
+ struct octeon_core_chip_data {
+ 	struct mutex core_irq_mutex;
+@@ -115,7 +100,7 @@
+ 	return 0;
+ }
+ 
+-static void octeon_irq_free_cd(struct irq_domain *d, unsigned int irq)
++void octeon_irq_free_cd(struct irq_domain *d, unsigned int irq)
+ {
+ 	struct irq_data *data = irq_get_irq_data(irq);
+ 	struct octeon_ciu_chip_data *cd = irq_data_get_irq_chip_data(data);
+@@ -140,7 +125,7 @@
+ 	return irq_domain_associate(domain, irq, line << 6 | bit);
+ }
+ 
+-static int octeon_coreid_for_cpu(int cpu)
++int octeon_coreid_for_cpu(int cpu)
+ {
+ #ifdef CONFIG_SMP
+ 	return cpu_logical_map(cpu);
+@@ -149,7 +134,7 @@
+ #endif
+ }
+ 
+-static int octeon_cpu_for_coreid(int coreid)
++int octeon_cpu_for_coreid(int coreid)
+ {
+ #ifdef CONFIG_SMP
+ 	return cpu_number_map(coreid);
+@@ -2510,7 +2495,7 @@
+ }
+ 
+ #ifdef CONFIG_SMP
+-static int octeon_irq_ciu3_set_affinity(struct irq_data *data,
++int octeon_irq_ciu3_set_affinity(struct irq_data *data,
+ 					const struct cpumask *dest, bool force)
+ {
+ 	union cvmx_ciu3_iscx_ctl isc_ctl;
+diff --git a/arch/mips/cavium-octeon/octeon-platform.c b/arch/mips/cavium-octeon/octeon-platform.c
+--- a/arch/mips/cavium-octeon/octeon-platform.c
++++ b/arch/mips/cavium-octeon/octeon-platform.c
+@@ -16,6 +16,7 @@
+ #include <linux/string.h>
+ 
+ #include <asm/octeon/octeon.h>
++#include <asm/octeon/cvmx-helper.h>
+ #include <asm/octeon/cvmx-helper-board.h>
+ 
+ #ifdef CONFIG_USB
+@@ -1112,7 +1113,7 @@
+ 			fdt_nop_property(initial_boot_params, aliases, "usbn");
+ 		} else  {
+ 			__be32 new_f[1];
+-			enum cvmx_helper_board_usb_clock_types c;
++			cvmx_helper_board_usb_clock_types_t c;
+ 
+ 			c = __cvmx_helper_board_usb_get_clock_type();
+ 			switch (c) {
+diff --git a/drivers/usb/dwc3/dwc3-octeon.c b/drivers/usb/dwc3/dwc3-octeon.c
+--- a/drivers/usb/dwc3/dwc3-octeon.c
++++ b/drivers/usb/dwc3/dwc3-octeon.c
+@@ -215,17 +215,17 @@
+ 	    && gpio <= 31) {
+ 		gpio_bit.u64 = cvmx_read_csr(CVMX_GPIO_BIT_CFGX(gpio));
+ 		gpio_bit.s.tx_oe = 1;
+-		gpio_bit.s.output_sel = (index == 0 ? 0x14 : 0x15);
++		gpio_bit.cn70xx.output_sel = (index == 0 ? 0x14 : 0x15);
+ 		cvmx_write_csr(CVMX_GPIO_BIT_CFGX(gpio), gpio_bit.u64);
+ 	} else if (gpio <= 15) {
+ 		gpio_bit.u64 = cvmx_read_csr(CVMX_GPIO_BIT_CFGX(gpio));
+ 		gpio_bit.s.tx_oe = 1;
+-		gpio_bit.s.output_sel = (index == 0 ? 0x14 : 0x19);
++		gpio_bit.cn70xx.output_sel = (index == 0 ? 0x14 : 0x19);
+ 		cvmx_write_csr(CVMX_GPIO_BIT_CFGX(gpio), gpio_bit.u64);
+ 	} else {
+ 		gpio_bit.u64 = cvmx_read_csr(CVMX_GPIO_XBIT_CFGX(gpio));
+ 		gpio_bit.s.tx_oe = 1;
+-		gpio_bit.s.output_sel = (index == 0 ? 0x14 : 0x19);
++		gpio_bit.cn70xx.output_sel = (index == 0 ? 0x14 : 0x19);
+ 		cvmx_write_csr(CVMX_GPIO_XBIT_CFGX(gpio), gpio_bit.u64);
+ 	}
+ }
+-- 
+2.54.0

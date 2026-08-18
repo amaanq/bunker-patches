@@ -1,0 +1,75 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Mon, 23 Jun 2026 00:00:00 -0400
+Subject: [PATCH 14/14] octeon: reconcile the cn6xxx PCIe driver with the SDK cvmx headers
+
+The CN73XX-oriented SDK headers rewrote the SLI and CIU registers the cn6xxx
+PCIe driver reaches through .s, so point mrrs and ba at the .cn61xx variant and
+restore the cvmx_ciu_qlm union the new headers drop.
+
+Signed-off-by: Amaan Qureshi <git@amaanq.com>
+---
+ arch/mips/pci/pcie-octeon.c | 30 +++++++++++++++++++++++++++---
+ 1 file changed, 27 insertions(+), 3 deletions(-)
+
+diff --git a/arch/mips/pci/pcie-octeon.c b/arch/mips/pci/pcie-octeon.c
+--- a/arch/mips/pci/pcie-octeon.c
++++ b/arch/mips/pci/pcie-octeon.c
+@@ -25,6 +25,30 @@
+ #include <asm/octeon/cvmx-helper-errata.h>
+ #include <asm/octeon/pci-octeon.h>
+ 
++/*
++ * The CN73XX-oriented SDK cvmx-ciu-defs.h drops the cn6xxx CIU_QLM register
++ * union that the CN63XX pass 1 PCIe de-emphasis errata below still needs.
++ */
++union cvmx_ciu_qlm {
++	uint64_t u64;
++	struct cvmx_ciu_qlm_s {
++		__BITFIELD_FIELD(uint64_t g2bypass:1,
++		__BITFIELD_FIELD(uint64_t reserved_53_62:10,
++		__BITFIELD_FIELD(uint64_t g2deemph:5,
++		__BITFIELD_FIELD(uint64_t reserved_45_47:3,
++		__BITFIELD_FIELD(uint64_t g2margin:5,
++		__BITFIELD_FIELD(uint64_t reserved_32_39:8,
++		__BITFIELD_FIELD(uint64_t txbypass:1,
++		__BITFIELD_FIELD(uint64_t reserved_21_30:10,
++		__BITFIELD_FIELD(uint64_t txdeemph:5,
++		__BITFIELD_FIELD(uint64_t reserved_13_15:3,
++		__BITFIELD_FIELD(uint64_t txmargin:5,
++		__BITFIELD_FIELD(uint64_t reserved_4_7:4,
++		__BITFIELD_FIELD(uint64_t lane_en:4,
++		;)))))))))))))
++	} s;
++};
++
+ #define MRRS_CN5XXX 0 /* 128 byte Max Read Request Size */
+ #define MPS_CN5XXX  0 /* 128 byte Max Packet Size (Limit of most PCs) */
+ #define MRRS_CN6XXX 3 /* 1024 byte Max Read Request Size */
+@@ -467,7 +491,7 @@
+ 		cvmx_write_csr(CVMX_DPI_SLI_PRTX_CFG(pcie_port), prt_cfg.u64);
+ 
+ 		sli_s2m_portx_ctl.u64 = cvmx_read_csr(CVMX_PEXP_SLI_S2M_PORTX_CTL(pcie_port));
+-		sli_s2m_portx_ctl.s.mrrs = MRRS_CN6XXX;
++		sli_s2m_portx_ctl.cn61xx.mrrs = MRRS_CN6XXX;
+ 		cvmx_write_csr(CVMX_PEXP_SLI_S2M_PORTX_CTL(pcie_port), sli_s2m_portx_ctl.u64);
+ 	}
+ 
+@@ -683,7 +707,7 @@
+ 	if (OCTEON_IS_MODEL(OCTEON_CN68XX))
+ 		pmas->cn68xx.ba++;
+ 	else
+-		pmas->s.ba++;
++		pmas->cn61xx.ba++;
+ }
+ 
+ /**
+@@ -1355,7 +1379,7 @@
+ 	if (OCTEON_IS_MODEL(OCTEON_CN68XX))
+ 		mem_access_subid.cn68xx.ba = 0;
+ 	else
+-		mem_access_subid.s.ba = 0;
++		mem_access_subid.cn61xx.ba = 0;
+ 
+ 	/*
+ 	 * Setup mem access 12-15 for port 0, 16-19 for port 1,

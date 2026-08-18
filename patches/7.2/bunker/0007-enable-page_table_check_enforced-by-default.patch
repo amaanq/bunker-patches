@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: linux-hardened <linux-hardened@protonmail.com>
+Date: Thu, 13 Feb 2026 00:00:00 +0000
+Subject: [PATCH 183/190] enable PAGE_TABLE_CHECK_ENFORCED by default
+
+Enable extra verification when new pages become accessible from userspace.
+Detects certain types of memory corruption (double-mapping, wrong permission
+elevation) and crashes the kernel on detection.
+
+Small performance/memory overhead but catches real page table corruption.
+Recommended by KSPP and included in upstream hardening.config since 6.10.
+
+---
+ mm/Kconfig.debug | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/mm/Kconfig.debug b/mm/Kconfig.debug
+--- a/mm/Kconfig.debug
++++ b/mm/Kconfig.debug
+@@ -122,6 +122,7 @@ config PAGE_TABLE_CHECK
+ 	bool "Check for invalid mappings in user page tables"
+ 	depends on ARCH_SUPPORTS_PAGE_TABLE_CHECK
+ 	depends on EXCLUSIVE_SYSTEM_RAM
++	default y
+ 	select PAGE_EXTENSION
+ 	help
+ 	  Check that anonymous page is not being mapped twice with read write
+@@ -135,6 +136,7 @@ config PAGE_TABLE_CHECK
+ config PAGE_TABLE_CHECK_ENFORCED
+ 	bool "Enforce the page table checking by default"
+ 	depends on PAGE_TABLE_CHECK
++	default y
+ 	help
+ 	  Always enable page table checking.  By default the page table
+ 	  checking is disabled, and can be optionally enabled via
+-- 
+2.47.1
+

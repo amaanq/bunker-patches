@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Levente Polyak <levente@leventepolyak.net>
+Date: Tue, 19 Sep 2023 00:57:29 +0200
+Subject: [PATCH 005/102] enable LIST_HARDENED by default
+
+Signed-off-by: Levente Polyak <levente@leventepolyak.net>
+---
+ security/Kconfig.hardening | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/security/Kconfig.hardening b/security/Kconfig.hardening
+index 8fea4f5fe8351..6850b14469c4f 100644
+--- a/security/Kconfig.hardening
++++ b/security/Kconfig.hardening
+@@ -243,10 +243,11 @@ endmenu
+ 
+ menu "Hardening of kernel data structures"
+ 
+ config LIST_HARDENED
+ 	bool "Check integrity of linked list manipulation"
++	default y
+ 	help
+ 	  Minimal integrity checking in the linked-list manipulation routines
+ 	  to catch memory corruptions that are not guaranteed to result in an
+ 	  immediate access fault.
+ 
+-- 
+2.55.0
+

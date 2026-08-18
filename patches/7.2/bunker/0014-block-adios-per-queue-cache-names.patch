@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Sat, 26 Apr 2026 00:00:00 +0000
+Subject: [PATCH] block/adios: namespace per-queue slab caches
+
+ADIOS creates its slab caches per request_queue, so any host with more
+than one ADIOS queue registers duplicate cache names. 3.2.0 adopted the
+7.1-era clzll(0) guard and gave rq_data a distinct "adios_rq_data" name,
+but both caches still collide across queues and dl_group_pool kept the
+generic name. Suffix both with the queue id.
+---
+--- a/block/adios.c
++++ b/block/adios.c
+@@ -278,6 +278,8 @@
+ 	struct kmem_cache *rq_data_cache;
+ 	mempool_t *rq_data_pool;
+ 	struct kmem_cache *dl_group_pool;
++	char rq_data_cache_name[32];
++	char dl_group_pool_name[32];
+ 
+ 	struct request_queue *queue;
+ };
+@@ -1496,7 +1498,9 @@
+ 	eq->elevator_data = ad;
+ 
+ 	// Create a memory pool for adios_rq_data
+-	ad->rq_data_cache = kmem_cache_create("adios_rq_data",
++	snprintf(ad->rq_data_cache_name, sizeof(ad->rq_data_cache_name),
++		"adios_rq_data_q%u", q->id);
++	ad->rq_data_cache = kmem_cache_create(ad->rq_data_cache_name,
+ 						sizeof(struct adios_rq_data),
+ 						0, SLAB_HWCACHE_ALIGN, NULL);
+ 	if (!ad->rq_data_cache) {
+@@ -1512,7 +1516,9 @@
+ 	}
+ 
+ 	/* Create a memory pool for dl_group */
+-	ad->dl_group_pool = kmem_cache_create("dl_group_pool",
++	snprintf(ad->dl_group_pool_name, sizeof(ad->dl_group_pool_name),
++		"adios_dl_group_q%u", q->id);
++	ad->dl_group_pool = kmem_cache_create(ad->dl_group_pool_name,
+ 						sizeof(struct dl_group),
+ 						0, SLAB_HWCACHE_ALIGN, NULL);
+ 	if (!ad->dl_group_pool) {

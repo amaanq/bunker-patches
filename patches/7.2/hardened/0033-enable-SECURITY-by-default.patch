@@ -1,0 +1,28 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Sun, 25 Feb 2018 02:13:48 -0500
+Subject: [PATCH 033/102] enable SECURITY by default
+
+---
+ security/Kconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/security/Kconfig b/security/Kconfig
+index 3d5c65d2ca72b..ee1519d2bac18 100644
+--- a/security/Kconfig
++++ b/security/Kconfig
+@@ -72,10 +72,11 @@ config MSEAL_SYSTEM_MAPPINGS
+ 
+ config SECURITY
+ 	bool "Enable different security models"
+ 	depends on SYSFS
+ 	depends on MULTIUSER
++	default y
+ 	help
+ 	  This allows you to choose different security modules to be
+ 	  configured into your kernel.
+ 
+ 	  If this option is not selected, the default Linux security
+-- 
+2.55.0
+

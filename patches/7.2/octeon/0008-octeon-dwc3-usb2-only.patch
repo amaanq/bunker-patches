@@ -1,0 +1,83 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Fri, 12 Jun 2026 00:00:00 -0400
+Subject: [PATCH 8/14] octeon: dwc3 CN7360 - SUSPHY quirks + tune SS PHY LOS mask
+
+Two CN7360 SuperSpeed fixes mainline's dwc3-octeon lacks. (1) The SS PHY wedges
+when the core auto-asserts SUSPHY, so inject dis_u2/u3_susphy_quirk and wait
+100 ms after UPHY_RST. (2) Mainline skips Step 5d, so program the LOS mask stock
+EdgeOS uses to stop the PHY dropping the device on spurious loss-of-signal.
+
+Signed-off-by: Amaan Qureshi <git@amaanq.com>
+---
+ drivers/usb/dwc3/dwc3-octeon.c | 44 ++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 43 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/usb/dwc3/dwc3-octeon.c b/drivers/usb/dwc3/dwc3-octeon.c
+--- a/drivers/usb/dwc3/dwc3-octeon.c
++++ b/drivers/usb/dwc3/dwc3-octeon.c
+@@ -329,7 +329,16 @@
+ 	/* Step 5c: Enable SuperSpeed. */
+ 	val |= USBDRD_UCTL_CTL_REF_SSP_EN;
+ 
+-	/* Step 5d: Configure PHYs. SKIP */
++	/* Step 5d: mainline SKIPs this so the SS PHY drops the device on spurious
++	 * loss-of-signal. Set a 1000-cycle LOS mask in CFG_SS[41:32] at base + 0x48. */
++	{
++		void __iomem *cfg_ss = octeon->base + 0x48;
++		u64 ss = dwc3_octeon_readq(cfg_ss);
++
++		ss &= ~(0x3ffULL << 32);
++		ss |= (1000ULL << 32);
++		dwc3_octeon_writeq(cfg_ss, ss);
++	}
+ 
+ 	/* Step 6a & 6b: Power up PHYs. */
+ 	val |= USBDRD_UCTL_CTL_HS_POWER_EN;
+@@ -410,6 +426,36 @@
+ 	dwc3_octeon_writeq(uctl_ctl_reg, val);
+ }
+ 
++static void dwc3_octeon_inject_quirks(struct device_node *node)
++{
++	static const char * const quirks[] = {
++		"snps,dis_u3_susphy_quirk",
++		"snps,dis_u2_susphy_quirk",
++	};
++	struct device_node *child;
++	int i;
++
++	for_each_child_of_node(node, child) {
++		for (i = 0; i < ARRAY_SIZE(quirks); i++) {
++			struct property *prop;
++
++			if (of_property_present(child, quirks[i]))
++				continue;
++			prop = kzalloc(sizeof(*prop), GFP_KERNEL);
++			if (!prop)
++				continue;
++			prop->name = kstrdup(quirks[i], GFP_KERNEL);
++			if (!prop->name) {
++				kfree(prop);
++				continue;
++			}
++			prop->value = NULL;
++			prop->length = 0;
++			of_add_property(child, prop);
++		}
++	}
++}
++
+ static int dwc3_octeon_probe(struct platform_device *pdev)
+ {
+ 	struct device *dev = &pdev->dev;
+@@ -500,6 +546,9 @@
+ 	dwc3_octeon_set_endian_mode(octeon);
+ 	dwc3_octeon_phy_reset(octeon);
+ 
++	msleep(100);
++	dwc3_octeon_inject_quirks(node);
++
+ 	platform_set_drvdata(pdev, octeon);
+ 
+ 	return of_platform_populate(node, NULL, NULL, dev);

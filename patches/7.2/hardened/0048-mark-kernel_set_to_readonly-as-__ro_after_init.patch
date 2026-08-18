@@ -1,0 +1,83 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Fri, 12 May 2017 03:22:00 -0400
+Subject: [PATCH 048/102] mark kernel_set_to_readonly as __ro_after_init
+
+This change was extracted from PaX where it's part of KERNEXEC.
+
+Signed-off-by: Daniel Micay <danielmicay@gmail.com>
+---
+ arch/x86/mm/init_32.c | 5 ++---
+ arch/x86/mm/init_64.c | 5 ++---
+ 2 files changed, 4 insertions(+), 6 deletions(-)
+
+diff --git a/arch/x86/mm/init_32.c b/arch/x86/mm/init_32.c
+index 0908c44d51e6f..2734208acddc0 100644
+--- a/arch/x86/mm/init_32.c
++++ b/arch/x86/mm/init_32.c
+@@ -716,11 +716,11 @@ void __init mem_init(void)
+ 	BUG_ON((unsigned long)high_memory		> VMALLOC_START);
+ 
+ 	test_wp_bit();
+ }
+ 
+-int kernel_set_to_readonly __read_mostly;
++int kernel_set_to_readonly __ro_after_init;
+ 
+ static void mark_nxdata_nx(void)
+ {
+ 	/*
+ 	 * When this called, init has already been executed and released,
+@@ -740,16 +740,15 @@ static void mark_nxdata_nx(void)
+ void mark_rodata_ro(void)
+ {
+ 	unsigned long start = PFN_ALIGN(_text);
+ 	unsigned long size = (unsigned long)__end_rodata - start;
+ 
++	kernel_set_to_readonly = 1;
+ 	set_pages_ro(virt_to_page(start), size >> PAGE_SHIFT);
+ 	pr_info("Write protecting kernel text and read-only data: %luk\n",
+ 		size >> 10);
+ 
+-	kernel_set_to_readonly = 1;
+-
+ #ifdef CONFIG_CPA_DEBUG
+ 	pr_info("Testing CPA: Reverting %lx-%lx\n", start, start + size);
+ 	set_pages_rw(virt_to_page(start), size >> PAGE_SHIFT);
+ 
+ 	pr_info("Testing CPA: write protecting again\n");
+diff --git a/arch/x86/mm/init_64.c b/arch/x86/mm/init_64.c
+index d57f29ca23a5a..7c6bd72d13f7c 100644
+--- a/arch/x86/mm/init_64.c
++++ b/arch/x86/mm/init_64.c
+@@ -1398,11 +1398,11 @@ void __init mem_init(void)
+ 		kclist_add(&kcore_vsyscall, (void *)VSYSCALL_ADDR, PAGE_SIZE, KCORE_USER);
+ 
+ 	preallocate_vmalloc_pages();
+ }
+ 
+-int kernel_set_to_readonly;
++int kernel_set_to_readonly __ro_after_init;
+ 
+ void mark_rodata_ro(void)
+ {
+ 	unsigned long start = PFN_ALIGN(_text);
+ 	unsigned long rodata_start = PFN_ALIGN(__start_rodata);
+@@ -1411,13 +1411,12 @@ void mark_rodata_ro(void)
+ 	unsigned long rodata_end = PFN_ALIGN(__end_rodata);
+ 	unsigned long all_end;
+ 
+ 	printk(KERN_INFO "Write protecting the kernel read-only data: %luk\n",
+ 	       (end - start) >> 10);
+-	set_memory_ro(start, (end - start) >> PAGE_SHIFT);
+-
+ 	kernel_set_to_readonly = 1;
++	set_memory_ro(start, (end - start) >> PAGE_SHIFT);
+ 
+ 	/*
+ 	 * The rodata/data/bss/brk section (but not the kernel text!)
+ 	 * should also be not-executable.
+ 	 *
+-- 
+2.55.0
+

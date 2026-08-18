@@ -1,0 +1,28 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Levente Polyak <levente@leventepolyak.net>
+Date: Mon, 1 May 2023 23:20:43 +0200
+Subject: [PATCH 045/102] kconfig: disable LEGACY_TIOCSTI by default
+
+---
+ drivers/tty/Kconfig | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/drivers/tty/Kconfig b/drivers/tty/Kconfig
+index 9e27a6c90585a..4b764d803055d 100644
+--- a/drivers/tty/Kconfig
++++ b/drivers/tty/Kconfig
+@@ -143,11 +143,10 @@ config LEGACY_PTY_COUNT
+ 	  When not in use, each legacy PTY occupies 12 bytes on 32-bit
+ 	  architectures and 24 bytes on 64-bit architectures.
+ 
+ config LEGACY_TIOCSTI
+ 	bool "Allow legacy TIOCSTI usage"
+-	default y
+ 	help
+ 	  Historically the kernel has allowed TIOCSTI, which will push
+ 	  characters into a controlling TTY. This continues to be used
+ 	  as a malicious privilege escalation mechanism, and provides no
+ 	  meaningful real-world utility any more. Its use is considered
+-- 
+2.55.0
+

@@ -1,0 +1,60 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Thibaut Sautereau <thibaut.sautereau@ssi.gouv.fr>
+Date: Fri, 29 Nov 2019 16:27:14 +0100
+Subject: [PATCH 093/102] slub: Extend init_on_alloc to slab caches with
+ constructors
+
+This has required some rework during the port to 5.13, due to
+da844b787245 ("kasan, mm: integrate slab init_on_alloc with HW_TAGS"),
+and the patch is actually quite simpler now since we do not need to
+unpoison objects anymore.
+
+Signed-off-by: Levente Polyak <levente@leventepolyak.net>
+Signed-off-by: Thibaut Sautereau <thibaut.sautereau@ssi.gouv.fr>
+[nicolas.bouchinet@ssi.gouv.fr: pre/post-alloc hooks moved from mm/slab.h to mm/slub.c (see 6011be59910fb12b7)]
+Signed-off-by: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
+---
+ mm/slab.h | 2 ++
+ mm/slub.c | 3 +++
+ 2 files changed, 5 insertions(+)
+
+diff --git a/mm/slab.h b/mm/slab.h
+index 3661f12961aca..8d2a6b2e0f4dd 100644
+--- a/mm/slab.h
++++ b/mm/slab.h
+@@ -726,12 +726,14 @@ static inline void cache_random_seq_destroy(struct kmem_cache *cachep) { }
+ 
+ static inline bool slab_want_init_on_alloc(gfp_t flags, struct kmem_cache *c)
+ {
+ 	if (static_branch_maybe(CONFIG_INIT_ON_ALLOC_DEFAULT_ON,
+ 				&init_on_alloc)) {
++#ifndef CONFIG_SLUB
+ 		if (c->ctor)
+ 			return false;
++#endif
+ 		if (c->flags & (SLAB_TYPESAFE_BY_RCU | SLAB_POISON))
+ 			return flags & __GFP_ZERO;
+ 		return true;
+ 	}
+ 	return flags & __GFP_ZERO;
+diff --git a/mm/slub.c b/mm/slub.c
+index f5355de1642d1..53be5c04e8387 100644
+--- a/mm/slub.c
++++ b/mm/slub.c
+@@ -4615,10 +4615,13 @@ bool slab_post_alloc_hook(struct kmem_cache *s, gfp_t flags, size_t size,
+ 		 * with SLUB zeroing full s->object_size
+ 		 */
+ 		if (init && p[i] && !is_kfence_address(p[i]))
+ 			memset(p[i], 0, zero_size);
+ 
++		if (p[i] && init && s->ctor)
++			s->ctor(p[i]);
++
+ 		if (alloc_flags_allow_spinning(ac->alloc_flags))
+ 			kmemleak_alloc_recursive(p[i], s->object_size, 1,
+ 						 s->flags, init_flags);
+ 		kmsan_slab_alloc(s, p[i], init_flags);
+ 		alloc_tagging_slab_alloc_hook(s, p[i], flags, ac->alloc_flags);
+-- 
+2.55.0
+
