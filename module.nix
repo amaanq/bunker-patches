@@ -77,7 +77,6 @@ let
       "zen/0012"
       "zen/0013"
       "zen/0014"
-      "zen/0020"
       "zen/0015"
       "zen/0016"
       "zen/0017"
@@ -114,9 +113,15 @@ let
       "bunker/0005"
     ];
     hardened =
-      # 7.1 uses anthraxx's 101-patch series and adds three GrapheneOS patches.
+      # 7.1 onward tracks anthraxx's official 101-patch series and picks
+      # up three extra GrapheneOS patches.
       (lib.genList (i: "hardened/${lib.fixedWidthString 4 "0" (toString (i + 1))}") (
-        if majorMinor == "7.1" then 101 else 105
+        {
+          "6.19" = 101;
+          "7.0" = 105;
+          "7.1" = 101;
+        }
+        .${majorMinor}
       ))
       ++ (lib.genList (i: "grapheneos/${lib.fixedWidthString 4 "0" (toString (i + 1))}") (
         if majorMinor == "7.1" then 8 else 5
@@ -250,12 +255,16 @@ let
       # POC 2.6.3 filters candidates by p->cpus_ptr, so 7.1 no longer needs
       # bunker/0012's affinity-gate fix for POC 1.6.
       interactive = [
+        "zen/0020"
         "xanmod/0013"
         "bunker/0012"
       ];
     };
     "7.1" = {
-      interactive = [ "bunker/0017" ]; # is_idle_core stub arity (must follow cachyos/0012)
+      interactive = [
+        "zen/0020"
+        "bunker/0017" # is_idle_core stub arity (must follow cachyos/0012)
+      ];
       extras = [ "cachyos/0020" ];
     };
   };
