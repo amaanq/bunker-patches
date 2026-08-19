@@ -280,6 +280,7 @@ let
     };
     # mainline 7.2 absorbed the carries the older releases still need
     "7.2" = {
+      base = [ "bunker/0018" ]; # reclaim-safe vmap purge
       interactive = [ "zen/0020" ];
       extras = [ "cachyos/0020" ];
     };

@@ -1,0 +1,59 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Wed, 19 Aug 2026 00:00:00 -0400
+Subject: [PATCH] mm/vmalloc: run vmap purge helpers on a WQ_MEM_RECLAIM
+ workqueue
+
+---
+--- a/mm/vmalloc.c
++++ b/mm/vmalloc.c
+@@ -1089,6 +1089,7 @@
+ static BLOCKING_NOTIFIER_HEAD(vmap_notify_list);
+ static void drain_vmap_area_work(struct work_struct *work);
+ static DECLARE_WORK(drain_vmap_work, drain_vmap_area_work);
++static struct workqueue_struct *purge_helper_wq;
+ 
+ static __cacheline_aligned_in_smp atomic_long_t vmap_lazy_nr;
+ 
+@@ -2400,6 +2401,8 @@
+ 		/* One extra worker is per a lazy_max_pages() full set minus one. */
+ 		nr_purge_helpers = atomic_long_read(&vmap_lazy_nr) / lazy_max_pages();
+ 		nr_purge_helpers = clamp(nr_purge_helpers, 1U, nr_purge_nodes) - 1;
++		if (!purge_helper_wq)
++			nr_purge_helpers = 0;
+ 
+ 		for_each_cpu(i, &purge_nodes) {
+ 			vn = &vmap_nodes[i];
+@@ -2408,9 +2411,9 @@
+ 				INIT_WORK(&vn->purge_work, purge_vmap_node);
+ 
+ 				if (cpumask_test_cpu(i, cpu_online_mask))
+-					schedule_work_on(i, &vn->purge_work);
++					queue_work_on(i, purge_helper_wq, &vn->purge_work);
+ 				else
+-					schedule_work(&vn->purge_work);
++					queue_work(purge_helper_wq, &vn->purge_work);
+ 
+ 				nr_purge_helpers--;
+ 			} else {
+@@ -5529,6 +5532,20 @@
+ 	return SHRINK_STOP;
+ }
+ 
++/*
++ * The purge helpers are flushed under memory reclaim and need a
++ * rescuer. vmalloc_init() runs before workqueue_init_early(), hence
++ * the initcall, and purging stays inline until it fires.
++ */
++static int __init vmap_purge_helper_wq_init(void)
++{
++	purge_helper_wq = alloc_workqueue("vmap_purge",
++					  WQ_MEM_RECLAIM | WQ_PERCPU, 0);
++	WARN_ON(!purge_helper_wq);
++	return 0;
++}
++core_initcall(vmap_purge_helper_wq_init);
++
+ void __init vmalloc_init(void)
+ {
+ 	struct shrinker *vmap_node_shrinker;
