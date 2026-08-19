@@ -51,6 +51,7 @@ let
     "6.19" = "6.19.12";
     "7.0" = "7.0.13";
     "7.1" = "7.1.5";
+    "7.2" = "7.2";
   };
 
   resolvedVersion =
@@ -85,7 +86,7 @@ let
       # cachyos: inline sched/mm/tick/vtime fixes, ADIOS, le9, compaction, BFQ lock, POCC
       "cachyos/0002" # fixes: __always_inline sched/mm/tick/vtime, RCU QS, NUMA, quirks
       "cachyos/0006"
-      "bunker/0014" # ADIOS: clzll(0) guard + per-queue slab cache names (must follow cachyos/0006)
+      "bunker/0014" # ADIOS: per-queue slab cache names, plus clzll(0) guard pre-7.2 (must follow cachyos/0006)
       "cachyos/0007"
       "cachyos/0009"
       "cachyos/0010"
@@ -120,15 +121,14 @@ let
           "6.19" = 101;
           "7.0" = 105;
           "7.1" = 101;
+          "7.2" = 101;
         }
         .${majorMinor}
       ))
       ++ (lib.genList (i: "grapheneos/${lib.fixedWidthString 4 "0" (toString (i + 1))}") (
-        if majorMinor == "7.1" then 8 else 5
+        if lib.versionAtLeast majorMinor "7.1" then 8 else 5
       ))
       ++ [
-        "cachyos/0014" # VMSCAPE/BHB clear mitigation
-        "bunker/0011" # VMSCAPE: barrier_nospec after static call (must follow cachyos/0014)
         "bunker/0003" # rust: allow clang native randstruct
         "bunker/0004" # enable RANDSTRUCT_FULL by default
         "bunker/0006" # enable KSTACK_ERASE by default
@@ -154,7 +154,6 @@ let
       "zen/0008"
       "zen/0011"
       "cachyos/0003"
-      "cachyos/0005"
       "cachyos/0015"
       "cachyos/0018"
       "bunker/0013" # r8125: disable vendor /proc debug files (must follow cachyos/0018)
@@ -230,6 +229,8 @@ let
       hardened = [
         "upstream/0022"
         "upstream/0023"
+        "cachyos/0014" # VMSCAPE/BHB clear mitigation
+        "bunker/0011" # VMSCAPE: barrier_nospec after static call (must follow cachyos/0014)
       ];
       networking = [
         "upstream/0007"
@@ -244,7 +245,7 @@ let
         "upstream/0018"
         "upstream/0019"
       ];
-      drivers = [ ];
+      drivers = [ "cachyos/0005" ]; # Zen errata workaround, folded into cachyos/0002 on 7.2
       extras = [
         "upstream/0020"
         "upstream/0021"
@@ -259,12 +260,27 @@ let
         "xanmod/0013"
         "bunker/0012"
       ];
+      hardened = [
+        "cachyos/0014" # VMSCAPE/BHB clear mitigation
+        "bunker/0011" # VMSCAPE: barrier_nospec after static call (must follow cachyos/0014)
+      ];
+      drivers = [ "cachyos/0005" ]; # Zen errata workaround, folded into cachyos/0002 on 7.2
     };
     "7.1" = {
       interactive = [
         "zen/0020"
         "bunker/0017" # is_idle_core stub arity (must follow cachyos/0012)
       ];
+      hardened = [
+        "cachyos/0014" # VMSCAPE/BHB clear mitigation
+        "bunker/0011" # VMSCAPE: barrier_nospec after static call (must follow cachyos/0014)
+      ];
+      drivers = [ "cachyos/0005" ]; # Zen errata workaround, folded into cachyos/0002 on 7.2
+      extras = [ "cachyos/0020" ];
+    };
+    # mainline 7.2 absorbed the carries the older releases still need
+    "7.2" = {
+      interactive = [ "zen/0020" ];
       extras = [ "cachyos/0020" ];
     };
   };
@@ -341,6 +357,7 @@ let
       "6.19.12" = "sha256-zlxPEgX5cpKGtWmwN2SVkVVfMcoeA8xQS9O3C45YqNU=";
       "7.0.13" = "sha256-PIHt0PcWrKPdSN/2kWgYJ1gMxT01qO7DvkfTRtH4mRM=";
       "7.1.5" = "sha256-IqAZazy83zTcJ7d1YfTQQFhf00R+3JqzUxoax54wQec=";
+      "7.2" = "sha256-+f7z0UwN9TgZAm9L50RZg1wqCw3L9bW72eoZ8IKUArM=";
     }
     .${resolvedVersion};
 
@@ -366,6 +383,11 @@ let
     BPF_SYSCALL = yes;
     BPF_JIT = yes;
     PSI = yes; # Pressure Stall Information (systemd-oomd)
+
+    # nixpkgs forces all three but 7.2 removed or de-prompted them
+    CRYPTO_DRBG_HASH = mkForce (option yes);
+    CRYPTO_DRBG_CTR = mkForce (option yes);
+    RANDOM_KMALLOC_CACHES = mkForce (option yes);
   }
   // optionalAttrs isX86 {
     MICROCODE = yes;
@@ -1131,8 +1153,8 @@ let
       DEFAULT_FQ_CODEL = option yes;
     }
     // (
-      # 7.1 exposes BBRv3 as "bbr3", while older patch sets expose it as "bbr".
-      if majorMinor == "7.1" then
+      # 7.1+ exposes BBRv3 as "bbr3", while older patch sets expose it as "bbr".
+      if lib.versionAtLeast majorMinor "7.1" then
         {
           TCP_CONG_BBR3 = option yes;
           DEFAULT_BBR3 = option yes;
@@ -1539,8 +1561,9 @@ in
         "6.19"
         "7.0"
         "7.1"
+        "7.2"
       ];
-      default = "7.1";
+      default = "7.2";
       description = "Linux kernel major.minor version. Automatically resolves to the latest stable point release.";
     };
 
