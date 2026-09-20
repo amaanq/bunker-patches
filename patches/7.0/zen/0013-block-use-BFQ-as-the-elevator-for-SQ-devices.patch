@@ -16,7 +16,7 @@ index 3bcd37c2aa3401..a50bcddc7e4660 100644
  void elevator_set_default(struct request_queue *q)
  {
  	struct elv_change_ctx ctx = {
-+#if defined(CONFIG_ZEN_INTERACTIVE) && defined(CONFIG_IOSCHED_BFQ)
++#if defined(CONFIG_BUNKER) && defined(CONFIG_IOSCHED_BFQ)
 +		.name = "bfq",
 +#else
  		.name = "mq-deadline",
@@ -28,7 +28,7 @@ diff --git a/init/Kconfig b/init/Kconfig
 index 13539041fe4852..876ee5ae949b1a 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -212,6 +212,10 @@ config ZEN_INTERACTIVE
+@@ -212,6 +212,10 @@ config BUNKER
  	help
  	  Tunes the kernel for responsiveness at the cost of throughput and power usage.
  

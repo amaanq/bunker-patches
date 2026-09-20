@@ -34,7 +34,7 @@ diff --git a/init/Kconfig b/init/Kconfig
 index 7e7a71088a1d8a..dca77e2e1dbf9f 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -217,6 +217,10 @@ config ZEN_INTERACTIVE
+@@ -217,6 +217,10 @@ config BUNKER
  	    Default scheduler for SQ..: mq-deadline ->   bfq
  	    Default scheduler for MQ..:        none ->   kyber
  
@@ -53,7 +53,7 @@ index b298cba853ab95..90fd91e4ae2240 100644
  #ifdef CONFIG_TRANSPARENT_HUGEPAGE_MADVISE
  	(1<<TRANSPARENT_HUGEPAGE_REQ_MADV_FLAG)|
  #endif
-+#ifdef CONFIG_ZEN_INTERACTIVE
++#ifdef CONFIG_BUNKER
 +	(1<<TRANSPARENT_HUGEPAGE_DEFRAG_KSWAPD_OR_MADV_FLAG)|
 +#else
  	(1<<TRANSPARENT_HUGEPAGE_DEFRAG_REQ_MADV_FLAG)|

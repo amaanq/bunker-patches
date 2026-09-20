@@ -21,7 +21,7 @@ index 3f831b69e7c48a..1e7ec7c1dd160b 100644
  	 * to "none".
  	 */
  	if (q->nr_hw_queues != 1 && !blk_mq_is_shared_tags(q->tag_set->flags))
-+#if defined(CONFIG_ZEN_INTERACTIVE) && defined(CONFIG_MQ_IOSCHED_KYBER)
++#if defined(CONFIG_BUNKER) && defined(CONFIG_MQ_IOSCHED_KYBER)
 +		ctx.name = "kyber";
 +#else
  		return;
@@ -33,7 +33,7 @@ diff --git a/init/Kconfig b/init/Kconfig
 index 876ee5ae949b1a..7e7a71088a1d8a 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -215,6 +215,7 @@ config ZEN_INTERACTIVE
+@@ -215,6 +215,7 @@ config BUNKER
  	  --- Block Layer ----------------------------------------
  
  	    Default scheduler for SQ..: mq-deadline ->   bfq

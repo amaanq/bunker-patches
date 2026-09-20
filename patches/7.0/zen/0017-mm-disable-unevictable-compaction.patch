@@ -14,7 +14,7 @@ diff --git a/init/Kconfig b/init/Kconfig
 index 2cfea8380d1fbf..0b4a053646a8ed 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -220,6 +220,7 @@ config ZEN_INTERACTIVE
+@@ -220,6 +220,7 @@ config BUNKER
  	  --- Virtual Memory Subsystem ---------------------------
  
  	    Background-reclaim hugepages...:   no   ->   yes

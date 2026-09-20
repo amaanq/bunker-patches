@@ -22,7 +22,7 @@ diff --git a/init/Kconfig b/init/Kconfig
 index 9e4f4e54844ed6..40ca36dc2ae3f7 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -222,6 +222,7 @@ config ZEN_INTERACTIVE
+@@ -222,6 +222,7 @@ config BUNKER
  	    Background-reclaim hugepages...:   no   ->   yes
  	    Compact unevictable............:   yes  ->   no
  	    Watermark boost factor.........:   1.5  ->   0
@@ -38,7 +38,7 @@ index bb19ccbece464d..7c04164e2dc18c 100644
   */
  void __init swap_setup(void)
  {
-+#ifdef CONFIG_ZEN_INTERACTIVE
++#ifdef CONFIG_BUNKER
 +	/* Only swap-in pages requested, avoid readahead */
 +	page_cluster = 0;
 +#else

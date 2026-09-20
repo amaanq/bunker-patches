@@ -44,7 +44,7 @@ diff --git a/init/Kconfig b/init/Kconfig
 index dca77e2e1dbf9f..d5132b37a37943 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -221,6 +221,13 @@ config ZEN_INTERACTIVE
+@@ -221,6 +221,13 @@ config BUNKER
  
  	    Background-reclaim hugepages...:   no   ->   yes
  
@@ -66,7 +66,7 @@ index ab4114712be740..41f5ed78d4da51 100644
   *
   * (default: 0.70 msec * (1 + ilog(ncpus)), units: nanoseconds)
   */
-+#ifdef CONFIG_ZEN_INTERACTIVE
++#ifdef CONFIG_BUNKER
 +unsigned int sysctl_sched_base_slice			= 400000ULL;
 +static unsigned int normalized_sysctl_sched_base_slice	= 400000ULL;
 +#else
@@ -74,7 +74,7 @@ index ab4114712be740..41f5ed78d4da51 100644
  static unsigned int normalized_sysctl_sched_base_slice	= 700000ULL;
 +#endif
  
-+#ifdef CONFIG_ZEN_INTERACTIVE
++#ifdef CONFIG_BUNKER
 +__read_mostly unsigned int sysctl_sched_migration_cost	= 300000UL;
 +#else
  __read_mostly unsigned int sysctl_sched_migration_cost	= 500000UL;
@@ -86,7 +86,7 @@ index ab4114712be740..41f5ed78d4da51 100644
   *
   * (default: 5 msec, units: microseconds)
   */
-+#ifdef CONFIG_ZEN_INTERACTIVE
++#ifdef CONFIG_BUNKER
 +static unsigned int sysctl_sched_cfs_bandwidth_slice		= 3000UL;
 +#else
  static unsigned int sysctl_sched_cfs_bandwidth_slice		= 5000UL;
@@ -104,7 +104,7 @@ index e20ed9f07bb153..029cdf18b8b751 100644
  extern void wakeup_preempt(struct rq *rq, struct task_struct *p, int flags);
  
 -#ifdef CONFIG_PREEMPT_RT
-+#if defined(CONFIG_PREEMPT_RT) || defined(CONFIG_ZEN_INTERACTIVE)
++#if defined(CONFIG_PREEMPT_RT) || defined(CONFIG_BUNKER)
  # define SCHED_NR_MIGRATE_BREAK 8
  #else
  # define SCHED_NR_MIGRATE_BREAK 32
