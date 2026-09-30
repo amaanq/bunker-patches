@@ -624,7 +624,7 @@ index 1a07ba0b2084f..832159e2c56dd 100644
  	 * simply flush and free it.
  	 */
  	if (!barn || data_race(barn->nr_full) >= MAX_FULL_SHEAVES ||
- 	    refill_sheaf(s, sheaf, gfp)) {
+ 	    refill_sheaf(s, sheaf, gfp | __GFP_NOMEMALLOC | __GFP_NOWARN)) {
 -		sheaf_flush_unused(s, sheaf);
 +		sheaf_flush_unused(s, sheaf, true);
  		free_empty_sheaf(s, sheaf);

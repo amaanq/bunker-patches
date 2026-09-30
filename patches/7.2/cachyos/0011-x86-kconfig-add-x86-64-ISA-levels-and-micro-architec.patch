@@ -4,17 +4,22 @@ Subject: [PATCH] x86/kconfig: add x86-64 ISA levels and micro-architecture optio
 
 Signed-off-by: Peter Jung <admin@ptr1337.dev>
 ---
+diff --git a/arch/x86/Kconfig.cpu b/arch/x86/Kconfig.cpu
+index 6e7a366f0..fa37304c0 100644
 --- a/arch/x86/Kconfig.cpu
 +++ b/arch/x86/Kconfig.cpu
-@@ -30,6 +30,7 @@
+@@ -28,19 +28,23 @@ choice
+ 	  - "Pentium-II" for the Intel Pentium II or pre-Coppermine Celeron.
+ 	  - "Pentium-III" for the Intel Pentium III or Coppermine Celeron.
  	  - "Pentium-4" for the Intel Pentium 4 or P4-based Celeron.
  	  - "K6" for the AMD K6, K6-II and K6-III (aka K6-3D).
  	  - "Athlon" for the AMD K7 family (Athlon/Duron/Thunderbird).
 +	  - "Opteron/Athlon64/Hammer/K8" for all K8 and newer AMD CPUs.
  	  - "Crusoe" for the Transmeta Crusoe series.
  	  - "Efficeon" for the Transmeta Efficeon series.
- 	  - "Winchip-C6" for original IDT Winchip.
-@@ -40,7 +41,10 @@
+ 	  - "AMD Elan" for the 32-bit AMD Elan embedded CPU.
+ 	  - "GeodeGX1" for Geode GX1 (Cyrix MediaGX).
+ 	  - "Geode GX/LX" For AMD Geode GX and LX processors.
  	  - "CyrixIII/VIA C3" for VIA Cyrix III or VIA C3.
  	  - "VIA C3-2" for VIA C3-2 "Nehemiah" (model 9 and above).
  	  - "VIA C7" for VIA C7.
@@ -25,7 +30,11 @@ Signed-off-by: Peter Jung <admin@ptr1337.dev>
  
  	  See each option's help text for additional details. If you don't know
  	  what to do, choose "Pentium-Pro".
-@@ -120,10 +124,21 @@
+ 
+ config M586TSC
+@@ -108,14 +112,25 @@ config MPENTIUM4
+ 		-Willamette
+ 		-Northwood
  		-Mobile Pentium 4
  		-Mobile Pentium 4 M
  		-Extreme Edition (Gallatin)
@@ -47,9 +56,13 @@ Signed-off-by: Peter Jung <admin@ptr1337.dev>
  
  config MK6
  	bool "K6/K6-II/K6-III"
-@@ -232,6 +247,10 @@
- 	# usage warnings that only appear wth '-march=native'.
- 	depends on CC_IS_GCC || CLANG_VERSION >= 190100
+ 	depends on X86_32
+ 	help
+@@ -212,25 +227,409 @@ config RUSTC_HAS_APXF
+ 	# Rust 1.88 added the `apxf` feature option, but versions before 1.93
+ 	# emit an `apxf` target attribute that only LLVM 23+ can interpret.
+ 	def_bool (RUSTC_VERSION >= 108800 && RUSTC_LLVM_MAJOR_VERSION >= 23) || \
+ 		 RUSTC_VERSION >= 109300
  
 +choice
 +	prompt "x86-64 Processor family"
@@ -58,7 +71,15 @@ Signed-off-by: Peter Jung <admin@ptr1337.dev>
  config X86_NATIVE_CPU
  	bool "Build and optimize for local/native CPU"
  	depends on X86_64
-@@ -246,6 +265,387 @@
+ 	depends on CC_HAS_MARCH_NATIVE
+-	depends on !RUST || RUSTC_HAS_APXF
+ 	help
+ 	  Optimize for the current CPU used to compile the kernel.
+ 	  Use this option if you intend to build the kernel for your
+ 	  local machine.
+ 
+ 	  Note that such a kernel might not work optimally on a
+ 	  different x86 machine.
  
  	  If unsure, say N.
  
@@ -446,7 +467,11 @@ Signed-off-by: Peter Jung <admin@ptr1337.dev>
  config X86_GENERIC
  	bool "Generic x86 support"
  	depends on X86_32
-@@ -267,8 +667,8 @@
+ 	help
+ 	  Instead of just including optimizations for the selected
+@@ -248,12 +647,12 @@ config X86_INTERNODE_CACHE_SHIFT
+ 	default "12" if X86_VSMP
+ 	default X86_L1_CACHE_SHIFT
  
  config X86_L1_CACHE_SHIFT
  	int
@@ -455,9 +480,13 @@ Signed-off-by: Peter Jung <admin@ptr1337.dev>
 +	default "7" if MPENTIUM4 || MPSC
 +	default "6" if MK7 || MK8 || MPENTIUMM || MCORE2 || MATOM || MVIAC7 || X86_GENERIC || GENERIC_CPU || MK8SSE3 || MK10 || MBARCELONA || MBOBCAT || MJAGUAR || MBULLDOZER || MPILEDRIVER || MSTEAMROLLER || MEXCAVATOR || MZEN || MZEN2 || MZEN3 || MZEN4 || MZEN5 || MNEHALEM || MWESTMERE || MSILVERMONT || MGOLDMONT || MGOLDMONTPLUS || MSANDYBRIDGE || MIVYBRIDGE || MHASWELL || MBROADWELL || MSKYLAKE || MSKYLAKEX || MCANNONLAKE || MICELAKE_CLIENT || MICELAKE_SERVER || MCASCADELAKE || MCOOPERLAKE || MTIGERLAKE || MSAPPHIRERAPIDS || MROCKETLAKE || MALDERLAKE || MRAPTORLAKE || MMETEORLAKE || MEMERALDRAPIDS
  	default "4" if MGEODEGX1
- 	default "5" if MWINCHIP3D || MWINCHIPC6 || MCRUSOE || MEFFICEON || MCYRIXIII || MK6 || MPENTIUMIII || MPENTIUMII || M686 || M586MMX || M586TSC || M586 || MVIAC3_2 || MGEODE_LX
+ 	default "5" if MCRUSOE || MEFFICEON || MCYRIXIII || MK6 || MPENTIUMIII || MPENTIUMII || M686 || M586MMX || M586TSC || MVIAC3_2 || MGEODE_LX
  
-@@ -286,18 +686,18 @@
+ config X86_F00F_BUG
+ 	def_bool y
+@@ -263,36 +662,36 @@ config X86_ALIGNMENT_16
+ 	def_bool y
+ 	depends on MCYRIXIII || MK6 || M586MMX || M586TSC || M586 || MVIAC3_2 || MGEODEGX1
  
  config X86_INTEL_USERCOPY
  	def_bool y
@@ -479,7 +508,8 @@ Signed-off-by: Peter Jung <admin@ptr1337.dev>
  
  config X86_CX8
  	def_bool y
-@@ -308,12 +708,12 @@
+ 
+ # this should be set for all -march=.. options where the compiler
  # generates cmov.
  config X86_CMOV
  	def_bool y
@@ -494,11 +524,17 @@ Signed-off-by: Peter Jung <admin@ptr1337.dev>
  	default "5"
  
  config X86_DEBUGCTLMSR
+ 	def_bool y
+ 	depends on !(MK6 || MCYRIXIII || M586MMX || M586TSC || M586) && !UML
+diff --git a/arch/x86/Makefile b/arch/x86/Makefile
+index 8af6b80cf..57d7ccf19 100644
 --- a/arch/x86/Makefile
 +++ b/arch/x86/Makefile
-@@ -167,10 +167,217 @@
- ifdef CONFIG_X86_NATIVE_CPU
-         KBUILD_CFLAGS += -march=native
+@@ -165,14 +165,221 @@ ifdef CONFIG_X86_NATIVE_CPU
+         # not yet prepared for general in-kernel use.
+         KBUILD_CFLAGS += $(call cc-option,-mno-apx-features=egpr)
+ 
+         # generate_rust_target.rs handles Rust APX gating.
          KBUILD_RUSTFLAGS += -Ctarget-cpu=native
 -else
 +endif
@@ -716,3 +752,21 @@ Signed-off-by: Peter Jung <admin@ptr1337.dev>
  
          KBUILD_CFLAGS += -mno-red-zone
          KBUILD_CFLAGS += -mcmodel=kernel
+         KBUILD_RUSTFLAGS += -Cno-redzone=y
+         KBUILD_RUSTFLAGS += -Ccode-model=kernel
+diff --git a/init/Kconfig b/init/Kconfig
+index af0f7a415..a89fba6c1 100644
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -2270,10 +2270,11 @@ config RUST
+ 	depends on !RANDSTRUCT || CC_IS_CLANG
+ 	depends on !DEBUG_INFO_BTF || (PAHOLE_HAS_LANG_EXCLUDE && !LTO)
+ 	depends on !CFI || HAVE_CFI_ICALL_NORMALIZE_INTEGERS_RUSTC
+ 	select CFI_ICALL_NORMALIZE_INTEGERS if CFI
+ 	depends on !KASAN || CC_IS_CLANG
++	depends on !X86_NATIVE_CPU || RUSTC_HAS_APXF
+ 	depends on !KASAN_SW_TAGS || RUSTC_VERSION >= 109600
+ 	help
+ 	  Enables Rust support in the kernel.
+ 
+ 	  This allows other Rust-related options, like drivers written in Rust,

@@ -51,7 +51,7 @@ let
     "6.19" = "6.19.12";
     "7.0" = "7.0.13";
     "7.1" = "7.1.5";
-    "7.2" = "7.2";
+    "7.2" = "7.2.8";
   };
 
   resolvedVersion =
@@ -358,7 +358,7 @@ let
       "6.19.12" = "sha256-zlxPEgX5cpKGtWmwN2SVkVVfMcoeA8xQS9O3C45YqNU=";
       "7.0.13" = "sha256-PIHt0PcWrKPdSN/2kWgYJ1gMxT01qO7DvkfTRtH4mRM=";
       "7.1.5" = "sha256-IqAZazy83zTcJ7d1YfTQQFhf00R+3JqzUxoax54wQec=";
-      "7.2" = "sha256-+f7z0UwN9TgZAm9L50RZg1wqCw3L9bW72eoZ8IKUArM=";
+      "7.2.8" = "sha256-EujVqXPRrXxaXGmILkAisTHtcV23AD/c12Dd+MPlGUE=";
     }
     .${resolvedVersion};
 

@@ -504,52 +504,6 @@ index 2df6643a5aa80..7db7554ceae18 100644
  	 * so iwl_trans_tx() would return -EIO for each frame. Avoid the
  	 * overhead of dequeuing from mac80211 only to immediately free
  	 * the skbs, and the potential memory pressure from rapid skb
-diff --git a/drivers/net/wireless/realtek/rtw89/fw.c b/drivers/net/wireless/realtek/rtw89/fw.c
-index d6a594b75ab20..c6f175041680f 100644
---- a/drivers/net/wireless/realtek/rtw89/fw.c
-+++ b/drivers/net/wireless/realtek/rtw89/fw.c
-@@ -11778,11 +11778,11 @@ static void rtw89_fw_cmd_ofld_write_rf(struct rtw89_dev *rtwdev,
- }
- 
- static void rtw89_fw_cmd_ofld_udelay(struct rtw89_dev *rtwdev, u32 us)
- {
- 	struct rtw89_fw_cmd_ofld_arg cmd = {
--		.src = RTW89_FW_CMD_OFLD_SRC_OTHER,
-+		.src = RTW89_FW_CMD_OFLD_SRC_BB,
- 		.type = RTW89_FW_CMD_OFLD_DELAY,
- 		.value = us,
- 	};
- 	int ret;
- 
-@@ -11792,11 +11792,11 @@ static void rtw89_fw_cmd_ofld_udelay(struct rtw89_dev *rtwdev, u32 us)
- }
- 
- static void rtw89_fw_cmd_ofld_mdelay(struct rtw89_dev *rtwdev, u32 ms)
- {
- 	struct rtw89_fw_cmd_ofld_arg cmd = {
--		.src = RTW89_FW_CMD_OFLD_SRC_OTHER,
-+		.src = RTW89_FW_CMD_OFLD_SRC_BB,
- 		.type = RTW89_FW_CMD_OFLD_DELAY,
- 		.value = ms * 1000,
- 	};
- 	int ret;
- 
-diff --git a/drivers/net/wireless/realtek/rtw89/fw.h b/drivers/net/wireless/realtek/rtw89/fw.h
-index 20721d5209aa3..3fcb3ac8c7115 100644
---- a/drivers/net/wireless/realtek/rtw89/fw.h
-+++ b/drivers/net/wireless/realtek/rtw89/fw.h
-@@ -3140,11 +3140,10 @@ struct rtw89_h2c_trx_protect {
- enum rtw89_fw_cmd_ofld_arg_src {
- 	RTW89_FW_CMD_OFLD_SRC_BB,
- 	RTW89_FW_CMD_OFLD_SRC_RF,
- 	RTW89_FW_CMD_OFLD_SRC_MAC,
- 	RTW89_FW_CMD_OFLD_SRC_RF_DDIE,
--	RTW89_FW_CMD_OFLD_SRC_OTHER,
- };
- 
- enum rtw89_fw_cmd_ofld_arg_type {
- 	RTW89_FW_CMD_OFLD_WRITE,
- 	RTW89_FW_CMD_OFLD_COMPARE,
 diff --git a/drivers/pci/quirks.c b/drivers/pci/quirks.c
 index b09f27f7846fc..9e407c44944cb 100644
 --- a/drivers/pci/quirks.c
@@ -838,21 +792,7 @@ diff --git a/kernel/sched/core.c b/kernel/sched/core.c
 index 96226707c2f61..85f215e7de3eb 100644
 --- a/kernel/sched/core.c
 +++ b/kernel/sched/core.c
-@@ -3730,10 +3730,13 @@ static inline void ttwu_do_wakeup(struct task_struct *p)
- 	trace_sched_wakeup(p);
- }
- 
- void update_rq_avg_idle(struct rq *rq)
- {
-+	if (!rq->idle_stamp)
-+		return;
-+
- 	u64 delta = rq_clock(rq) - rq->idle_stamp;
- 	u64 max = 2*rq->max_idle_balance_cost;
- 
- 	update_avg(&rq->avg_idle, delta);
- 
-@@ -5072,11 +5075,11 @@ static inline void prepare_task(struct task_struct *next)
+@@ -5072,11 +5072,11 @@ static inline void prepare_task(struct task_struct *next)
  	 * its ordering comment.
  	 */
  	WRITE_ONCE(next->on_cpu, 1);
@@ -865,7 +805,7 @@ index 96226707c2f61..85f215e7de3eb 100644
  	 * This must be the very last reference to @prev from this CPU. After
  	 * p->on_cpu is cleared, the task can be moved to a different CPU. We
  	 * must ensure this doesn't happen until the switch is completely
-@@ -5116,11 +5119,11 @@ static void zap_balance_callbacks(struct rq *rq)
+@@ -5116,11 +5116,11 @@ static void zap_balance_callbacks(struct rq *rq)
  		head = next;
  	}
  	rq->balance_callback = found ? &balance_push_callback : NULL;
@@ -878,7 +818,7 @@ index 96226707c2f61..85f215e7de3eb 100644
  	struct balance_callback *next;
  
  	lockdep_assert_rq_held(rq);
-@@ -5151,11 +5154,11 @@ static void balance_push(struct rq *rq);
+@@ -5151,11 +5151,11 @@ static void balance_push(struct rq *rq);
  struct balance_callback balance_push_callback = {
  	.next = NULL,
  	.func = balance_push,
@@ -891,7 +831,7 @@ index 96226707c2f61..85f215e7de3eb 100644
  	struct balance_callback *head = rq->balance_callback;
  
  	if (likely(!head))
-@@ -5225,11 +5228,11 @@ prepare_lock_switch(struct rq *rq, struct task_struct *next, struct rq_flags *rf
+@@ -5225,11 +5225,11 @@ prepare_lock_switch(struct rq *rq, struct task_struct *next, struct rq_flags *rf
  	 */
  	__release(__rq_lockp(rq));
  	__acquire(__rq_lockp(this_rq()));
@@ -904,7 +844,7 @@ index 96226707c2f61..85f215e7de3eb 100644
  	/*
  	 * If we are tracking spinlock dependencies then we have to
  	 * fix up the runqueue lock - which gets 'carried over' from
-@@ -5259,11 +5262,11 @@ static inline void kmap_local_sched_out(void)
+@@ -5259,11 +5259,11 @@ static inline void kmap_local_sched_out(void)
  	if (unlikely(current->kmap_ctrl.idx))
  		__kmap_local_sched_out();
  #endif
@@ -917,7 +857,7 @@ index 96226707c2f61..85f215e7de3eb 100644
  	if (unlikely(current->kmap_ctrl.idx))
  		__kmap_local_sched_in();
  #endif
-@@ -5313,11 +5316,11 @@ prepare_task_switch(struct rq *rq, struct task_struct *prev,
+@@ -5313,11 +5313,11 @@ prepare_task_switch(struct rq *rq, struct task_struct *prev,
   * The context switch have flipped the stack from under us and restored the
   * local variables which were saved when this task called schedule() in the
   * past. 'prev == current' is still correct but we need to recalculate this_rq

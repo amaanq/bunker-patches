@@ -405,7 +405,7 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c b/drivers
 index c6f94eb71ffad..11c0f803f3873 100644
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
-@@ -181,11 +181,16 @@ enum dc_edid_status dm_helpers_parse_edid_caps(
+@@ -191,11 +191,16 @@ enum dc_edid_status dm_helpers_parse_edid_caps(
  
  	drm_edid_get_monitor_name(edid_buf,
  				  edid_caps->display_name,
@@ -420,9 +420,9 @@ index c6f94eb71ffad..11c0f803f3873 100644
 +	}
  
  	if (edid_caps->edid_hdmi) {
+ 		edid_caps->qs_bit = connector->display_info.rgb_quant_range_selectable;
  		populate_hdmi_info_from_connector(link->dc->config.enable_frl, &connector->display_info.hdmi, edid_caps);
  		drm_dbg_driver(connector->dev, "%s: HDMI_FRL [%s] max_frl_rate %d\n", __func__, connector->name, edid_caps->max_frl_rate);
- 		if (edid_caps->frl_dsc_support)
 @@ -1548,46 +1553,46 @@ void dm_helpers_dp_mst_update_branch_bandwidth(
  		struct dc_link *link)
  {
