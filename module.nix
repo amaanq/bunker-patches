@@ -346,10 +346,20 @@ let
 
   kernelPatches = map (e: { inherit (e) name patch; }) selectedPatches;
 
+  kernelLlvmPackages = pkgsKernel.pkgsBuildTarget.llvmPackages.overrideScope (
+    _: prev: {
+      lld = prev.lld.overrideAttrs (old: {
+        patches = (old.patches or [ ]) ++ [
+          (patchFile ./patches/userspace/lld-initialize-symbol-fields-in-constructor.patch)
+        ];
+      });
+    }
+  );
+
   # Keep hostPlatform as the kernel target; swap only build-native LLVM tools.
   llvmStdenv = pkgsKernel.overrideCC pkgsKernel.llvmPackages.stdenv (
-    pkgsKernel.pkgsBuildTarget.llvmPackages.clang.override {
-      bintools = pkgsKernel.pkgsBuildTarget.llvmPackages.bintools;
+    kernelLlvmPackages.clang.override {
+      bintools = kernelLlvmPackages.bintools;
     }
   );
 
@@ -1387,7 +1397,7 @@ let
     # ppc64 vDSO links via `clang -fuse-ld=lld`, which needs `ld.lld` on PATH.
     nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [
       pkgsKernel.buildPackages.rustfmt
-      pkgsKernel.pkgsBuildBuild.lld.out
+      kernelLlvmPackages.lld.out
     ];
 
     postInstall =
