@@ -1,0 +1,83 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Tue, 16 May 2017 17:51:48 -0400
+Subject: [PATCH 083/101] usb: add toggle for disabling newly added USB devices
+
+Based on the public grsecurity patches.
+
+[thibaut.sautereau@ssi.gouv.fr: Adapt to sysctl code refactoring]
+Signed-off-by: Thibaut Sautereau <thibaut.sautereau@ssi.gouv.fr>
+Signed-off-by: Levente Polyak <levente@leventepolyak.net>
+[thibaut.sautereau@ssi.gouv.fr: Adapt to sysctl code refactoring]
+Signed-off-by: Nicolas Bouchinet <nicolas.bouchinet@oss.cyber.gouv.fr>
+---
+diff --git a/drivers/usb/core/hub.c b/drivers/usb/core/hub.c
+--- a/drivers/usb/core/hub.c
++++ b/drivers/usb/core/hub.c
+@@ -5405,6 +5405,9 @@
+ 	return changed;
+ }
+ 
++/* sysctl */
++int deny_new_usb __read_mostly = 0;
++
+ static void hub_port_connect(struct usb_hub *hub, int port1, u16 portstatus,
+ 		u16 portchange)
+ {
+@@ -5466,6 +5469,12 @@
+ 			goto done;
+ 		return;
+ 	}
++
++	if (deny_new_usb) {
++		dev_err(&port_dev->dev, "denied insert of USB device on port %d\n", port1);
++		goto done;
++	}
++
+ 	if (hub_is_superspeed(hub->hdev))
+ 		unit_load = 150;
+ 	else
+diff --git a/include/linux/usb.h b/include/linux/usb.h
+--- a/include/linux/usb.h
++++ b/include/linux/usb.h
+@@ -2115,6 +2115,9 @@
+ static inline void usb_led_activity(enum usb_led_event ev) {}
+ #endif
+ 
++/* sysctl */
++extern int deny_new_usb;
++
+ #endif  /* __KERNEL__ */
+ 
+ #endif
+diff --git a/kernel/sysctl.c b/kernel/sysctl.c
+--- a/kernel/sysctl.c
++++ b/kernel/sysctl.c
+@@ -25,6 +25,9 @@
+ #ifdef CONFIG_USER_NS
+ #include <linux/user_namespace.h>
+ #endif
++#if IS_ENABLED(CONFIG_USB)
++#include <linux/usb.h>
++#endif
+ 
+ /* shared constants to be used in various sysctls */
+ const int sysctl_vals[] = { 0, 1, 2, 3, 4, 100, 200, 1000, 3000, INT_MAX, 65535, -1 };
+@@ -1457,6 +1460,17 @@
+ 		.proc_handler	= proc_dointvec,
+ 	},
+ #endif
++#if IS_ENABLED(CONFIG_USB)
++	{
++		.procname	= "deny_new_usb",
++		.data		= &deny_new_usb,
++		.maxlen		= sizeof(int),
++		.mode		= 0644,
++		.proc_handler	= proc_dointvec_minmax_sysadmin,
++		.extra1		= SYSCTL_ZERO,
++		.extra2		= SYSCTL_ONE,
++	},
++#endif
+ };
+ 
+ int __init sysctl_init_bases(void)

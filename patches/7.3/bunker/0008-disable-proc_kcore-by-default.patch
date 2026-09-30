@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: linux-hardened <linux-hardened@protonmail.com>
+Date: Thu, 13 Feb 2026 00:00:00 +0000
+Subject: [PATCH 184/190] disable PROC_KCORE by default
+
+Disable /proc/kcore which provides a virtual ELF core file of the live
+kernel. This exposes kernel memory layout to userspace, aiding exploitation.
+
+Already have PROC_VMCORE disabled (patch 0080). Zero runtime overhead.
+Recommended by KSPP and disabled in upstream hardening.config.
+
+---
+ fs/proc/Kconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/fs/proc/Kconfig b/fs/proc/Kconfig
+--- a/fs/proc/Kconfig
++++ b/fs/proc/Kconfig
+@@ -32,6 +32,7 @@ config PROC_FS
+ config PROC_KCORE
+ 	bool "/proc/kcore support" if !ARM
+ 	depends on PROC_FS && MMU
++	default n
+ 	select VMCORE_INFO
+ 	help
+ 	  Provides a virtual ELF core file of the live kernel.  This can
+-- 
+2.47.1
+

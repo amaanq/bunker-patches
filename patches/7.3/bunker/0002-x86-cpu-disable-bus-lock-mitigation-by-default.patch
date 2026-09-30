@@ -1,0 +1,23 @@
+From 849b118f3d553daea1068965540c930870b09307 Mon Sep 17 00:00:00 2001
+From: Peter Jung <admin@ptr1337.dev>
+Date: Sat, 7 Feb 2026 21:57:43 -0500
+Subject: [PATCH 42/190] x86/cpu: disable bus lock mitigation by default
+
+Set sysctl_sld_mitigate = 0 to avoid performance penalty from
+bus lock detection split-lock handling.
+---
+diff --git a/arch/x86/kernel/cpu/bus_lock.c b/arch/x86/kernel/cpu/bus_lock.c
+--- a/arch/x86/kernel/cpu/bus_lock.c
++++ b/arch/x86/kernel/cpu/bus_lock.c
+@@ -47,7 +47,11 @@
+ 
+ static struct ratelimit_state bld_ratelimit;
+ 
++#ifdef CONFIG_BUNKER
++static unsigned int sysctl_sld_mitigate = 0;
++#else
+ static unsigned int sysctl_sld_mitigate = 1;
++#endif /* CONFIG_BUNKER */
+ static DEFINE_SEMAPHORE(buslock_sem, 1);
+ 
+ #ifdef CONFIG_SYSCTL

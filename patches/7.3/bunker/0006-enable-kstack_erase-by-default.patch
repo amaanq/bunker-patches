@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: linux-hardened <linux-hardened@protonmail.com>
+Date: Thu, 13 Feb 2026 00:00:00 +0000
+Subject: [PATCH 182/190] enable KSTACK_ERASE by default
+
+Wipe the kernel stack after syscall completion to reduce the lifetime
+of sensitive data and mitigate uninitialized stack variable exploitation
+in subsequent syscalls. This is the mainline version of the grsecurity
+PAX_MEMORY_STACKLEAK feature.
+
+~1% overhead on compilation workloads, but blocks real info leak vectors.
+Recommended by KSPP and included in upstream hardening.config.
+
+---
+ security/Kconfig.hardening | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/security/Kconfig.hardening b/security/Kconfig.hardening
+--- a/security/Kconfig.hardening
++++ b/security/Kconfig.hardening
+@@ -88,6 +88,7 @@ endchoice
+ config KSTACK_ERASE
+ 	bool "Poison kernel stack before returning from syscalls"
+ 	depends on HAVE_ARCH_KSTACK_ERASE
++	default y
+ 	depends on GCC_PLUGINS || CC_HAS_SANCOV_STACK_DEPTH_CALLBACK
+ 	help
+ 	  Wipe the kernel stack before returning to user mode at the end of
+-- 
+2.47.1
+

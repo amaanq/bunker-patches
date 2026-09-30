@@ -1,0 +1,25 @@
+From b70ce58b3994b63c24e8b02df5a89e0f5508f224 Mon Sep 17 00:00:00 2001
+From: Steven Barrett <steven@liquorix.net>
+Date: Mon, 11 Jul 2022 19:10:30 -0500
+Subject: [PATCH] ZEN: cpufreq: Remove schedutil dependency on Intel/AMD
+ P-State drivers
+
+Although both P-State drivers depend on schedutil in Kconfig, both code
+bases do not use any schedutil code.  This arbitrarily enables schedutil
+when unwanted in some configurations.
+---
+ drivers/cpufreq/Kconfig.x86 | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/drivers/cpufreq/Kconfig.x86 b/drivers/cpufreq/Kconfig.x86
+index 2c5c228408bf28..918e2bebfe788f 100644
+--- a/drivers/cpufreq/Kconfig.x86
++++ b/drivers/cpufreq/Kconfig.x86
+@@ -39,7 +39,6 @@ config X86_AMD_PSTATE
+ 	depends on X86 && ACPI
+ 	select ACPI_PROCESSOR
+ 	select ACPI_CPPC_LIB if X86_64
+-	select CPU_FREQ_GOV_SCHEDUTIL if SMP
+ 	select ACPI_PLATFORM_PROFILE
+ 	select POWER_SUPPLY
+ 	help

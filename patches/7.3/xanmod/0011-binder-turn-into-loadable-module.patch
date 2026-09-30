@@ -1,0 +1,256 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Alexandre Frade <kernel@xanmod.org>
+Subject: [PATCH] binder: turn into loadable module
+
+Signed-off-by: Alexandre Frade <kernel@xanmod.org>
+---
+--- a/drivers/android/Kconfig
++++ b/drivers/android/Kconfig
+@@ -2,7 +2,7 @@
+ menu "Android"
+ 
+ config ANDROID_BINDER_IPC
+-	bool "Android Binder IPC Driver"
++	tristate "Android Binder IPC Driver"
+ 	depends on MMU
+ 	depends on NET
+ 	default n
+@@ -28,8 +28,8 @@
+ 	  between said processes.
+ 
+ config ANDROID_BINDERFS
+-	bool "Android Binderfs filesystem"
+-	depends on ANDROID_BINDER_IPC
++	tristate "Android Binderfs filesystem"
++	depends on (ANDROID_BINDER_IPC=y) || (ANDROID_BINDER_IPC=m && m)
+ 	default n
+ 	help
+ 	  Binderfs is a pseudo-filesystem for the Android Binder IPC driver
+--- a/drivers/android/Makefile
++++ b/drivers/android/Makefile
+@@ -1,7 +1,8 @@
+ # SPDX-License-Identifier: GPL-2.0-only
+ ccflags-y += -I$(src)			# needed for trace events
+ 
+-obj-$(CONFIG_ANDROID_BINDERFS)		+= binderfs.o
+-obj-$(CONFIG_ANDROID_BINDER_IPC)	+= binder.o binder_alloc.o binder_netlink.o
+-obj-$(CONFIG_ANDROID_BINDER_ALLOC_KUNIT_TEST)	+= tests/
+-obj-$(CONFIG_ANDROID_BINDER_IPC_RUST)	+= binder/
++binder_linux-y := binder.o binder_alloc.o binder_netlink.o
++obj-$(CONFIG_ANDROID_BINDER_IPC) += binder_linux.o
++binder_linux-$(CONFIG_ANDROID_BINDERFS) += binderfs.o
++binder_linux-$(CONFIG_ANDROID_BINDER_ALLOC_KUNIT_TEST) += binder_alloc_selftest.o
++binder_linux-$(CONFIG_ANDROID_BINDER_IPC_RUST)   += binder/
+--- a/drivers/android/binder.c
++++ b/drivers/android/binder.c
+@@ -7165,7 +7165,20 @@
+ 	return ret;
+ }
+ 
+-device_initcall(binder_init);
++module_init(binder_init);
++/*
++ * binder will have no exit function since binderfs instances can be mounted
++ * multiple times and also in user namespaces finding and destroying them all
++ * is not feasible without introducing insane locking. Just ignoring existing
++ * instances on module unload also wouldn't work since we would loose track of
++ * what major numer was dynamically allocated and also what minor numbers are
++ * already given out. So this would get us into all kinds of issues with device
++ * number reuse. So simply don't allow unloading unless we are forced to do so.
++ */
++
++MODULE_AUTHOR("Google, Inc.");
++MODULE_DESCRIPTION("Driver for Android binder device");
++MODULE_LICENSE("GPL v2");
+ 
+ #define CREATE_TRACE_POINTS
+ #include "binder_trace.h"
+--- a/drivers/android/binder_alloc.h
++++ b/drivers/android/binder_alloc.h
+@@ -6,6 +6,7 @@
+ #ifndef _LINUX_BINDER_ALLOC_H
+ #define _LINUX_BINDER_ALLOC_H
+ 
++#include <linux/kconfig.h>
+ #include <linux/rbtree.h>
+ #include <linux/list.h>
+ #include <linux/mm.h>
+--- a/drivers/android/binder_internal.h
++++ b/drivers/android/binder_internal.h
+@@ -4,6 +4,7 @@
+ #define _LINUX_BINDER_INTERNAL_H
+ 
+ #include <linux/fs.h>
++#include <linux/kconfig.h>
+ #include <linux/list.h>
+ #include <linux/miscdevice.h>
+ #include <linux/mutex.h>
+@@ -76,7 +77,7 @@
+ 
+ extern char *binder_devices_param;
+ 
+-#ifdef CONFIG_ANDROID_BINDERFS
++#if IS_ENABLED(CONFIG_ANDROID_BINDERFS)
+ extern bool is_binderfs_device(const struct inode *inode);
+ extern struct dentry *binderfs_create_file(struct dentry *dir, const char *name,
+ 					   const struct file_operations *fops,
+@@ -95,7 +96,7 @@
+ }
+ #endif
+ 
+-#ifdef CONFIG_ANDROID_BINDERFS
++#if IS_ENABLED(CONFIG_ANDROID_BINDERFS)
+ extern int __init init_binderfs(void);
+ #else
+ static inline int __init init_binderfs(void)
+--- a/drivers/android/binderfs.c
++++ b/drivers/android/binderfs.c
+@@ -123,7 +123,7 @@
+ 	struct super_block *sb = ref_inode->i_sb;
+ 	struct binderfs_info *info = sb->s_fs_info;
+ #if defined(CONFIG_IPC_NS)
+-	bool use_reserve = (info->ipc_ns == &init_ipc_ns);
++	bool use_reserve = (info->ipc_ns == show_init_ipc_ns());
+ #else
+ 	bool use_reserve = true;
+ #endif
+@@ -391,7 +391,7 @@
+ 	struct dentry *root = sb->s_root;
+ 	struct binderfs_info *info = sb->s_fs_info;
+ #if defined(CONFIG_IPC_NS)
+-	bool use_reserve = (info->ipc_ns == &init_ipc_ns);
++	bool use_reserve = (info->ipc_ns == show_init_ipc_ns());
+ #else
+ 	bool use_reserve = true;
+ #endif
+@@ -643,7 +643,7 @@
+ 		return -ENOMEM;
+ 	info = sb->s_fs_info;
+ 
+-	info->ipc_ns = get_ipc_ns(current->nsproxy->ipc_ns);
++	info->ipc_ns = get_ipc_ns_exported(current->nsproxy->ipc_ns);
+ 
+ 	info->root_gid = make_kgid(sb->s_user_ns, 0);
+ 	if (!gid_valid(info->root_gid))
+--- a/include/linux/ipc_namespace.h
++++ b/include/linux/ipc_namespace.h
+@@ -128,6 +128,9 @@
+ static inline int mq_init_ns(struct ipc_namespace *ns) { return 0; }
+ #endif
+ 
++extern struct ipc_namespace *get_ipc_ns_exported(struct ipc_namespace *ns);
++extern struct ipc_namespace *show_init_ipc_ns(void);
++
+ #if defined(CONFIG_IPC_NS)
+ static inline struct ipc_namespace *to_ipc_ns(struct ns_common *ns)
+ {
+--- a/ipc/namespace.c
++++ b/ipc/namespace.c
+@@ -210,6 +210,23 @@
+ 			schedule_work(&free_ipc_work);
+ 	}
+ }
++EXPORT_SYMBOL(put_ipc_ns);
++
++struct ipc_namespace *get_ipc_ns_exported(struct ipc_namespace *ns)
++{
++	return get_ipc_ns(ns);
++}
++EXPORT_SYMBOL(get_ipc_ns_exported);
++
++struct ipc_namespace *show_init_ipc_ns(void)
++{
++#if defined(CONFIG_IPC_NS)
++	return &init_ipc_ns;
++#else
++	return NULL;
++#endif
++}
++EXPORT_SYMBOL(show_init_ipc_ns);
+ 
+ static struct ns_common *ipcns_get(struct task_struct *task)
+ {
+--- a/kernel/sched/syscalls.c
++++ b/kernel/sched/syscalls.c
+@@ -119,6 +119,7 @@
+ {
+ 	return is_nice_reduction(p, nice) || capable(CAP_SYS_NICE);
+ }
++EXPORT_SYMBOL(can_nice);
+ 
+ #ifdef __ARCH_WANT_SYS_NICE
+ 
+--- a/kernel/task_work.c
++++ b/kernel/task_work.c
+@@ -102,6 +102,7 @@
+ 
+ 	return 0;
+ }
++EXPORT_SYMBOL(task_work_add);
+ 
+ /**
+  * task_work_cancel_match - cancel a pending work added by task_work_add()
+--- a/mm/memory.c
++++ b/mm/memory.c
+@@ -2247,6 +2247,7 @@
+	zap_vma_range_batched(&tlb, vma, address, size, NULL);
+	tlb_finish_mmu(&tlb);
+ }
++EXPORT_SYMBOL(zap_vma_range);
+ 
+ /**
+  * zap_special_vma_range - zap all page table entries in a special vma range
+--- a/mm/mmap_lock.c
++++ b/mm/mmap_lock.c
+@@ -340,6 +340,7 @@
+ 	count_vm_vma_lock_event(VMA_LOCK_ABORT);
+ 	return NULL;
+ }
++EXPORT_SYMBOL_GPL(lock_vma_under_rcu);
+ 
+ static struct vm_area_struct *lock_next_vma_under_mmap_lock(struct mm_struct *mm,
+ 							    struct vma_iterator *vmi,
+--- a/mm/vmalloc.c
++++ b/mm/vmalloc.c
+@@ -3270,6 +3270,7 @@
+ 				  NUMA_NO_NODE, GFP_KERNEL,
+ 				  __builtin_return_address(0));
+ }
++EXPORT_SYMBOL(get_vm_area);
+ 
+ struct vm_struct *get_vm_area_caller(unsigned long size, unsigned long flags,
+ 				const void *caller)
+--- a/security/security.c
++++ b/security/security.c
+@@ -514,6 +514,7 @@
+ {
+ 	return call_int_hook(binder_set_context_mgr, mgr);
+ }
++EXPORT_SYMBOL(security_binder_set_context_mgr);
+ 
+ /**
+  * security_binder_transaction() - Check if a binder transaction is allowed
+@@ -529,6 +530,7 @@
+ {
+ 	return call_int_hook(binder_transaction, from, to);
+ }
++EXPORT_SYMBOL(security_binder_transaction);
+ 
+ /**
+  * security_binder_transfer_binder() - Check if a binder transfer is allowed
+@@ -544,6 +546,7 @@
+ {
+ 	return call_int_hook(binder_transfer_binder, from, to);
+ }
++EXPORT_SYMBOL(security_binder_transfer_binder);
+ 
+ /**
+  * security_binder_transfer_file() - Check if a binder file xfer is allowed
+@@ -560,6 +563,7 @@
+ {
+ 	return call_int_hook(binder_transfer_file, from, to, file);
+ }
++EXPORT_SYMBOL(security_binder_transfer_file);
+ 
+ /**
+  * security_ptrace_access_check() - Check if tracing is allowed

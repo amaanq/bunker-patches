@@ -1,0 +1,86 @@
+From b0e637bd70217fd3aeb4620a207d4691ab9d53a1 Mon Sep 17 00:00:00 2001
+From: Steven Barrett <steven@liquorix.net>
+Date: Fri, 15 Mar 2024 12:36:51 -0500
+Subject: [PATCH] ZEN: drm/amdgpu/pm: Allow override of min_power_limit with
+ ignore_min_pcap
+
+---
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu.h
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
+@@ -157,6 +157,7 @@
+  */
+ extern int amdgpu_modeset;
+ extern unsigned int amdgpu_vram_limit;
++extern int amdgpu_ignore_min_pcap;
+ extern int amdgpu_vis_vram_limit;
+ extern int amdgpu_gart_size;
+ extern int amdgpu_gtt_size;
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+@@ -150,6 +150,7 @@
+ };
+ 
+ unsigned int amdgpu_vram_limit = UINT_MAX;
++int amdgpu_ignore_min_pcap = 0; /* do not ignore by default */
+ int amdgpu_vis_vram_limit;
+ int amdgpu_gart_size = -1; /* auto */
+ int amdgpu_gtt_size = -1; /* auto */
+@@ -272,6 +273,15 @@
+ };
+ 
+ /**
++ * DOC: ignore_min_pcap (int)
++ * Ignore the minimum power cap.
++ * Useful on graphics cards where the minimum power cap is very high.
++ * The default is 0 (Do not ignore).
++ */
++MODULE_PARM_DESC(ignore_min_pcap, "Ignore the minimum power cap");
++module_param_named(ignore_min_pcap, amdgpu_ignore_min_pcap, int, 0600);
++
++/**
+  * DOC: vramlimit (int)
+  * Restrict the total amount of VRAM in MiB for testing.  The default is 0 (Use full VRAM).
+  */
+diff --git a/drivers/gpu/drm/amd/pm/amdgpu_pm.c b/drivers/gpu/drm/amd/pm/amdgpu_pm.c
+--- a/drivers/gpu/drm/amd/pm/amdgpu_pm.c
++++ b/drivers/gpu/drm/amd/pm/amdgpu_pm.c
+@@ -3422,6 +3422,9 @@
+ 					 struct device_attribute *attr,
+ 					 char *buf)
+ {
++	if (amdgpu_ignore_min_pcap)
++		return sysfs_emit(buf, "%i\n", 0);
++
+ 	return amdgpu_hwmon_show_power_cap_generic(dev, attr, buf, PP_PWR_LIMIT_MIN);
+ }
+ 
+diff --git a/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c b/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c
+--- a/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c
++++ b/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c
+@@ -3001,9 +3001,12 @@
+ 			smu->ppt_limits.range[power_source][limit_type].max;
+ 		break;
+ 	case SMU_PPT_LIMIT_MIN:
+-		*limit = smu->od_enabled ?
+-			smu->ppt_limits.range[power_source][limit_type].od_min :
+-			smu->ppt_limits.range[power_source][limit_type].min;
++		if (amdgpu_ignore_min_pcap)
++			*limit = 0;
++		else
++			*limit = smu->od_enabled ?
++				smu->ppt_limits.range[power_source][limit_type].od_min :
++				smu->ppt_limits.range[power_source][limit_type].min;
+ 		break;
+ 	default:
+ 		return -EINVAL;
+@@ -3040,7 +3043,7 @@
+ 			return ret;
+ 	}
+ 
+-	if (limit > max_limit || limit < min_limit) {
++	if (limit > max_limit || (!amdgpu_ignore_min_pcap && limit < min_limit)) {
+ 		dev_err(smu->adev->dev,
+ 			"New PPT limit (%d) is out of range [%d,%d]\n",
+ 			limit, min_limit, max_limit);

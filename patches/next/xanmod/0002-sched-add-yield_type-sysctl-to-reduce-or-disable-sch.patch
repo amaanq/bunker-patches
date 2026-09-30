@@ -1,0 +1,69 @@
+From 24ffcd9a1c990cc845ddec46ecb03e96004e12bc Mon Sep 17 00:00:00 2001
+From: Alexandre Frade <kernel@xanmod.org>
+Date: Sun, 15 Sep 2024 23:03:38 +0000
+Subject: [PATCH 29/190] sched: add yield_type sysctl to reduce or disable
+ sched_yield
+
+---
+diff --git a/kernel/sched/syscalls.c b/kernel/sched/syscalls.c
+--- a/kernel/sched/syscalls.c
++++ b/kernel/sched/syscalls.c
+@@ -1334,15 +1334,29 @@
+ 	return ret;
+ }
+ 
++/**
++ * sysctl_sched_yield_type - choose the yield level that will perform.
++ *
++ * 0: No yield.
++ * 1: Yield only to better priority/deadline tasks.
++ * 2: Re-queue current tasks. (default CFS)
++ */
++__read_mostly int sysctl_sched_yield_type = 2;
++
+ static void do_sched_yield(void)
+ {
+ 	struct rq_flags rf;
+ 	struct rq *rq;
+ 
++	if (!sysctl_sched_yield_type)
++		return;
++
+ 	rq = this_rq_lock_irq(&rf);
+ 
+ 	schedstat_inc(rq->yld_count);
+-	rq->donor->sched_class->yield_task(rq);
++
++	if (sysctl_sched_yield_type > 1)
++		rq->donor->sched_class->yield_task(rq);
+ 
+ 	preempt_disable();
+ 	rq_unlock_irq(rq, &rf);
+diff --git a/kernel/sysctl.c b/kernel/sysctl.c
+--- a/kernel/sysctl.c
++++ b/kernel/sysctl.c
+@@ -31,6 +31,8 @@
+ 
+ #ifdef CONFIG_SYSCTL
+ 
++extern int sysctl_sched_yield_type;
++
+ /* Constants used for minimum and maximum */
+ static const int ngroups_max = NGROUPS_MAX;
+ static const int cap_last_cap = CAP_LAST_CAP;
+@@ -1380,6 +1382,15 @@
+ 		.proc_handler	= proc_dointvec,
+ 	},
+ 	{
++		.procname	= "yield_type",
++		.data		= &sysctl_sched_yield_type,
++		.maxlen		= sizeof (int),
++		.mode		= 0644,
++		.proc_handler	= proc_dointvec,
++		.extra1		= SYSCTL_ZERO,
++		.extra2		= SYSCTL_TWO,
++	},
++	{
+ 		.procname	= "cap_last_cap",
+ 		.data		= (void *)&cap_last_cap,
+ 		.maxlen		= sizeof(int),

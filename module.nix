@@ -47,23 +47,31 @@ let
   isPpc64 = pkgsKernel.stdenv.hostPlatform.isPower64;
   isMips = pkgsKernel.stdenv.hostPlatform.isMips;
 
-  stableRelease = {
+  release = {
     "6.19" = "6.19.12";
     "7.0" = "7.0.13";
     "7.1" = "7.1.5";
     "7.2" = "7.2.8";
+    "7.3" = "7.3-rc5";
+    next = "7.3-rc5-next-20260930";
   };
 
   resolvedVersion =
-    stableRelease.${cfg.version} or (throw "bunker: unsupported kernel version ${cfg.version}");
+    release.${cfg.version} or (throw "bunker: unsupported kernel version ${cfg.version}");
 
   majorMinor = cfg.version;
 
+  # "next" sorts below every number in compareVersions, so version gates use
+  # the release the tree is based on.
+  kernelMajorMinor = lib.versions.majorMinor resolvedVersion;
+
   fullVersion =
     let
-      parts = lib.splitString "." resolvedVersion;
+      parts = builtins.match "([0-9.]+)(.*)" resolvedVersion;
+      base = builtins.elemAt parts 0;
     in
-    if builtins.length parts >= 3 then resolvedVersion else "${resolvedVersion}.0";
+    (if builtins.length (lib.splitString "." base) >= 3 then base else "${base}.0")
+    + builtins.elemAt parts 1;
 
   # Shared keys are stable; upstream/ numbering is version-specific.
   sharedGroups = {
@@ -122,11 +130,13 @@ let
           "7.0" = 105;
           "7.1" = 101;
           "7.2" = 101;
+          "7.3" = 101;
+          next = 101;
         }
         .${majorMinor}
       ))
       ++ (lib.genList (i: "grapheneos/${lib.fixedWidthString 4 "0" (toString (i + 1))}") (
-        if lib.versionAtLeast majorMinor "7.1" then 8 else 5
+        if lib.versionAtLeast kernelMajorMinor "7.1" then 8 else 5
       ))
       ++ [
         "bunker/0003" # rust: allow clang native randstruct
@@ -172,8 +182,6 @@ let
       "cachyos/0017"
       "xanmod/0008"
       "xanmod/0009"
-      "xanmod/0010"
-      "xanmod/0011"
     ];
     # Cavium Octeon III ethernet patches for mips64.
     octeon = [
@@ -247,6 +255,8 @@ let
       ];
       drivers = [ "cachyos/0005" ]; # Zen errata workaround, folded into cachyos/0002 on 7.2
       extras = [
+        "xanmod/0010"
+        "xanmod/0011" # C binder, deleted in linux-next
         "upstream/0020"
         "upstream/0021"
         "xanmod/0015"
@@ -265,6 +275,10 @@ let
         "bunker/0011" # VMSCAPE: barrier_nospec after static call (must follow cachyos/0014)
       ];
       drivers = [ "cachyos/0005" ]; # Zen errata workaround, folded into cachyos/0002 on 7.2
+      extras = [
+        "xanmod/0010"
+        "xanmod/0011" # C binder, deleted in linux-next
+      ];
     };
     "7.1" = {
       interactive = [
@@ -276,11 +290,32 @@ let
         "bunker/0011" # VMSCAPE: barrier_nospec after static call (must follow cachyos/0014)
       ];
       drivers = [ "cachyos/0005" ]; # Zen errata workaround, folded into cachyos/0002 on 7.2
-      extras = [ "cachyos/0020" ];
+      extras = [
+        "xanmod/0010"
+        "xanmod/0011" # C binder, deleted in linux-next
+        "cachyos/0020"
+      ];
     };
     # mainline 7.2 absorbed the carries the older releases still need
     "7.2" = {
       base = [ "bunker/0018" ]; # reclaim-safe vmap purge
+      interactive = [ "zen/0020" ];
+      extras = [
+        "xanmod/0010"
+        "xanmod/0011" # C binder, deleted in linux-next
+        "cachyos/0020"
+      ];
+    };
+    "7.3" = {
+      base = [ "bunker/0018" ]; # reclaim-safe vmap purge
+      interactive = [ "zen/0020" ];
+      extras = [
+        "xanmod/0010"
+        "xanmod/0011" # C binder, deleted in linux-next
+        "cachyos/0020"
+      ];
+    };
+    next = {
       interactive = [ "zen/0020" ];
       extras = [ "cachyos/0020" ];
     };
@@ -369,17 +404,30 @@ let
       "7.0.13" = "sha256-PIHt0PcWrKPdSN/2kWgYJ1gMxT01qO7DvkfTRtH4mRM=";
       "7.1.5" = "sha256-IqAZazy83zTcJ7d1YfTQQFhf00R+3JqzUxoax54wQec=";
       "7.2.8" = "sha256-EujVqXPRrXxaXGmILkAisTHtcV23AD/c12Dd+MPlGUE=";
+      "7.3-rc5" = "sha256-OC1qpIZANR332mMh4VbDkVW0qZsJhdQ3D35ghymYdFM=";
+      "7.3-rc5-next-20260930" = "sha256-QC0jrHN8ZkoaiJlVOLE2FS/pJzqT1yoqUT9CK8w74pQ=";
     }
     .${resolvedVersion};
 
-  sourceUrl = "https://cdn.kernel.org/pub/linux/kernel/v${
-    builtins.substring 0 1 cfg.version
-  }.x/linux-${resolvedVersion}.tar.xz";
-
-  kernelSrc = pkgsKernel.fetchurl {
-    url = sourceUrl;
-    hash = sourceHash;
-  };
+  # cgit drops the connection generating linux-next snapshot tarballs, so
+  # next is cloned instead.
+  kernelSrc =
+    if cfg.version == "next" then
+      pkgsKernel.fetchgit {
+        url = "https://git.kernel.org/pub/scm/linux/kernel/git/next/linux-next.git";
+        rev = "refs/tags/next-${lib.last (lib.splitString "-next-" resolvedVersion)}";
+        hash = sourceHash;
+      }
+    else if lib.hasInfix "-rc" resolvedVersion then
+      pkgsKernel.fetchurl {
+        url = "https://git.kernel.org/torvalds/t/linux-${resolvedVersion}.tar.gz";
+        hash = sourceHash;
+      }
+    else
+      pkgsKernel.fetchurl {
+        url = "https://cdn.kernel.org/pub/linux/kernel/v${lib.versions.major resolvedVersion}.x/linux-${resolvedVersion}.tar.xz";
+        hash = sourceHash;
+      };
 
   # Per-group structured kconfig.
   # Uses optionalAttrs (not mkIf) because these are merged with // into buildLinux,
@@ -399,6 +447,10 @@ let
     CRYPTO_DRBG_HASH = mkForce (option yes);
     CRYPTO_DRBG_CTR = mkForce (option yes);
     RANDOM_KMALLOC_CACHES = mkForce (option yes);
+
+    # linux-next renamed it COREBOOT_FIRMWARE and left the old name transitional
+    GOOGLE_FIRMWARE = mkForce (option yes);
+    COREBOOT_FIRMWARE = option yes;
   }
   // optionalAttrs isX86 {
     MICROCODE = yes;
@@ -645,6 +697,7 @@ let
       UBIFS_FS = option no; # UBI flash filesystem (embedded)
       NTFS_FS = option no; # prefer NTFS3 over 7.1's revived classic driver
       NTFS_FS_POSIX_ACL = option no; # child of NTFS_FS; nixpkgs forces =y on 7.1+, but parent is off
+      NTFS_FS_WOF_COMPRESSION = option no; # same, nixpkgs forces =y on 7.3+
       MSDOS_FS = option no; # 8.3 FAT (VFAT supersedes)
 
       # --- Dead subsystems ---
@@ -1165,7 +1218,7 @@ let
     }
     // (
       # 7.1+ exposes BBRv3 as "bbr3", while older patch sets expose it as "bbr".
-      if lib.versionAtLeast majorMinor "7.1" then
+      if lib.versionAtLeast kernelMajorMinor "7.1" then
         {
           TCP_CONG_BBR3 = option yes;
           DEFAULT_BBR3 = option yes;
@@ -1573,9 +1626,11 @@ in
         "7.0"
         "7.1"
         "7.2"
+        "7.3"
+        "next"
       ];
       default = "7.2";
-      description = "Linux kernel major.minor version. Automatically resolves to the latest stable point release.";
+      description = "Linux kernel major.minor version, or \"next\" for linux-next. Resolves to the pinned point release, rc or next tag.";
     };
 
     interactive = mkOption {

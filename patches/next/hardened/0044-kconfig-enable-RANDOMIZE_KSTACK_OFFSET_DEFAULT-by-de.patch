@@ -1,0 +1,23 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Levente Polyak <levente@leventepolyak.net>
+Date: Wed, 25 Aug 2021 22:24:10 +0200
+Subject: [PATCH 044/101] kconfig: enable RANDOMIZE_KSTACK_OFFSET_DEFAULT by
+ default
+
+---
+ arch/Kconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/Kconfig b/arch/Kconfig
+index 4ea9fa84b0971..f76851c49cf7b 100644
+--- a/arch/Kconfig
++++ b/arch/Kconfig
+@@ -1581,6 +1581,7 @@ config RANDOMIZE_KSTACK_OFFSET
+ config RANDOMIZE_KSTACK_OFFSET_DEFAULT
+ 	bool "Default state of kernel stack offset randomization"
+ 	depends on RANDOMIZE_KSTACK_OFFSET
++	default y
+ 	help
+ 	  Kernel stack offset randomization is controlled by kernel boot param
+ 	  "randomize_kstack_offset=on/off", and this config chooses the default
+

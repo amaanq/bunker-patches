@@ -1,0 +1,92 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Tue, 16 May 2017 17:51:48 -0400
+Subject: [PATCH 083/101] usb: add toggle for disabling newly added USB devices
+
+Based on the public grsecurity patches.
+
+[thibaut.sautereau@ssi.gouv.fr: Adapt to sysctl code refactoring]
+Signed-off-by: Thibaut Sautereau <thibaut.sautereau@ssi.gouv.fr>
+Signed-off-by: Levente Polyak <levente@leventepolyak.net>
+[thibaut.sautereau@ssi.gouv.fr: Adapt to sysctl code refactoring]
+Signed-off-by: Nicolas Bouchinet <nicolas.bouchinet@oss.cyber.gouv.fr>
+---
+ drivers/usb/core/hub.c |  9 +++++++++
+ include/linux/usb.h    |  3 +++
+ kernel/sysctl.c        | 14 ++++++++++++++
+ 3 files changed, 26 insertions(+)
+
+diff --git a/drivers/usb/core/hub.c b/drivers/usb/core/hub.c
+index 3345b3298daf3..b3a4cde1adf2a 100644
+--- a/drivers/usb/core/hub.c
++++ b/drivers/usb/core/hub.c
+@@ -5400,6 +5400,9 @@ static int descriptors_changed(struct usb_device *udev,
+ 	return changed;
+ }
+ 
++/* sysctl */
++int deny_new_usb __read_mostly = 0;
++
+ static void hub_port_connect(struct usb_hub *hub, int port1, u16 portstatus,
+ 		u16 portchange)
+ {
+@@ -5461,6 +5464,12 @@ static void hub_port_connect(struct usb_hub *hub, int port1, u16 portstatus,
+ 			goto done;
+ 		return;
+ 	}
++
++	if (deny_new_usb) {
++		dev_err(&port_dev->dev, "denied insert of USB device on port %d\n", port1);
++		goto done;
++	}
++
+ 	if (hub_is_superspeed(hub->hdev))
+ 		unit_load = 150;
+ 	else
+diff --git a/include/linux/usb.h b/include/linux/usb.h
+index 49ab8dbb885f6..f2a0543390135 100644
+--- a/include/linux/usb.h
++++ b/include/linux/usb.h
+@@ -2113,6 +2113,9 @@ extern void usb_led_activity(enum usb_led_event ev);
+ static inline void usb_led_activity(enum usb_led_event ev) {}
+ #endif
+ 
++/* sysctl */
++extern int deny_new_usb;
++
+ #endif  /* __KERNEL__ */
+ 
+ #endif
+diff --git a/kernel/sysctl.c b/kernel/sysctl.c
+index dde6290100cd8..45bb962c32b22 100644
+--- a/kernel/sysctl.c
++++ b/kernel/sysctl.c
+@@ -25,6 +25,9 @@
+ #ifdef CONFIG_USER_NS
+ #include <linux/user_namespace.h>
+ #endif
++#if IS_ENABLED(CONFIG_USB)
++#include <linux/usb.h>
++#endif
+ 
+ /* shared constants to be used in various sysctls */
+ const int sysctl_vals[] = { 0, 1, 2, 3, 4, 100, 200, 1000, 3000, INT_MAX, 65535, -1 };
+@@ -1458,6 +1461,17 @@ static const struct ctl_table sysctl_subsys_table[] = {
+ 		.extra1		= SYSCTL_NEG_ONE,
+ 		.extra2		= SYSCTL_ONE,
+ 	},
++#endif
++#if IS_ENABLED(CONFIG_USB)
++	{
++		.procname	= "deny_new_usb",
++		.data		= &deny_new_usb,
++		.maxlen		= sizeof(int),
++		.mode		= 0644,
++		.proc_handler	= proc_dointvec_minmax_sysadmin,
++		.extra1		= SYSCTL_ZERO,
++		.extra2		= SYSCTL_ONE,
++	},
+ #endif
+ 	{
+ 		.procname	= "ngroups_max",
+
