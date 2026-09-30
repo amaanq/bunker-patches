@@ -1,13 +1,24 @@
-bcachefs-tools(#725): throttle btree writes at half dirty cache
+bcachefs-tools(#725): throttle btree writes at half dirty cache, not on writes in flight, and start reclaim at a quarter
 
 --- a/src/fs/bcachefs/btree/cache.h
 +++ b/src/fs/bcachefs/btree/cache.h
-@@ -179,7 +179,7 @@
+@@ -179,7 +179,6 @@
  	size_t live	= btree_cache_nr_live(bc);
  	size_t dirty	= btree_cache_nr_dirty(bc);
- 	bool throttle	= atomic_long_read(&bc->nr_in_flight_inner) > BTREE_WRITE_IO_LIMIT(c) ||
+-	bool throttle	= atomic_long_read(&bc->nr_in_flight_inner) > BTREE_WRITE_IO_LIMIT(c) ||
 -			  (live && dirty > live * 3 / 4);
-+			  (live && dirty > live / 2);
++	bool throttle	= live && dirty > live / 2;
 
  	if (throttle != READ_ONCE(bc->should_throttle))
  		WRITE_ONCE(bc->should_throttle, throttle);
+--- a/src/fs/bcachefs/journal/reclaim.c
++++ b/src/fs/bcachefs/journal/reclaim.c
+@@ -979,7 +979,7 @@
+ 		size_t btree_cache_live = btree_cache_list_nr(&bc->live[0]) +
+ 					  btree_cache_list_nr(&bc->live[1]);
+ 		size_t btree_cache_dirty = bc->live[0].nr_dirty + bc->live[1].nr_dirty;
+-		if (btree_cache_dirty * 2 > btree_cache_live)
++		if (btree_cache_dirty * 4 > btree_cache_live)
+ 			min_nr = 1;
+ 
+ 		min_key_cache = min(bch2_nr_btree_keys_need_flush(c), (size_t) 128);
