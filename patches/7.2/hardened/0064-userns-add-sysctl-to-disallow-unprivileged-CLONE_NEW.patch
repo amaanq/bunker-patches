@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Serge Hallyn <serge.hallyn@canonical.com>
 Date: Fri, 31 May 2013 19:12:12 +0100
-Subject: [PATCH 064/102] userns: add sysctl to disallow unprivileged
+Subject: [PATCH 064/100] userns: add sysctl to disallow unprivileged
  CLONE_NEWUSER by default
 
 Signed-off-by: Serge Hallyn <serge.hallyn@ubuntu.com>
@@ -22,9 +22,7 @@ diff --git a/include/linux/user_namespace.h b/include/linux/user_namespace.h
 index 9c3be157397e0..bb05d4a07c46a 100644
 --- a/include/linux/user_namespace.h
 +++ b/include/linux/user_namespace.h
-@@ -171,10 +171,12 @@ static inline struct user_namespace *to_user_ns(struct ns_common *ns)
- 	return container_of(ns, struct user_namespace, ns);
- }
+@@ -173,6 +173,8 @@ static inline struct user_namespace *to_user_ns(struct ns_common *ns)
  
  #ifdef CONFIG_USER_NS
  
@@ -33,11 +31,7 @@ index 9c3be157397e0..bb05d4a07c46a 100644
  static inline struct user_namespace *get_user_ns(struct user_namespace *ns)
  {
  	if (ns)
- 		ns_ref_inc(ns);
- 	return ns;
-@@ -204,10 +206,12 @@ extern bool in_userns(const struct user_namespace *ancestor,
- 		       const struct user_namespace *child);
- extern bool current_in_userns(const struct user_namespace *target_ns);
+@@ -206,6 +208,8 @@ extern bool current_in_userns(const struct user_namespace *target_ns);
  struct ns_common *ns_get_owner(struct ns_common *ns);
  #else
  
@@ -46,15 +40,11 @@ index 9c3be157397e0..bb05d4a07c46a 100644
  static inline struct user_namespace *get_user_ns(struct user_namespace *ns)
  {
  	return &init_user_ns;
- }
- 
 diff --git a/kernel/fork.c b/kernel/fork.c
-index f0e2e131a9a5a..60fa5fa63617c 100644
+index 2c88568b0463d..7d413cb241d03 100644
 --- a/kernel/fork.c
 +++ b/kernel/fork.c
-@@ -83,10 +83,11 @@
- #include <linux/fs_struct.h>
- #include <linux/magic.h>
+@@ -85,6 +85,7 @@
  #include <linux/perf_event.h>
  #include <linux/posix-timers.h>
  #include <linux/user-return-notifier.h>
@@ -62,11 +52,7 @@ index f0e2e131a9a5a..60fa5fa63617c 100644
  #include <linux/oom.h>
  #include <linux/khugepaged.h>
  #include <linux/signalfd.h>
- #include <linux/uprobes.h>
- #include <linux/aio.h>
-@@ -2012,10 +2013,14 @@ __latent_entropy struct task_struct *copy_process(
- 		return ERR_PTR(-EINVAL);
- 
+@@ -2013,6 +2014,10 @@ __latent_entropy struct task_struct *copy_process(
  	if ((clone_flags & (CLONE_NEWUSER|CLONE_FS)) == (CLONE_NEWUSER|CLONE_FS))
  		return ERR_PTR(-EINVAL);
  
@@ -77,11 +63,7 @@ index f0e2e131a9a5a..60fa5fa63617c 100644
  	/*
  	 * Thread groups must share signals as well, and detached threads
  	 * can only be started up within the thread group.
- 	 */
- 	if ((clone_flags & CLONE_THREAD) && !(clone_flags & CLONE_SIGHAND))
-@@ -3245,10 +3250,16 @@ int ksys_unshare(unsigned long unshare_flags)
- 	if (unshare_flags & UNSHARE_EMPTY_MNTNS)
- 		unshare_flags |= CLONE_NEWNS;
+@@ -3249,6 +3254,12 @@ int ksys_unshare(unsigned long unshare_flags)
  	if (unshare_flags & CLONE_NEWNS)
  		unshare_flags |= CLONE_FS;
  
@@ -94,15 +76,11 @@ index f0e2e131a9a5a..60fa5fa63617c 100644
  	err = check_unshare_flags(unshare_flags);
  	if (err)
  		goto bad_unshare_out;
- 	/*
- 	 * CLONE_NEWIPC must also detach from the undolist: after switching
 diff --git a/kernel/sysctl.c b/kernel/sysctl.c
 index c9efb17cc255c..57613459d7d09 100644
 --- a/kernel/sysctl.c
 +++ b/kernel/sysctl.c
-@@ -20,10 +20,14 @@
- #include "../lib/kstrtox.h"
- 
+@@ -22,6 +22,10 @@
  #include <linux/uaccess.h>
  #include <asm/processor.h>
  
@@ -113,11 +91,7 @@ index c9efb17cc255c..57613459d7d09 100644
  /* shared constants to be used in various sysctls */
  const int sysctl_vals[] = { 0, 1, 2, 3, 4, 100, 200, 1000, 3000, INT_MAX, 65535, -1 };
  EXPORT_SYMBOL(sysctl_vals);
- 
- const unsigned long sysctl_long_vals[] = { 0, 1, LONG_MAX };
-@@ -1370,10 +1374,21 @@ int proc_do_static_key(const struct ctl_table *table, int dir,
- 	mutex_unlock(&static_key_mutex);
- 	return ret;
+@@ -1372,6 +1376,17 @@ int proc_do_static_key(const struct ctl_table *table, int dir,
  }
  
  static const struct ctl_table sysctl_subsys_table[] = {
@@ -135,15 +109,11 @@ index c9efb17cc255c..57613459d7d09 100644
  #ifdef CONFIG_PROC_SYSCTL
  	{
  		.procname	= "sysctl_writes_strict",
- 		.data		= &sysctl_writes_strict,
- 		.maxlen		= sizeof(int),
 diff --git a/kernel/user_namespace.c b/kernel/user_namespace.c
 index 0bed462e9b2a2..c84977d660bec 100644
 --- a/kernel/user_namespace.c
 +++ b/kernel/user_namespace.c
-@@ -21,10 +21,13 @@
- #include <linux/fs_struct.h>
- #include <linux/bsearch.h>
+@@ -23,6 +23,9 @@
  #include <linux/sort.h>
  #include <linux/nstree.h>
  
@@ -153,8 +123,4 @@ index 0bed462e9b2a2..c84977d660bec 100644
  static struct kmem_cache *user_ns_cachep __ro_after_init;
  static DEFINE_MUTEX(userns_state_mutex);
  
- static bool new_idmap_permitted(const struct file *file,
- 				struct user_namespace *ns, int cap_setid,
--- 
-2.55.0
 

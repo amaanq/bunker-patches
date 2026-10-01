@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Thibaut Sautereau <thibaut.sautereau@ssi.gouv.fr>
 Date: Mon, 6 May 2019 17:07:11 +0200
-Subject: [PATCH 091/102] modpost: Add
+Subject: [PATCH 090/100] modpost: Add
  CONFIG_DEBUG_WRITABLE_FUNCTION_POINTERS_VERBOSE
 
 With 46c7dd56d541 ("modpost: always show verbose warning for section
@@ -21,12 +21,10 @@ Signed-off-by: Levente Polyak <levente@leventepolyak.net>
  3 files changed, 19 insertions(+), 6 deletions(-)
 
 diff --git a/lib/Kconfig.debug b/lib/Kconfig.debug
-index 072eae4626f4c..32522f99676c8 100644
+index 0aa0676b126ff..077e37f90f709 100644
 --- a/lib/Kconfig.debug
 +++ b/lib/Kconfig.debug
-@@ -524,10 +524,13 @@ config SECTION_MISMATCH_WARN_ONLY
- 	  If you say N here, the build process will fail if there are any
- 	  section mismatch, instead of just throwing warnings.
+@@ -526,6 +526,9 @@ config SECTION_MISMATCH_WARN_ONLY
  
  	  If unsure, say Y.
  
@@ -36,15 +34,11 @@ index 072eae4626f4c..32522f99676c8 100644
  config DEBUG_FORCE_FUNCTION_ALIGN_64B
  	bool "Force all function address 64B aligned"
  	depends on EXPERT && (X86_64 || ARM64 || PPC32 || PPC64 || ARC || RISCV || S390)
- 	select FUNCTION_ALIGNMENT_64B
- 	help
 diff --git a/scripts/Makefile.modpost b/scripts/Makefile.modpost
 index d7d45067d08b9..b501130c534cc 100644
 --- a/scripts/Makefile.modpost
 +++ b/scripts/Makefile.modpost
-@@ -45,10 +45,11 @@ modpost-args =										\
- 	$(if $(CONFIG_MODVERSIONS),-m)							\
- 	$(if $(CONFIG_BASIC_MODVERSIONS),-b)						\
+@@ -47,6 +47,7 @@ modpost-args =										\
  	$(if $(CONFIG_EXTENDED_MODVERSIONS),-x)						\
  	$(if $(CONFIG_MODULE_SRCVERSION_ALL),-a)					\
  	$(if $(CONFIG_SECTION_MISMATCH_WARN_ONLY),,-E)					\
@@ -52,15 +46,11 @@ index d7d45067d08b9..b501130c534cc 100644
  	$(if $(KBUILD_MODPOST_WARN),-w)							\
  	$(if $(KBUILD_NSDEPS),-d modules.nsdeps)					\
  	$(if $(CONFIG_MODULE_ALLOW_MISSING_NAMESPACE_IMPORTS)$(KBUILD_NSDEPS),-N)	\
- 	$(if $(findstring 1, $(KBUILD_EXTRA_WARN)),-W)					\
- 	-o $@
 diff --git a/scripts/mod/modpost.c b/scripts/mod/modpost.c
-index 0111d76367741..fec040a5448eb 100644
+index 034f256ca86f0..040bf7ef7d040 100644
 --- a/scripts/mod/modpost.c
 +++ b/scripts/mod/modpost.c
-@@ -48,10 +48,11 @@ static int sec_mismatch_count;
- static bool sec_mismatch_warn_only = true;
- /* Trim EXPORT_SYMBOLs that are unused by in-tree modules */
+@@ -50,6 +50,7 @@ static bool sec_mismatch_warn_only = true;
  static bool trim_unused_exports;
  
  static int writable_fptr_count = 0;
@@ -68,11 +58,7 @@ index 0111d76367741..fec040a5448eb 100644
  /* ignore missing files */
  static bool ignore_missing_files;
  /* If set to 1, only warn (instead of error) about missing ns imports */
- static bool allow_missing_ns_imports;
- 
-@@ -1048,14 +1049,17 @@ static void default_mismatch_handler(const char *modname, struct elf_info *elf,
- 
- 	/* check whitelist - we may ignore it */
+@@ -1051,10 +1052,13 @@ static void default_mismatch_handler(const char *modname, struct elf_info *elf,
  	if (!secref_whitelist(fromsec, fromsym, tosec, tosym))
  		return;
  
@@ -88,11 +74,7 @@ index 0111d76367741..fec040a5448eb 100644
  
  	if (!tosym[0])
  		snprintf(taddr_str, sizeof(taddr_str), "0x%x", (unsigned int)taddr);
- 
- 	/*
-@@ -2319,20 +2323,23 @@ int main(int argc, char **argv)
- 	char *dump_write = NULL, *files_source = NULL;
- 	int opt;
+@@ -2322,7 +2326,7 @@ int main(int argc, char **argv)
  	LIST_HEAD(dump_lists);
  	struct dump_list *dl, *dl2;
  
@@ -101,9 +83,7 @@ index 0111d76367741..fec040a5448eb 100644
  		switch (opt) {
  		case 'e':
  			external_module = true;
- 			break;
- 		case 'i':
- 			dl = xmalloc(sizeof(*dl));
+@@ -2332,6 +2336,9 @@ int main(int argc, char **argv)
  			dl->file = optarg;
  			list_add_tail(&dl->list, &dump_lists);
  			break;
@@ -113,11 +93,7 @@ index 0111d76367741..fec040a5448eb 100644
  		case 'M':
  			module_enabled = true;
  			break;
- 		case 'm':
- 			modversions = true;
-@@ -2429,11 +2436,13 @@ int main(int argc, char **argv)
- 
- 	if (nr_unresolved > MAX_UNRESOLVED_REPORTS)
+@@ -2432,9 +2439,11 @@ int main(int argc, char **argv)
  		warn("suppressed %u unresolved symbol warnings because there were too many)\n",
  		     nr_unresolved - MAX_UNRESOLVED_REPORTS);
  
@@ -132,6 +108,4 @@ index 0111d76367741..fec040a5448eb 100644
  
  	return error_occurred ? 1 : 0;
  }
--- 
-2.55.0
 

@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Sun, 25 Feb 2018 02:15:24 -0500
-Subject: [PATCH 036/102] enable AUDIT by default
+Subject: [PATCH 036/100] enable AUDIT by default
 
 ---
  init/Kconfig | 1 +
@@ -11,9 +11,7 @@ diff --git a/init/Kconfig b/init/Kconfig
 index 3c9fa44e1e2ef..1fd8624e20d4a 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -537,10 +537,11 @@ config CROSS_MEMORY_ATTACH
- 	  See the man page for more details.
- 
+@@ -539,6 +539,7 @@ config CROSS_MEMORY_ATTACH
  config AUDIT
  	bool "Auditing support"
  	depends on NET
@@ -21,8 +19,4 @@ index 3c9fa44e1e2ef..1fd8624e20d4a 100644
  	help
  	  Enable auditing infrastructure that can be used with another
  	  kernel subsystem, such as SELinux (which requires this for
- 	  logging of avc messages output).  System call auditing is included
- 	  on architectures which support it.
--- 
-2.55.0
 

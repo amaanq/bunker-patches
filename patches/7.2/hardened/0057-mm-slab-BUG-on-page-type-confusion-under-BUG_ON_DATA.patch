@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Tue, 17 Sep 2019 18:00:54 +0200
-Subject: [PATCH 057/102] mm: slab: BUG on page type confusion under
+Subject: [PATCH 057/100] mm: slab: BUG on page type confusion under
  BUG_ON_DATA_CORRUPTION
 
 This change was extracted from PaX.
@@ -16,12 +16,10 @@ Signed-off-by: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
  1 file changed, 4 insertions(+)
 
 diff --git a/mm/slub.c b/mm/slub.c
-index dbebc53b3d36e..d4d77b4596db6 100644
+index afbce86c0c299..ee4a0ca15521e 100644
 --- a/mm/slub.c
 +++ b/mm/slub.c
-@@ -6455,14 +6455,18 @@ static noinline void warn_free_bad_obj(struct kmem_cache *s, void *obj)
- {
- 	struct kmem_cache *cachep;
+@@ -6471,10 +6471,14 @@ static noinline void warn_free_bad_obj(struct kmem_cache *s, void *obj)
  	struct slab *slab;
  
  	slab = virt_to_slab(obj);
@@ -36,8 +34,4 @@ index dbebc53b3d36e..d4d77b4596db6 100644
  
  	cachep = slab->slab_cache;
  
- 	if (WARN_ONCE(cachep != s,
- 			"kmem_cache_free(%s, %p): object belongs to different cache %s\n",
--- 
-2.55.0
 

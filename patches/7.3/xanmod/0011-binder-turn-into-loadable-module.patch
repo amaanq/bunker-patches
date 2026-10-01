@@ -4,6 +4,7 @@ Subject: [PATCH] binder: turn into loadable module
 
 Signed-off-by: Alexandre Frade <kernel@xanmod.org>
 ---
+diff --git a/drivers/android/Kconfig b/drivers/android/Kconfig
 --- a/drivers/android/Kconfig
 +++ b/drivers/android/Kconfig
 @@ -2,7 +2,7 @@
@@ -26,6 +27,7 @@ Signed-off-by: Alexandre Frade <kernel@xanmod.org>
  	default n
  	help
  	  Binderfs is a pseudo-filesystem for the Android Binder IPC driver
+diff --git a/drivers/android/Makefile b/drivers/android/Makefile
 --- a/drivers/android/Makefile
 +++ b/drivers/android/Makefile
 @@ -1,7 +1,8 @@
@@ -41,9 +43,10 @@ Signed-off-by: Alexandre Frade <kernel@xanmod.org>
 +binder_linux-$(CONFIG_ANDROID_BINDERFS) += binderfs.o
 +binder_linux-$(CONFIG_ANDROID_BINDER_ALLOC_KUNIT_TEST) += binder_alloc_selftest.o
 +binder_linux-$(CONFIG_ANDROID_BINDER_IPC_RUST)   += binder/
+diff --git a/drivers/android/binder.c b/drivers/android/binder.c
 --- a/drivers/android/binder.c
 +++ b/drivers/android/binder.c
-@@ -7165,7 +7165,20 @@
+@@ -7180,7 +7180,20 @@
  	return ret;
  }
  
@@ -65,6 +68,7 @@ Signed-off-by: Alexandre Frade <kernel@xanmod.org>
  
  #define CREATE_TRACE_POINTS
  #include "binder_trace.h"
+diff --git a/drivers/android/binder_alloc.h b/drivers/android/binder_alloc.h
 --- a/drivers/android/binder_alloc.h
 +++ b/drivers/android/binder_alloc.h
 @@ -6,6 +6,7 @@
@@ -75,6 +79,7 @@ Signed-off-by: Alexandre Frade <kernel@xanmod.org>
  #include <linux/rbtree.h>
  #include <linux/list.h>
  #include <linux/mm.h>
+diff --git a/drivers/android/binder_internal.h b/drivers/android/binder_internal.h
 --- a/drivers/android/binder_internal.h
 +++ b/drivers/android/binder_internal.h
 @@ -4,6 +4,7 @@
@@ -103,6 +108,7 @@ Signed-off-by: Alexandre Frade <kernel@xanmod.org>
  extern int __init init_binderfs(void);
  #else
  static inline int __init init_binderfs(void)
+diff --git a/drivers/android/binderfs.c b/drivers/android/binderfs.c
 --- a/drivers/android/binderfs.c
 +++ b/drivers/android/binderfs.c
 @@ -123,7 +123,7 @@
@@ -132,6 +138,7 @@ Signed-off-by: Alexandre Frade <kernel@xanmod.org>
  
  	info->root_gid = make_kgid(sb->s_user_ns, 0);
  	if (!gid_valid(info->root_gid))
+diff --git a/include/linux/ipc_namespace.h b/include/linux/ipc_namespace.h
 --- a/include/linux/ipc_namespace.h
 +++ b/include/linux/ipc_namespace.h
 @@ -128,6 +128,9 @@
@@ -144,6 +151,7 @@ Signed-off-by: Alexandre Frade <kernel@xanmod.org>
  #if defined(CONFIG_IPC_NS)
  static inline struct ipc_namespace *to_ipc_ns(struct ns_common *ns)
  {
+diff --git a/ipc/namespace.c b/ipc/namespace.c
 --- a/ipc/namespace.c
 +++ b/ipc/namespace.c
 @@ -210,6 +210,23 @@
@@ -170,6 +178,7 @@ Signed-off-by: Alexandre Frade <kernel@xanmod.org>
  
  static struct ns_common *ipcns_get(struct task_struct *task)
  {
+diff --git a/kernel/sched/syscalls.c b/kernel/sched/syscalls.c
 --- a/kernel/sched/syscalls.c
 +++ b/kernel/sched/syscalls.c
 @@ -119,6 +119,7 @@
@@ -180,6 +189,7 @@ Signed-off-by: Alexandre Frade <kernel@xanmod.org>
  
  #ifdef __ARCH_WANT_SYS_NICE
  
+diff --git a/kernel/task_work.c b/kernel/task_work.c
 --- a/kernel/task_work.c
 +++ b/kernel/task_work.c
 @@ -102,6 +102,7 @@
@@ -190,16 +200,18 @@ Signed-off-by: Alexandre Frade <kernel@xanmod.org>
  
  /**
   * task_work_cancel_match - cancel a pending work added by task_work_add()
+diff --git a/mm/memory.c b/mm/memory.c
 --- a/mm/memory.c
 +++ b/mm/memory.c
-@@ -2247,6 +2247,7 @@
-	zap_vma_range_batched(&tlb, vma, address, size, NULL);
-	tlb_finish_mmu(&tlb);
+@@ -2378,6 +2378,7 @@
+ 	zap_vma_range_batched(&tlb, vma, address, size, NULL);
+ 	tlb_finish_mmu(&tlb);
  }
 +EXPORT_SYMBOL(zap_vma_range);
  
  /**
   * zap_special_vma_range - zap all page table entries in a special vma range
+diff --git a/mm/mmap_lock.c b/mm/mmap_lock.c
 --- a/mm/mmap_lock.c
 +++ b/mm/mmap_lock.c
 @@ -340,6 +340,7 @@
@@ -210,9 +222,10 @@ Signed-off-by: Alexandre Frade <kernel@xanmod.org>
  
  static struct vm_area_struct *lock_next_vma_under_mmap_lock(struct mm_struct *mm,
  							    struct vma_iterator *vmi,
+diff --git a/mm/vmalloc.c b/mm/vmalloc.c
 --- a/mm/vmalloc.c
 +++ b/mm/vmalloc.c
-@@ -3270,6 +3270,7 @@
+@@ -3295,6 +3295,7 @@
  				  NUMA_NO_NODE, GFP_KERNEL,
  				  __builtin_return_address(0));
  }
@@ -220,6 +233,7 @@ Signed-off-by: Alexandre Frade <kernel@xanmod.org>
  
  struct vm_struct *get_vm_area_caller(unsigned long size, unsigned long flags,
  				const void *caller)
+diff --git a/security/security.c b/security/security.c
 --- a/security/security.c
 +++ b/security/security.c
 @@ -514,6 +514,7 @@
@@ -254,3 +268,14 @@ Signed-off-by: Alexandre Frade <kernel@xanmod.org>
  
  /**
   * security_ptrace_access_check() - Check if tracing is allowed
+diff --git a/mm/list_lru.c b/mm/list_lru.c
+--- a/mm/list_lru.c
++++ b/mm/list_lru.c
+@@ -273,6 +273,7 @@
+ 	list_lru_unlock(l);
+ 	return ret;
+ }
++EXPORT_SYMBOL_GPL(list_lru_del);
+ 
+ bool list_lru_del_obj(struct list_lru *lru, struct list_head *item)
+ {

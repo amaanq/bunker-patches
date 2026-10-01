@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Sat, 27 May 2017 07:29:45 -0400
-Subject: [PATCH 024/102] disable PROC_VMCORE by default
+Subject: [PATCH 024/100] disable PROC_VMCORE by default
 
 ---
  fs/proc/Kconfig | 1 -
@@ -11,9 +11,7 @@ diff --git a/fs/proc/Kconfig b/fs/proc/Kconfig
 index 6ae966c561e73..27d78d669f955 100644
 --- a/fs/proc/Kconfig
 +++ b/fs/proc/Kconfig
-@@ -39,11 +39,10 @@ config PROC_KCORE
- 	  made using this mechanism.
- 
+@@ -41,7 +41,6 @@ config PROC_KCORE
  config PROC_VMCORE
  	bool "/proc/vmcore support"
  	depends on PROC_FS && CRASH_DUMP
@@ -21,8 +19,4 @@ index 6ae966c561e73..27d78d669f955 100644
  	help
  	  Exports the dump image of crashed kernel in ELF format.
  
- config PROC_VMCORE_DEVICE_DUMP
- 	bool "Device Hardware/Firmware Log Collection"
--- 
-2.55.0
 

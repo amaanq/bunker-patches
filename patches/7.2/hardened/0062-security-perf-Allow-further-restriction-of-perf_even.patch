@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Ben Hutchings <ben@decadent.org.uk>
 Date: Mon, 11 Jan 2016 15:23:55 +0000
-Subject: [PATCH 062/102] security,perf: Allow further restriction of
+Subject: [PATCH 062/100] security,perf: Allow further restriction of
  perf_event_open
 
 When kernel.perf_event_open is set to 3 (or greater), disallow all
@@ -41,9 +41,7 @@ diff --git a/Documentation/admin-guide/sysctl/kernel.rst b/Documentation/admin-g
 index c6994e55d1411..78051f230d65b 100644
 --- a/Documentation/admin-guide/sysctl/kernel.rst
 +++ b/Documentation/admin-guide/sysctl/kernel.rst
-@@ -1013,10 +1013,12 @@ with respect to CAP_PERFMON use cases.
-      Disallow raw tracepoint access by users without ``CAP_PERFMON``.
- 
+@@ -1015,6 +1015,8 @@ with respect to CAP_PERFMON use cases.
  >=1  Disallow CPU event access by users without ``CAP_PERFMON``.
  
  >=2  Disallow kernel profiling by users without ``CAP_PERFMON``.
@@ -52,15 +50,11 @@ index c6994e55d1411..78051f230d65b 100644
  ===  ==================================================================
  
  
- perf_event_max_stack
- ====================
 diff --git a/include/linux/perf_event.h b/include/linux/perf_event.h
 index 48d851fbd8ea5..b82bab945bf59 100644
 --- a/include/linux/perf_event.h
 +++ b/include/linux/perf_event.h
-@@ -1790,10 +1790,18 @@ static inline int perf_is_paranoid(void)
- 	return sysctl_perf_event_paranoid > -1;
- }
+@@ -1792,6 +1792,14 @@ static inline int perf_is_paranoid(void)
  
  extern int perf_allow_kernel(void);
  
@@ -75,15 +69,11 @@ index 48d851fbd8ea5..b82bab945bf59 100644
  static inline int perf_allow_cpu(void)
  {
  	if (sysctl_perf_event_paranoid > 0 && !perfmon_capable())
- 		return -EACCES;
- 
 diff --git a/kernel/events/core.c b/kernel/events/core.c
-index ba5bd6a78fe7b..7f7a3400f118b 100644
+index 60e60809bedc7..1131944a98adf 100644
 --- a/kernel/events/core.c
 +++ b/kernel/events/core.c
-@@ -490,12 +490,17 @@ static __always_inline bool is_guest_mediated_pmu_loaded(void)
-  * perf event paranoia level:
-  *  -1 - not paranoid at all
+@@ -492,8 +492,13 @@ static __always_inline bool is_guest_mediated_pmu_loaded(void)
   *   0 - disallow raw tracepoint access for unpriv
   *   1 - disallow cpu events for unpriv
   *   2 - disallow kernel profiling for unpriv
@@ -97,11 +87,7 @@ index ba5bd6a78fe7b..7f7a3400f118b 100644
  
  /* Minimum for 512 kiB + 1 user control page. 'free' kiB per user. */
  static int sysctl_perf_event_mlock __read_mostly = 512 + (PAGE_SIZE / 1024);
- 
- /*
-@@ -13905,11 +13910,11 @@ SYSCALL_DEFINE5(perf_event_open,
- 	err = perf_copy_attr(attr_uptr, &attr);
- 	if (err)
+@@ -13918,7 +13923,7 @@ SYSCALL_DEFINE5(perf_event_open,
  		return err;
  
  	/* Do we allow access to perf_event_open(2) ? */
@@ -110,15 +96,11 @@ index ba5bd6a78fe7b..7f7a3400f118b 100644
  	if (err)
  		return err;
  
- 	if (!attr.exclude_kernel) {
- 		err = perf_allow_kernel();
 diff --git a/security/Kconfig b/security/Kconfig
 index b0a185a9f2789..667528552d86e 100644
 --- a/security/Kconfig
 +++ b/security/Kconfig
-@@ -68,10 +68,19 @@ config MSEAL_SYSTEM_MAPPINGS
- 	  this config can't be enabled universally.
- 
+@@ -70,6 +70,15 @@ config MSEAL_SYSTEM_MAPPINGS
  	  For complete descriptions of memory sealing, please see
  	  Documentation/userspace-api/mseal.rst
  
@@ -134,15 +116,11 @@ index b0a185a9f2789..667528552d86e 100644
  config SECURITY
  	bool "Enable different security models"
  	depends on SYSFS
- 	depends on MULTIUSER
- 	default y
 diff --git a/tools/perf/Documentation/security.txt b/tools/perf/Documentation/security.txt
 index 4fe3b8b1958f6..a7d88cc23a70c 100644
 --- a/tools/perf/Documentation/security.txt
 +++ b/tools/perf/Documentation/security.txt
-@@ -146,10 +146,11 @@ Perf tool provides a message similar to the one below:
-      -1: Allow use of (almost) all events by all users
-          Ignore mlock limit after perf_event_mlock_kb without CAP_IPC_LOCK
+@@ -148,6 +148,7 @@ Perf tool provides a message similar to the one below:
     >= 0: Disallow raw and ftrace function tracepoint access
     >= 1: Disallow CPU event access
     >= 2: Disallow kernel profiling
@@ -150,15 +128,11 @@ index 4fe3b8b1958f6..a7d88cc23a70c 100644
     To make the adjusted perf_event_paranoid setting permanent preserve it
     in /etc/sysctl.conf (e.g. kernel.perf_event_paranoid = <setting>)
  
- To make sure that access is limited by MAC policy settings inspect system
- audit records using journalctl command or /var/log/audit/audit.log so the
 diff --git a/tools/perf/util/evsel.c b/tools/perf/util/evsel.c
-index ea9fa04429f08..5f199871b4f16 100644
+index 968cd74a9cde9..8a7b8324eefb9 100644
 --- a/tools/perf/util/evsel.c
 +++ b/tools/perf/util/evsel.c
-@@ -4273,10 +4273,11 @@ int evsel__open_strerror(struct evsel *evsel, struct target *target,
- 		 "  -1: Allow use of (almost) all events by all users\n"
- 		 "      Ignore mlock limit after perf_event_mlock_kb without CAP_IPC_LOCK\n"
+@@ -4382,6 +4382,7 @@ int evsel__open_strerror(struct evsel *evsel, struct target *target,
  		 ">= 0: Disallow raw and ftrace function tracepoint access\n"
  		 ">= 1: Disallow CPU event access\n"
  		 ">= 2: Disallow kernel profiling\n"
@@ -166,8 +140,4 @@ index ea9fa04429f08..5f199871b4f16 100644
  		 "To make the adjusted perf_event_paranoid setting permanent preserve it\n"
  		 "in /etc/sysctl.conf (e.g. kernel.perf_event_paranoid = <setting>)",
  		 perf_event_paranoid());
- 	case ENOENT:
- 		return scnprintf(msg, size, "The %s event is not supported.", evsel__name(evsel));
--- 
-2.55.0
 

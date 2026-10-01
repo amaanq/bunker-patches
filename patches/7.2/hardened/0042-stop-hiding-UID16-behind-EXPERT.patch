@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Levente Polyak <levente@leventepolyak.net>
 Date: Tue, 22 Dec 2020 23:40:09 +0100
-Subject: [PATCH 042/102] stop hiding UID16 behind EXPERT
+Subject: [PATCH 042/100] stop hiding UID16 behind EXPERT
 
 ---
  init/Kconfig | 2 +-
@@ -11,9 +11,7 @@ diff --git a/init/Kconfig b/init/Kconfig
 index 1fd8624e20d4a..e4faf862cfecd 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -1713,11 +1713,11 @@ menuconfig EXPERT
- 	  to be disabled or tweaked. This is for specialized
- 	  environments which can tolerate a "non-standard" kernel.
+@@ -1715,7 +1715,7 @@ menuconfig EXPERT
  	  Only use this if you really know what you are doing.
  
  config UID16
@@ -22,8 +20,4 @@ index 1fd8624e20d4a..e4faf862cfecd 100644
  	depends on HAVE_UID16 && MULTIUSER
  	default y
  	help
- 	  This enables the legacy 16-bit UID syscall wrappers.
- 
--- 
-2.55.0
 

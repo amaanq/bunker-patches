@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Tue, 4 Jul 2017 01:32:30 -0400
-Subject: [PATCH 055/102] mark open_softirq as only used for init
+Subject: [PATCH 055/100] mark open_softirq as only used for init
 
 [nicolas.bouchinet@ssi.gouv.fr: Adapt to commit 75e340ce106fa]
 ---
@@ -13,9 +13,7 @@ diff --git a/include/linux/interrupt.h b/include/linux/interrupt.h
 index 3bf969ad8fe07..22e9c151247ff 100644
 --- a/include/linux/interrupt.h
 +++ b/include/linux/interrupt.h
-@@ -602,11 +602,11 @@ static inline void do_softirq_post_smp_call_flush(unsigned int unused)
- {
- 	do_softirq();
+@@ -604,7 +604,7 @@ static inline void do_softirq_post_smp_call_flush(unsigned int unused)
  }
  #endif
  
@@ -24,15 +22,11 @@ index 3bf969ad8fe07..22e9c151247ff 100644
  extern void softirq_init(void);
  extern void __raise_softirq_irqoff(unsigned int nr);
  
- extern void raise_softirq_irqoff(unsigned int nr);
- extern void raise_softirq(unsigned int nr);
 diff --git a/kernel/softirq.c b/kernel/softirq.c
 index 4425d8dce44b4..77a8b50b05339 100644
 --- a/kernel/softirq.c
 +++ b/kernel/softirq.c
-@@ -801,11 +801,11 @@ void __raise_softirq_irqoff(unsigned int nr)
- 	lockdep_assert_irqs_disabled();
- 	trace_softirq_raise(nr);
+@@ -803,7 +803,7 @@ void __raise_softirq_irqoff(unsigned int nr)
  	or_softirq_pending(1UL << nr);
  }
  
@@ -41,8 +35,4 @@ index 4425d8dce44b4..77a8b50b05339 100644
  {
  	softirq_vec[nr].action = action;
  }
- 
- /*
--- 
-2.55.0
 

@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Fri, 12 May 2017 00:06:16 -0400
-Subject: [PATCH 053/102] mark __{supported,default_kernel}_pte_mask as
+Subject: [PATCH 053/100] mark __{supported,default_kernel}_pte_mask as
  __ro_after_init
 
 These changes were initially extracted from PaX where it was part of
@@ -24,9 +24,7 @@ diff --git a/arch/x86/mm/init_32.c b/arch/x86/mm/init_32.c
 index 0908c44d51e6f..edf0b9ea159c0 100644
 --- a/arch/x86/mm/init_32.c
 +++ b/arch/x86/mm/init_32.c
-@@ -497,13 +497,13 @@ static void __init pagetable_init(void)
- 	permanent_kmaps_init(pgd_base);
- }
+@@ -499,9 +499,9 @@ static void __init pagetable_init(void)
  
  #define DEFAULT_PTE_MASK ~(_PAGE_NX | _PAGE_GLOBAL)
  /* Bits supported by the hardware: */
@@ -38,15 +36,11 @@ index 0908c44d51e6f..edf0b9ea159c0 100644
  EXPORT_SYMBOL_GPL(__supported_pte_mask);
  /* Used in PAGE_KERNEL_* macros which are reasonably used out-of-tree: */
  EXPORT_SYMBOL(__default_kernel_pte_mask);
- 
- /* user-defined highmem size */
 diff --git a/arch/x86/mm/init_64.c b/arch/x86/mm/init_64.c
 index d57f29ca23a5a..58682fa5ba816 100644
 --- a/arch/x86/mm/init_64.c
 +++ b/arch/x86/mm/init_64.c
-@@ -102,13 +102,13 @@ static inline pgprot_t prot_sethuge(pgprot_t prot)
-  * physical space so we can cache the place of the first one and move
-  * around without checking the pgd every time.
+@@ -104,9 +104,9 @@ static inline pgprot_t prot_sethuge(pgprot_t prot)
   */
  
  /* Bits supported by the hardware: */
@@ -58,8 +52,4 @@ index d57f29ca23a5a..58682fa5ba816 100644
  EXPORT_SYMBOL_GPL(__supported_pte_mask);
  /* Used in PAGE_KERNEL_* macros which are reasonably used out-of-tree: */
  EXPORT_SYMBOL(__default_kernel_pte_mask);
- 
- int force_personality32;
--- 
-2.55.0
 

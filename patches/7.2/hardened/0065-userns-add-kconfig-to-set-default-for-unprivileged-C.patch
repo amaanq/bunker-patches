@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Levente Polyak <levente@leventepolyak.net>
 Date: Wed, 31 Jul 2019 20:50:48 +0100
-Subject: [PATCH 065/102] userns: add kconfig to set default for unprivileged
+Subject: [PATCH 065/100] userns: add kconfig to set default for unprivileged
  CLONE_NEWUSER
 
 When disabled, unprivileged users will not be able to create
@@ -25,9 +25,7 @@ diff --git a/init/Kconfig b/init/Kconfig
 index 365a853c99c4d..b9d8b5c79796f 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -1447,10 +1447,26 @@ config USER_NS
- 	  user-space use the memory control groups to limit the amount
- 	  of memory a memory unprivileged users can use.
+@@ -1449,6 +1449,22 @@ config USER_NS
  
  	  If unsure, say N.
  
@@ -50,15 +48,11 @@ index 365a853c99c4d..b9d8b5c79796f 100644
  config PID_NS
  	bool "PID Namespaces"
  	default y
- 	help
- 	  Support process id namespaces.  This allows having multiple
 diff --git a/kernel/user_namespace.c b/kernel/user_namespace.c
 index c84977d660bec..b54a9a25d1c36 100644
 --- a/kernel/user_namespace.c
 +++ b/kernel/user_namespace.c
-@@ -22,11 +22,15 @@
- #include <linux/bsearch.h>
- #include <linux/sort.h>
+@@ -24,7 +24,11 @@
  #include <linux/nstree.h>
  
  /* sysctl */
@@ -70,8 +64,4 @@ index c84977d660bec..b54a9a25d1c36 100644
  
  static struct kmem_cache *user_ns_cachep __ro_after_init;
  static DEFINE_MUTEX(userns_state_mutex);
- 
- static bool new_idmap_permitted(const struct file *file,
--- 
-2.55.0
 

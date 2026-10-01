@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Levente Polyak <levente@leventepolyak.net>
 Date: Wed, 14 May 2025 21:00:09 +0200
-Subject: [PATCH 100/102] kconfig: enable MSEAL_SYSTEM_MAPPINGS by default
+Subject: [PATCH 098/100] kconfig: enable MSEAL_SYSTEM_MAPPINGS by default
 
 Signed-off-by: Levente Polyak <levente@leventepolyak.net>
 ---
@@ -12,9 +12,7 @@ diff --git a/security/Kconfig b/security/Kconfig
 index aae25dff2ec9a..7b4b1707ea7c5 100644
 --- a/security/Kconfig
 +++ b/security/Kconfig
-@@ -52,10 +52,11 @@ endchoice
- config MSEAL_SYSTEM_MAPPINGS
- 	bool "mseal system mappings"
+@@ -54,6 +54,7 @@ config MSEAL_SYSTEM_MAPPINGS
  	depends on 64BIT
  	depends on ARCH_SUPPORTS_MSEAL_SYSTEM_MAPPINGS
  	depends on !CHECKPOINT_RESTORE
@@ -22,8 +20,4 @@ index aae25dff2ec9a..7b4b1707ea7c5 100644
  	help
  	  Apply mseal on system mappings.
  	  The system mappings includes vdso, vvar, vvar_vclock,
- 	  vectors (arm compat-mode), sigpage (arm compat-mode), uprobes.
- 
--- 
-2.55.0
 

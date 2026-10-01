@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Sun, 14 May 2017 19:01:58 -0400
-Subject: [PATCH 050/102] mark slub runtime configuration as __ro_after_init
+Subject: [PATCH 050/100] mark slub runtime configuration as __ro_after_init
 
 Signed-off-by: Daniel Micay <danielmicay@gmail.com>
 ---
@@ -9,12 +9,10 @@ Signed-off-by: Daniel Micay <danielmicay@gmail.com>
  1 file changed, 6 insertions(+), 6 deletions(-)
 
 diff --git a/mm/slub.c b/mm/slub.c
-index 0337e60db5ace..dbebc53b3d36e 100644
+index 3791d69ba6f90..afbce86c0c299 100644
 --- a/mm/slub.c
 +++ b/mm/slub.c
-@@ -987,17 +987,17 @@ static inline void *restore_red_left(struct kmem_cache *s, void *p)
- 
- /*
+@@ -995,13 +995,13 @@ static inline void *restore_red_left(struct kmem_cache *s, void *p)
   * Debug settings:
   */
  #if defined(CONFIG_SLUB_DEBUG_ON)
@@ -31,11 +29,7 @@ index 0337e60db5ace..dbebc53b3d36e 100644
  
  /*
   * Object debugging
-  */
- 
-@@ -7453,14 +7453,14 @@ EXPORT_SYMBOL(kmem_cache_alloc_bulk_noprof);
-  * Minimum / Maximum order of slab pages. This influences locking overhead
-  * and slab fragmentation. A higher order reduces the number of partial slabs
+@@ -7467,10 +7467,10 @@ EXPORT_SYMBOL(kmem_cache_alloc_bulk_noprof);
   * and increases the number of allocations possible without having to
   * take the list_lock.
   */
@@ -49,8 +43,4 @@ index 0337e60db5ace..dbebc53b3d36e 100644
  
  /*
   * Calculate the order of allocation given an slab object size.
-  *
-  * The order of allocation has significant impact on performance and other
--- 
-2.55.0
 

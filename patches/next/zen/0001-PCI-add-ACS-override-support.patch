@@ -1,40 +1,57 @@
-From b98f8d4f598cef72c2c61b4be65f7a4cfb09b6cb Mon Sep 17 00:00:00 2001
+From 6e7e8c5b6aade5864e8800d8cd4e594f04b5d00f Mon Sep 17 00:00:00 2001
 From: Steven Barrett <steven@liquorix.net>
-Date: Sat, 30 Jan 2021 11:34:18 -0600
+Date: Fri, 31 Jul 2026 15:24:53 -0500
 Subject: [PATCH] ZEN: Add ACS override support
 
 Source: https://gitlab.com/Queuecumber/linux-acs-override/-/raw/master/workspaces/5.10.4/acso.patch
+
+Reintroduce the ACS override reverted in d59db80a3f60c.  Only the IOMMU
+group isolation query is answered, so pci_enable_pasid() still sees real
+hardware state; devices with real ACS, and untrusted or external-facing
+devices, are never overridden.  Taints the kernel.
 ---
- .../admin-guide/kernel-parameters.txt         |   9 ++
- drivers/pci/quirks.c                          | 101 ++++++++++++++++++
- 2 files changed, 110 insertions(+)
+ .../admin-guide/kernel-parameters.txt         |  13 ++
+ drivers/pci/quirks.c                          | 124 ++++++++++++++++++
+ 2 files changed, 137 insertions(+)
 
 diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
-index 03a550630644f4..df2b2bb9fa5d81 100644
+index e8ff36982d97bc..abe38363cda8b0 100644
 --- a/Documentation/admin-guide/kernel-parameters.txt
 +++ b/Documentation/admin-guide/kernel-parameters.txt
-@@ -5114,6 +5114,15 @@ Kernel parameters
- 		nomsi		[MSI] If the PCI_MSI kernel config parameter is
- 				enabled, this kernel boot option can be used to
- 				disable the use of MSI interrupts system-wide.
-+		pcie_acs_override =
-+					[PCIE] Override missing PCIe ACS support for:
-+				downstream
-+					All downstream ports - full ACS capabilities
-+				multfunction
-+					All multifunction devices - multifunction ACS subset
-+				id:nnnn:nnnn
-+					Specfic device - full ACS capabilities
-+					Specified as vid:did (vendor/device ID) in hex
- 		noioapicquirk	[APIC] Disable all boot interrupt quirks.
- 				Safety option to keep boot IRQs enabled. This
- 				should never be necessary.
+@@ -5273,6 +5273,19 @@ Kernel parameters
+ 				to disable PCIe TLP Processing Hints support
+ 				system-wide.
+ 
++	pcie_acs_override=
++			[PCIE] Assert ACS isolation for PCIe devices
++			lacking it, splitting their IOMMU groups.  Not a
++			security boundary: peer-to-peer DMA between
++			affected devices is unprotected.  Taints the
++			kernel.  Devices with real ACS, and devices the
++			firmware marked untrusted or external-facing, are
++			never affected.  Comma-separated list of:
++		downstream	Downstream and root ports
++		multifunction	Multifunction endpoints and upstream ports
++		id:nnnn:nnnn	Devices with this vendor:device ID, hex,
++				up to 16
++
+ 	pcie_aspm=	[PCIE] Forcibly enable or ignore PCIe Active State Power
+ 			Management.
+ 		off	Don't touch ASPM configuration at all.  Leave any
 diff --git a/drivers/pci/quirks.c b/drivers/pci/quirks.c
-index 48946cca4be72c..9a9ad2c1f4f221 100644
+index b09f27f7846fcd..75edcd0ef46276 100644
 --- a/drivers/pci/quirks.c
 +++ b/drivers/pci/quirks.c
-@@ -3759,6 +3759,106 @@ static void quirk_no_bus_reset(struct pci_dev *dev)
- 	dev->dev_flags |= PCI_DEV_FLAGS_NO_BUS_RESET;
+@@ -15,6 +15,7 @@
+ #include <linux/aer.h>
+ #include <linux/align.h>
+ #include <linux/bitfield.h>
++#include <linux/hex.h>
+ #include <linux/types.h>
+ #include <linux/kernel.h>
+ #include <linux/export.h>
+@@ -5074,6 +5075,128 @@ static int  pci_quirk_wangxun_nic_acs(struct pci_dev *dev, u16 acs_flags)
+ 	return false;
  }
  
 +static bool acs_on_downstream;
@@ -48,60 +65,69 @@ index 48946cca4be72c..9a9ad2c1f4f221 100644
 +static struct acs_on_id acs_on_ids[NUM_ACS_IDS];
 +static u8 max_acs_id;
 +
-+static __init int pcie_acs_override_setup(char *p)
++static int __init pcie_acs_parse_id(const char *p, struct acs_on_id *id)
++{
++	unsigned int val = 0;
++	int i, d;
++
++	if (p[7] != ':')
++		return -EINVAL;
++
++	for (i = 3; i < 12; i++) {
++		if (i == 7)
++			continue;
++		d = hex_to_bin(p[i]);
++		if (d < 0)
++			return -EINVAL;
++		val = (val << 4) | d;
++	}
++
++	id->vendor = val >> 16;
++	id->device = val & 0xffff;
++	return 0;
++}
++
++static int __init pcie_acs_override_setup(char *p)
 +{
 +	if (!p)
 +		return -EINVAL;
 +
 +	while (*p) {
-+		if (!strncmp(p, "downstream", 10))
++		size_t len = strcspn(p, ",");
++
++		if (len == strlen("downstream") &&
++		    !strncmp(p, "downstream", len)) {
 +			acs_on_downstream = true;
-+		if (!strncmp(p, "multifunction", 13))
++		} else if (len == strlen("multifunction") &&
++			   !strncmp(p, "multifunction", len)) {
 +			acs_on_multifunction = true;
-+		if (!strncmp(p, "id:", 3)) {
-+			char opt[5];
-+			int ret;
-+			long val;
++		} else if (len == strlen("id:nnnn:nnnn") &&
++			   !strncmp(p, "id:", 3)) {
++			struct acs_on_id id;
 +
-+			if (max_acs_id >= NUM_ACS_IDS - 1) {
++			if (pcie_acs_parse_id(p, &id)) {
++				pr_warn("Invalid PCIe ACS override '%.*s'\n",
++					(int)len, p);
++			} else if (max_acs_id >= ARRAY_SIZE(acs_on_ids)) {
 +				pr_warn("Out of PCIe ACS override slots (%d)\n",
-+						NUM_ACS_IDS);
-+				goto next;
++					NUM_ACS_IDS);
++			} else {
++				acs_on_ids[max_acs_id++] = id;
 +			}
-+
-+			p += 3;
-+			snprintf(opt, 5, "%s", p);
-+			ret = kstrtol(opt, 16, &val);
-+			if (ret) {
-+				pr_warn("PCIe ACS ID parse error %d\n", ret);
-+				goto next;
-+			}
-+			acs_on_ids[max_acs_id].vendor = val;
-+
-+			p += strcspn(p, ":");
-+			if (*p != ':') {
-+				pr_warn("PCIe ACS invalid ID\n");
-+				goto next;
-+			}
-+
-+			p++;
-+			snprintf(opt, 5, "%s", p);
-+			ret = kstrtol(opt, 16, &val);
-+			if (ret) {
-+				pr_warn("PCIe ACS ID parse error %d\n", ret);
-+				goto next;
-+			}
-+			acs_on_ids[max_acs_id].device = val;
-+			max_acs_id++;
++		} else if (len) {
++			pr_warn("Invalid PCIe ACS override '%.*s'\n",
++				(int)len, p);
 +		}
-+next:
-+		p += strcspn(p, ",");
++
++		p += len;
 +		if (*p == ',')
 +			p++;
 +	}
 +
-+	if (acs_on_downstream || acs_on_multifunction || max_acs_id)
++	if (acs_on_downstream || acs_on_multifunction || max_acs_id) {
 +		pr_warn("Warning: PCIe ACS overrides enabled; This may allow non-IOMMU protected peer-to-peer DMA\n");
++		add_taint(TAINT_USER, LOCKDEP_STILL_OK);
++	}
 +
 +	return 0;
 +}
@@ -111,15 +137,19 @@ index 48946cca4be72c..9a9ad2c1f4f221 100644
 +{
 +	int i;
 +
-+	/* Never override ACS for legacy devices or devices with ACS caps */
-+	if (!pci_is_pcie(dev) ||
-+		pci_find_ext_capability(dev, PCI_EXT_CAP_ID_ACS))
-+			return -ENOTTY;
++	if (!acs_on_downstream && !acs_on_multifunction && !max_acs_id)
++		return -ENOTTY;
 +
-+	for (i = 0; i < max_acs_id; i++)
-+		if (acs_on_ids[i].vendor == dev->vendor &&
-+			acs_on_ids[i].device == dev->device)
-+				return 1;
++	/* Only answer the IOMMU group isolation query (REQ_ACS_FLAGS) */
++	if (acs_flags != (PCI_ACS_SV | PCI_ACS_RR | PCI_ACS_CR | PCI_ACS_UF))
++		return -ENOTTY;
++
++	/* Never override ACS for legacy devices or devices with ACS caps */
++	if (!pci_is_pcie(dev) || dev->acs_cap)
++		return -ENOTTY;
++
++	if (dev->untrusted || dev->external_facing)
++		return -ENOTTY;
 +
 +	switch (pci_pcie_type(dev)) {
 +	case PCI_EXP_TYPE_DOWNSTREAM:
@@ -133,14 +163,23 @@ index 48946cca4be72c..9a9ad2c1f4f221 100644
 +	case PCI_EXP_TYPE_RC_END:
 +		if (acs_on_multifunction && dev->multifunction)
 +			return 1;
++		break;
++	default:
++		return -ENOTTY;
 +	}
++
++	for (i = 0; i < max_acs_id; i++)
++		if (acs_on_ids[i].vendor == dev->vendor &&
++		    acs_on_ids[i].device == dev->device)
++			return 1;
 +
 +	return -ENOTTY;
 +}
- /*
-  * After asserting Secondary Bus Reset to downstream devices via a GB10
-  * Root Port, the link may not retrain correctly.
-@@ -5254,6 +5354,7 @@ static const struct pci_dev_acs_enabled {
++
+ static const struct pci_dev_acs_enabled {
+ 	u16 vendor;
+ 	u16 device;
+@@ -5242,6 +5365,7 @@ static const struct pci_dev_acs_enabled {
  	{ PCI_VENDOR_ID_ZHAOXIN, PCI_ANY_ID, pci_quirk_zhaoxin_pcie_ports_acs },
  	/* Wangxun nics */
  	{ PCI_VENDOR_ID_WANGXUN, PCI_ANY_ID, pci_quirk_wangxun_nic_acs },
@@ -148,3 +187,4 @@ index 48946cca4be72c..9a9ad2c1f4f221 100644
  	{ 0 }
  };
  
+

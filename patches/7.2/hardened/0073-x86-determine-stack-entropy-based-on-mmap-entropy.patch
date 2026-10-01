@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Sun, 21 May 2017 20:30:44 -0400
-Subject: [PATCH 073/102] x86: determine stack entropy based on mmap entropy
+Subject: [PATCH 073/100] x86: determine stack entropy based on mmap entropy
 
 Stack mapping entropy is currently hard-wired to 11 bits of entropy on
 32-bit and 22 bits of entropy on 64-bit. The stack itself gains an extra
@@ -31,9 +31,7 @@ diff --git a/arch/x86/include/asm/elf.h b/arch/x86/include/asm/elf.h
 index e478de95a41c8..1c0808bdcf028 100644
 --- a/arch/x86/include/asm/elf.h
 +++ b/arch/x86/include/asm/elf.h
-@@ -311,21 +311,25 @@ extern unsigned long get_mmap_base(int is_legacy);
- extern bool mmap_address_hint_valid(unsigned long addr, unsigned long len);
- extern unsigned long get_sigframe_size(void);
+@@ -313,8 +313,8 @@ extern unsigned long get_sigframe_size(void);
  
  #ifdef CONFIG_X86_32
  
@@ -44,8 +42,7 @@ index e478de95a41c8..1c0808bdcf028 100644
  
  #define ARCH_DLINFO		ARCH_DLINFO_IA32
  
- /* update AT_VECTOR_SIZE_ARCH if the number of NEW_AUX_ENT entries changes */
- 
+@@ -323,7 +323,11 @@ extern unsigned long get_sigframe_size(void);
  #else /* CONFIG_X86_32 */
  
  /* 1GB for 64bit, 8MB for 32bit */
@@ -58,8 +55,4 @@ index e478de95a41c8..1c0808bdcf028 100644
  #define STACK_RND_MASK __STACK_RND_MASK(mmap_is_ia32())
  
  #define ARCH_DLINFO							\
- do {									\
- 	if (vdso64_enabled)						\
--- 
-2.55.0
 

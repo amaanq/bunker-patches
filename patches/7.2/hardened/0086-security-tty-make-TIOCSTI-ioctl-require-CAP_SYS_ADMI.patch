@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Matt Brown <matt@nmatt.com>
 Date: Mon, 29 May 2017 17:38:00 -0400
-Subject: [PATCH 087/102] security: tty: make TIOCSTI ioctl require
+Subject: [PATCH 086/100] security: tty: make TIOCSTI ioctl require
  CAP_SYS_ADMIN
 
 This introduces the tiocsti_restrict sysctl, whose default is controlled
@@ -70,9 +70,7 @@ diff --git a/Documentation/admin-guide/sysctl/kernel.rst b/Documentation/admin-g
 index 78051f230d65b..a02683f39d68f 100644
 --- a/Documentation/admin-guide/sysctl/kernel.rst
 +++ b/Documentation/admin-guide/sysctl/kernel.rst
-@@ -1597,10 +1597,30 @@ timer_migration
- When set to a non-zero value, attempt to migrate timers away from idle cpus to
- allow them to remain in low power states longer.
+@@ -1599,6 +1599,26 @@ allow them to remain in low power states longer.
  
  Default is set (1).
  
@@ -99,15 +97,11 @@ index 78051f230d65b..a02683f39d68f 100644
  traceoff_on_warning
  ===================
  
- When set, disables tracing (see Documentation/trace/ftrace.rst) when a
- ``WARN()`` is hit.
 diff --git a/drivers/tty/tty_io.c b/drivers/tty/tty_io.c
-index 847b3e02a392e..5bc36b4af75db 100644
+index 992843a62ec97..4f8f6f5a1ac89 100644
 --- a/drivers/tty/tty_io.c
 +++ b/drivers/tty/tty_io.c
-@@ -2255,10 +2255,11 @@ static int tty_fasync(int fd, struct file *filp, int on)
- 
- 	return retval;
+@@ -2257,6 +2257,7 @@ static int tty_fasync(int fd, struct file *filp, int on)
  }
  
  static bool tty_legacy_tiocsti __read_mostly = IS_ENABLED(CONFIG_LEGACY_TIOCSTI);
@@ -115,11 +109,7 @@ index 847b3e02a392e..5bc36b4af75db 100644
  /**
   * tiocsti - fake input character
   * @tty: tty to fake input into
-  * @p: pointer to character
-  *
-@@ -2276,10 +2277,16 @@ static int tiocsti(struct tty_struct *tty, u8 __user *p)
- 	u8 ch;
- 
+@@ -2278,6 +2279,12 @@ static int tiocsti(struct tty_struct *tty, u8 __user *p)
  	if (!tty_legacy_tiocsti && !capable(CAP_SYS_ADMIN))
  		return -EIO;
  
@@ -132,11 +122,7 @@ index 847b3e02a392e..5bc36b4af75db 100644
  	if ((current->signal->tty != tty) && !capable(CAP_SYS_ADMIN))
  		return -EPERM;
  	if (get_user(ch, p))
- 		return -EFAULT;
- 	tty_audit_tiocsti(tty, ch);
-@@ -3640,10 +3647,19 @@ static const struct ctl_table tty_table[] = {
- 		.mode		= 0644,
- 		.proc_handler	= proc_dointvec_minmax,
+@@ -3644,6 +3651,15 @@ static const struct ctl_table tty_table[] = {
  		.extra1		= SYSCTL_ZERO,
  		.extra2		= SYSCTL_ONE,
  	},
@@ -152,15 +138,11 @@ index 847b3e02a392e..5bc36b4af75db 100644
  };
  
  /*
-  * Ok, now we can initialize the rest of the tty devices and can count
-  * on memory allocations, interrupts etc..
 diff --git a/security/Kconfig b/security/Kconfig
 index cf18f3b8b7575..28d31eff03f34 100644
 --- a/security/Kconfig
 +++ b/security/Kconfig
-@@ -78,10 +78,23 @@ config SECURITY_PERF_EVENTS_RESTRICT
- 	  If you say Y here, the kernel.perf_event_paranoid sysctl
- 	  will be set to 3 by default, and no unprivileged use of the
+@@ -80,6 +80,19 @@ config SECURITY_PERF_EVENTS_RESTRICT
  	  perf_event_open syscall will be permitted unless it is
  	  changed.
  
@@ -180,8 +162,4 @@ index cf18f3b8b7575..28d31eff03f34 100644
  config SECURITY
  	bool "Enable different security models"
  	depends on SYSFS
- 	depends on MULTIUSER
- 	default y
--- 
-2.55.0
 

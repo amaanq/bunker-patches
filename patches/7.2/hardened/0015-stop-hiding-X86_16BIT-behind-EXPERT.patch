@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Thu, 4 May 2017 18:11:31 -0400
-Subject: [PATCH 015/102] stop hiding X86_16BIT behind EXPERT
+Subject: [PATCH 015/100] stop hiding X86_16BIT behind EXPERT
 
 ---
  arch/x86/Kconfig | 2 +-
@@ -11,9 +11,7 @@ diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
 index bdad90f210e4b..b90a27c9a03a4 100644
 --- a/arch/x86/Kconfig
 +++ b/arch/x86/Kconfig
-@@ -1223,11 +1223,11 @@ config X86_LEGACY_VM86
- config VM86
- 	bool
+@@ -1225,7 +1225,7 @@ config VM86
  	default X86_LEGACY_VM86
  
  config X86_16BIT
@@ -22,8 +20,4 @@ index bdad90f210e4b..b90a27c9a03a4 100644
  	default y
  	depends on MODIFY_LDT_SYSCALL
  	help
- 	  This option is required by programs like Wine to run 16-bit
- 	  protected mode legacy code on x86 processors.  Disabling
--- 
-2.55.0
 

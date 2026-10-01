@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Levente Polyak <levente@leventepolyak.net>
 Date: Sun, 6 Sep 2020 21:08:16 +0200
-Subject: [PATCH 084/102] usb: implement dedicated subsystem sysctl tables
+Subject: [PATCH 084/100] usb: implement dedicated subsystem sysctl tables
 
 This moves the usb related sysctl knobs to an own usb local sysctl table
 in order to clean up the global sysctl as well as allow the knob to be
@@ -23,9 +23,7 @@ diff --git a/drivers/usb/core/Makefile b/drivers/usb/core/Makefile
 index 60ea76160122b..cb5ed42e12c28 100644
 --- a/drivers/usb/core/Makefile
 +++ b/drivers/usb/core/Makefile
-@@ -13,10 +13,11 @@ usbcore-y += phy.o port.o trace.o
- 
- usbcore-$(CONFIG_OF)		+= of.o
+@@ -15,6 +15,7 @@ usbcore-$(CONFIG_OF)		+= of.o
  usbcore-$(CONFIG_USB_XHCI_SIDEBAND)	+= offload.o
  usbcore-$(CONFIG_USB_PCI)		+= hcd-pci.o
  usbcore-$(CONFIG_ACPI)		+= usb-acpi.o
@@ -33,15 +31,11 @@ index 60ea76160122b..cb5ed42e12c28 100644
  
  ifdef CONFIG_USB_ONBOARD_DEV
  usbcore-y			+= ../misc/onboard_usb_dev_pdevs.o
- endif
- 
 diff --git a/drivers/usb/core/hub.c b/drivers/usb/core/hub.c
-index a115a3b2d8a17..2bd20423b4da5 100644
+index 23e7918dcb578..6829231587ea4 100644
 --- a/drivers/usb/core/hub.c
 +++ b/drivers/usb/core/hub.c
-@@ -5393,13 +5393,10 @@ static int descriptors_changed(struct usb_device *udev,
- 
- 	kfree(buf);
+@@ -5400,9 +5400,6 @@ static int descriptors_changed(struct usb_device *udev,
  	return changed;
  }
  
@@ -51,8 +45,6 @@ index a115a3b2d8a17..2bd20423b4da5 100644
  static void hub_port_connect(struct usb_hub *hub, int port1, u16 portstatus,
  		u16 portchange)
  {
- 	int status = -ENODEV;
- 	int i;
 diff --git a/drivers/usb/core/sysctl.c b/drivers/usb/core/sysctl.c
 new file mode 100644
 index 0000000000000..813db3f0b1cb0
@@ -98,9 +90,7 @@ diff --git a/drivers/usb/core/usb.c b/drivers/usb/core/usb.c
 index df166cafe1061..e32de22b9aadb 100644
 --- a/drivers/usb/core/usb.c
 +++ b/drivers/usb/core/usb.c
-@@ -71,10 +71,13 @@ MODULE_PARM_DESC(autosuspend, "default autosuspend delay");
- 
- #else
+@@ -73,6 +73,9 @@ MODULE_PARM_DESC(autosuspend, "default autosuspend delay");
  #define usb_autosuspend_delay		0
  #endif
  
@@ -110,11 +100,7 @@ index df166cafe1061..e32de22b9aadb 100644
  static bool match_endpoint(struct usb_endpoint_descriptor *epd,
  		struct usb_endpoint_descriptor **bulk_in,
  		struct usb_endpoint_descriptor **bulk_out,
- 		struct usb_endpoint_descriptor **int_in,
- 		struct usb_endpoint_descriptor **int_out)
-@@ -1218,10 +1221,13 @@ static int __init usb_init(void)
- 	usb_init_pool_max();
- 
+@@ -1220,6 +1223,9 @@ static int __init usb_init(void)
  	usb_debugfs_init();
  
  	usb_acpi_register();
@@ -124,11 +110,7 @@ index df166cafe1061..e32de22b9aadb 100644
  	retval = bus_register(&usb_bus_type);
  	if (retval)
  		goto bus_register_failed;
- 	retval = bus_register_notifier(&usb_bus_type, &usb_bus_nb);
- 	if (retval)
-@@ -1257,10 +1263,12 @@ static int __init usb_init(void)
- major_init_failed:
- 	bus_unregister_notifier(&usb_bus_type, &usb_bus_nb);
+@@ -1259,6 +1265,8 @@ static int __init usb_init(void)
  bus_notifier_failed:
  	bus_unregister(&usb_bus_type);
  bus_register_failed:
@@ -137,11 +119,7 @@ index df166cafe1061..e32de22b9aadb 100644
  	usb_acpi_unregister();
  	usb_debugfs_cleanup();
  out:
- 	return retval;
- }
-@@ -1281,10 +1289,11 @@ static void __exit usb_exit(void)
- 	usb_devio_cleanup();
- 	usb_hub_cleanup();
+@@ -1283,6 +1291,7 @@ static void __exit usb_exit(void)
  	class_unregister(&usbmisc_class);
  	bus_unregister_notifier(&usb_bus_type, &usb_bus_nb);
  	bus_unregister(&usb_bus_type);
@@ -149,15 +127,11 @@ index df166cafe1061..e32de22b9aadb 100644
  	usb_acpi_unregister();
  	usb_debugfs_cleanup();
  	idr_destroy(&usb_bus_idr);
- }
- 
 diff --git a/include/linux/usb.h b/include/linux/usb.h
-index c238ba47e5b52..0daafbd0c85f5 100644
+index f2a0543390135..12c707aa3158f 100644
 --- a/include/linux/usb.h
 +++ b/include/linux/usb.h
-@@ -2110,11 +2110,19 @@ enum usb_led_event {
- extern void usb_led_activity(enum usb_led_event ev);
- #else
+@@ -2113,8 +2113,16 @@ extern void usb_led_activity(enum usb_led_event ev);
  static inline void usb_led_activity(enum usb_led_event ev) {}
  #endif
  
@@ -175,14 +149,11 @@ index c238ba47e5b52..0daafbd0c85f5 100644
  
  #endif  /* __KERNEL__ */
  
- #endif
 diff --git a/kernel/sysctl.c b/kernel/sysctl.c
-index c0cd4cbb33f2b..6a9bc5747a76e 100644
+index 862f0fdcdffa7..3a43c1f7ba35e 100644
 --- a/kernel/sysctl.c
 +++ b/kernel/sysctl.c
-@@ -23,13 +23,10 @@
- #include <asm/processor.h>
- 
+@@ -25,9 +25,6 @@
  #ifdef CONFIG_USER_NS
  #include <linux/user_namespace.h>
  #endif
@@ -192,11 +163,7 @@ index c0cd4cbb33f2b..6a9bc5747a76e 100644
  
  /* shared constants to be used in various sysctls */
  const int sysctl_vals[] = { 0, 1, 2, 3, 4, 100, 200, 1000, 3000, INT_MAX, 65535, -1 };
- EXPORT_SYMBOL(sysctl_vals);
- 
-@@ -1433,21 +1430,10 @@ static const struct ctl_table sysctl_subsys_table[] = {
- 		.mode		= 0644,
- 		.proc_handler	= proc_dointvec_minmax,
+@@ -1435,17 +1432,6 @@ static const struct ctl_table sysctl_subsys_table[] = {
  		.extra1		= SYSCTL_NEG_ONE,
  		.extra2		= SYSCTL_ONE,
  	},
@@ -214,8 +181,4 @@ index c0cd4cbb33f2b..6a9bc5747a76e 100644
  #endif
  	{
  		.procname	= "ngroups_max",
- 		.data		= (void *)&ngroups_max,
- 		.maxlen		= sizeof (int),
--- 
-2.55.0
 

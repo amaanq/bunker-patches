@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Mon, 29 May 2017 07:08:42 -0400
-Subject: [PATCH 019/102] set LEGACY_VSYSCALL_NONE by default
+Subject: [PATCH 019/100] set LEGACY_VSYSCALL_NONE by default
 
 ---
  arch/x86/Kconfig | 2 +-
@@ -11,9 +11,7 @@ diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
 index 90db08acfcae7..823fafc89bad1 100644
 --- a/arch/x86/Kconfig
 +++ b/arch/x86/Kconfig
-@@ -2188,11 +2188,11 @@ config COMPAT_VDSO
- 	  are unlikely to be using a buggy version of glibc.
- 
+@@ -2190,7 +2190,7 @@ config COMPAT_VDSO
  choice
  	prompt "vsyscall table for legacy applications"
  	depends on X86_64
@@ -22,8 +20,4 @@ index 90db08acfcae7..823fafc89bad1 100644
  	help
  	  Legacy user code that does not know how to find the vDSO expects
  	  to be able to issue three syscalls by calling fixed addresses in
- 	  kernel space. Since this location is not randomized with ASLR,
- 	  it can be used to assist security vulnerability exploitation.
--- 
-2.55.0
 

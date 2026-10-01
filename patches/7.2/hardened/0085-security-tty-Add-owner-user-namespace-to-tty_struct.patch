@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Matt Brown <matt@nmatt.com>
 Date: Mon, 29 May 2017 17:37:59 -0400
-Subject: [PATCH 086/102] security: tty: Add owner user namespace to tty_struct
+Subject: [PATCH 085/100] security: tty: Add owner user namespace to tty_struct
 
 This patch adds struct user_namespace *owner_user_ns to the tty_struct.
 Then it is set to current_user_ns() in the alloc_tty_struct function.
@@ -26,12 +26,10 @@ Signed-off-by: Matt Brown <matt@nmatt.com>
  2 files changed, 4 insertions(+)
 
 diff --git a/drivers/tty/tty_io.c b/drivers/tty/tty_io.c
-index 6b283fd03ff82..847b3e02a392e 100644
+index 4889076b975f3..992843a62ec97 100644
 --- a/drivers/tty/tty_io.c
 +++ b/drivers/tty/tty_io.c
-@@ -169,10 +169,11 @@ static void release_tty(struct tty_struct *tty, int idx);
- static void free_tty_struct(struct tty_struct *tty)
- {
+@@ -171,6 +171,7 @@ static void free_tty_struct(struct tty_struct *tty)
  	tty_ldisc_deinit(tty);
  	put_device(tty->dev);
  	kvfree(tty->write_buf);
@@ -39,11 +37,7 @@ index 6b283fd03ff82..847b3e02a392e 100644
  	kfree(tty);
  }
  
- static inline struct tty_struct *file_tty(struct file *file)
- {
-@@ -3128,10 +3129,11 @@ struct tty_struct *alloc_tty_struct(struct tty_driver *driver, int idx)
- 	tty->driver = driver;
- 	tty->ops = driver->ops;
+@@ -3130,6 +3131,7 @@ struct tty_struct *alloc_tty_struct(struct tty_driver *driver, int idx)
  	tty->index = idx;
  	tty_line_name(driver, idx, tty->name);
  	tty->dev = tty_get_device(tty);
@@ -51,15 +45,11 @@ index 6b283fd03ff82..847b3e02a392e 100644
  
  	return tty;
  }
- 
- /**
 diff --git a/include/linux/tty.h b/include/linux/tty.h
 index 0a46e4054dec7..99c733852fb2d 100644
 --- a/include/linux/tty.h
 +++ b/include/linux/tty.h
-@@ -12,10 +12,11 @@
- #include <linux/mutex.h>
- #include <linux/tty_flags.h>
+@@ -14,6 +14,7 @@
  #include <uapi/linux/tty.h>
  #include <linux/rwsem.h>
  #include <linux/llist.h>
@@ -67,11 +57,7 @@ index 0a46e4054dec7..99c733852fb2d 100644
  
  
  /*
-  * (Note: the *_driver.minor_start values 1, 64, 128, 192 are
-  * hardcoded at present.)
-@@ -238,10 +239,11 @@ struct tty_struct {
- 	u8 *write_buf;
- 
+@@ -240,6 +241,7 @@ struct tty_struct {
  	struct list_head tty_files;
  
  	struct work_struct SAK_work;
@@ -79,8 +65,4 @@ index 0a46e4054dec7..99c733852fb2d 100644
  } __randomize_layout;
  
  /* Each of a tty's open files has private_data pointing to tty_file_private */
- struct tty_file_private {
- 	struct tty_struct *tty;
--- 
-2.55.0
 

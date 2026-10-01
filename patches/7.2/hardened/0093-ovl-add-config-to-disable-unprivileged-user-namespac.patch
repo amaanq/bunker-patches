@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Levente Polyak <levente@leventepolyak.net>
 Date: Thu, 11 Mar 2021 23:09:50 +0100
-Subject: [PATCH 095/102] ovl: add config to disable unprivileged user
+Subject: [PATCH 093/100] ovl: add config to disable unprivileged user
  namespace mounts
 
 When disabled, unprivileged users will not be able to create
@@ -19,9 +19,7 @@ diff --git a/fs/overlayfs/Kconfig b/fs/overlayfs/Kconfig
 index 2ac67e04a6fbe..3340e13c959c8 100644
 --- a/fs/overlayfs/Kconfig
 +++ b/fs/overlayfs/Kconfig
-@@ -132,5 +132,21 @@ config OVERLAY_FS_DEBUG
- 	depends on OVERLAY_FS
- 	help
+@@ -134,3 +134,19 @@ config OVERLAY_FS_DEBUG
  	  Say Y here to enable extra debugging checks in overlayfs.
  
  	  If unsure, say N.
@@ -42,12 +40,10 @@ index 2ac67e04a6fbe..3340e13c959c8 100644
 +
 +	  If unsure, say N.
 diff --git a/fs/overlayfs/super.c b/fs/overlayfs/super.c
-index 60f0b7ceef0a6..efe878a702dbd 100644
+index 43eb0c053dacd..90bd357f5ab37 100644
 --- a/fs/overlayfs/super.c
 +++ b/fs/overlayfs/super.c
-@@ -1571,11 +1571,13 @@ int ovl_fill_super(struct super_block *sb, struct fs_context *fc)
- struct file_system_type ovl_fs_type = {
- 	.owner			= THIS_MODULE,
+@@ -1574,7 +1574,9 @@ struct file_system_type ovl_fs_type = {
  	.name			= "overlay",
  	.init_fs_context	= ovl_init_fs_context,
  	.parameters		= ovl_parameter_spec,
@@ -57,8 +53,4 @@ index 60f0b7ceef0a6..efe878a702dbd 100644
  	.kill_sb		= kill_anon_super,
  };
  MODULE_ALIAS_FS("overlay");
- 
- static void ovl_inode_init_once(void *foo)
--- 
-2.55.0
 

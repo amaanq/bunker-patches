@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Tue, 30 May 2017 10:47:23 -0400
-Subject: [PATCH 032/102] enable protected_{symlinks,hardlinks} by default
+Subject: [PATCH 032/100] enable protected_{symlinks,hardlinks} by default
 
 ---
  fs/namei.c | 4 ++--
@@ -11,9 +11,7 @@ diff --git a/fs/namei.c b/fs/namei.c
 index 19ce43c9a6e66..447d9291cfab7 100644
 --- a/fs/namei.c
 +++ b/fs/namei.c
-@@ -1199,12 +1199,12 @@ static inline void put_link(struct nameidata *nd)
- 	do_delayed_call(&last->done);
- 	if (!(nd->flags & LOOKUP_RCU))
+@@ -1201,8 +1201,8 @@ static inline void put_link(struct nameidata *nd)
  		path_put(&last->link);
  }
  
@@ -24,8 +22,4 @@ index 19ce43c9a6e66..447d9291cfab7 100644
  static int sysctl_protected_fifos __read_mostly;
  static int sysctl_protected_regular __read_mostly;
  
- #ifdef CONFIG_SYSCTL
- static const struct ctl_table namei_sysctls[] = {
--- 
-2.55.0
 

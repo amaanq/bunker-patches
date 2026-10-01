@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Sun, 25 Feb 2018 02:16:49 -0500
-Subject: [PATCH 037/102] enable SECURITY_SELINUX by default
+Subject: [PATCH 037/100] enable SECURITY_SELINUX by default
 
 ---
  security/selinux/Kconfig | 2 +-
@@ -11,9 +11,7 @@ diff --git a/security/selinux/Kconfig b/security/selinux/Kconfig
 index 5588c4d573f6c..567a33eae4605 100644
 --- a/security/selinux/Kconfig
 +++ b/security/selinux/Kconfig
-@@ -1,11 +1,11 @@
- # SPDX-License-Identifier: GPL-2.0-only
- config SECURITY_SELINUX
+@@ -3,7 +3,7 @@ config SECURITY_SELINUX
  	bool "SELinux Support"
  	depends on SECURITY_NETWORK && AUDIT && NET && INET
  	select NETWORK_SECMARK
@@ -22,8 +20,4 @@ index 5588c4d573f6c..567a33eae4605 100644
  	help
  	  This selects Security-Enhanced Linux (SELinux).
  	  You will also need a policy configuration and a labeled filesystem.
- 	  If you are unsure how to answer this question, answer N.
- 
--- 
-2.55.0
 

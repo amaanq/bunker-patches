@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Wed, 3 May 2017 11:50:53 -0400
-Subject: [PATCH 058/102] bug on kmem_cache_free with the wrong cache
+Subject: [PATCH 058/100] bug on kmem_cache_free with the wrong cache
 
 At least when CONFIG_BUG_ON_DATA_CORRUPTION is enabled.
 
@@ -15,12 +15,10 @@ Signed-off-by: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
  1 file changed, 4 insertions(+)
 
 diff --git a/mm/slub.c b/mm/slub.c
-index d4d77b4596db6..fb02174e5f5ca 100644
+index ee4a0ca15521e..2b0c63e45095b 100644
 --- a/mm/slub.c
 +++ b/mm/slub.c
-@@ -6466,17 +6466,21 @@ static noinline void warn_free_bad_obj(struct kmem_cache *s, void *obj)
- 		return;
- #endif
+@@ -6482,6 +6482,9 @@ static noinline void warn_free_bad_obj(struct kmem_cache *s, void *obj)
  
  	cachep = slab->slab_cache;
  
@@ -30,7 +28,7 @@ index d4d77b4596db6..fb02174e5f5ca 100644
  	if (WARN_ONCE(cachep != s,
  			"kmem_cache_free(%s, %p): object belongs to different cache %s\n",
  			s->name, obj, cachep ? cachep->name : "(NULL)")) {
- 		if (cachep)
+@@ -6489,6 +6492,7 @@ static noinline void warn_free_bad_obj(struct kmem_cache *s, void *obj)
  			print_tracking(cachep, obj);
  		return;
  	}
@@ -38,8 +36,4 @@ index d4d77b4596db6..fb02174e5f5ca 100644
  }
  
  /**
-  * kmem_cache_free - Deallocate an object
-  * @s: The cache the allocation was from.
--- 
-2.55.0
 

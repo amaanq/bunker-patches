@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Emese Revfy <re.emese@gmail.com>
 Date: Tue, 31 May 2016 01:34:02 +0200
-Subject: [PATCH 066/102] Add the extra_latent_entropy kernel parameter
+Subject: [PATCH 066/100] Add the extra_latent_entropy kernel parameter
 
 When extra_latent_entropy is passed on the kernel command line,
 entropy will be extracted from up to the first 4GB of RAM while the
@@ -19,12 +19,10 @@ Signed-off-by: Levente Polyak <levente@leventepolyak.net>
  3 files changed, 34 insertions(+)
 
 diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
-index 3d35270dddefc..534ea240fcc8e 100644
+index d0f1742883651..b9f783644fa5b 100644
 --- a/Documentation/admin-guide/kernel-parameters.txt
 +++ b/Documentation/admin-guide/kernel-parameters.txt
-@@ -5004,10 +5004,15 @@ Kernel parameters
- 	pause_on_oops=<int>
- 			Halt all CPUs after the first oops has been printed for
+@@ -4969,6 +4969,11 @@ Kernel parameters
  			the specified number of seconds.  This is to be used if
  			your oopses keep scrolling off the screen.
  
@@ -36,15 +34,11 @@ index 3d35270dddefc..534ea240fcc8e 100644
  	pci=option[,option...]	[PCI,EARLY] various PCI subsystem options.
  
  				Some options herein operate on a specific device
- 				or a set of devices (<pci_dev>). These are
- 				specified in one of the following formats:
 diff --git a/mm/page_alloc.c b/mm/page_alloc.c
-index 7179a0a8ed1a4..148b889178c2a 100644
+index ab8c6856b6b2b..b75a6a43e8e86 100644
 --- a/mm/page_alloc.c
 +++ b/mm/page_alloc.c
-@@ -178,10 +178,19 @@ DEFINE_PER_CPU(int, _numa_mem_);		/* Kernel "local memory" node */
- EXPORT_PER_CPU_SYMBOL(_numa_mem_);
- #endif
+@@ -180,6 +180,15 @@ EXPORT_PER_CPU_SYMBOL(_numa_mem_);
  
  static DEFINE_MUTEX(pcpu_drain_mutex);
  
@@ -60,11 +54,7 @@ index 7179a0a8ed1a4..148b889178c2a 100644
  #ifdef CONFIG_GCC_PLUGIN_LATENT_ENTROPY
  volatile unsigned long latent_entropy __latent_entropy;
  EXPORT_SYMBOL(latent_entropy);
- #endif
- 
-@@ -1613,10 +1622,25 @@ void __meminit __free_pages_core(struct page *page, unsigned int order,
- 		for (loop = 0; loop < nr_pages; loop++, p++) {
- 			__ClearPageReserved(p);
+@@ -1615,6 +1624,21 @@ void __meminit __free_pages_core(struct page *page, unsigned int order,
  			set_page_count(p, 0);
  		}
  
@@ -86,15 +76,11 @@ index 7179a0a8ed1a4..148b889178c2a 100644
  		/* memblock adjusts totalram_pages() manually. */
  		atomic_long_add(nr_pages, &page_zone(page)->managed_pages);
  	}
- 
- 	if (page_contains_unaccepted(page, order)) {
 diff --git a/scripts/gcc-plugins/Kconfig b/scripts/gcc-plugins/Kconfig
 index 6b34ba19358d8..d83e715c9d404 100644
 --- a/scripts/gcc-plugins/Kconfig
 +++ b/scripts/gcc-plugins/Kconfig
-@@ -27,10 +27,15 @@ config GCC_PLUGIN_LATENT_ENTROPY
- 	  program state.  This will help especially embedded systems where
- 	  there is little 'natural' source of entropy normally.  The cost
+@@ -29,6 +29,11 @@ config GCC_PLUGIN_LATENT_ENTROPY
  	  is some slowdown of the boot process (about 0.5%) and fork and
  	  irq processing.
  
@@ -106,8 +92,4 @@ index 6b34ba19358d8..d83e715c9d404 100644
  	  Note that entropy extracted this way is not cryptographically
  	  secure!
  
- 	  This plugin was ported from grsecurity/PaX. More information at:
- 	   * https://grsecurity.net/
--- 
-2.55.0
 

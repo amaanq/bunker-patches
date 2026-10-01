@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Sun, 25 Feb 2018 02:14:02 -0500
-Subject: [PATCH 035/102] enable SECURITY_NETWORK by default
+Subject: [PATCH 035/100] enable SECURITY_NETWORK by default
 
 ---
  security/Kconfig | 1 +
@@ -11,9 +11,7 @@ diff --git a/security/Kconfig b/security/Kconfig
 index ee1519d2bac18..b0a185a9f2789 100644
 --- a/security/Kconfig
 +++ b/security/Kconfig
-@@ -98,10 +98,11 @@ config SECURITYFS
- 	  If you are unsure how to answer this question, answer N.
- 
+@@ -100,6 +100,7 @@ config SECURITYFS
  config SECURITY_NETWORK
  	bool "Socket and Networking Security Hooks"
  	depends on SECURITY
@@ -21,8 +19,4 @@ index ee1519d2bac18..b0a185a9f2789 100644
  	help
  	  This enables the socket and networking security hooks.
  	  If enabled, a security module can use these hooks to
- 	  implement socket and networking access controls.
- 	  If you are unsure how to answer this question, answer N.
--- 
-2.55.0
 

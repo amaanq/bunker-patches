@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Tue, 4 Jul 2017 01:42:33 -0400
-Subject: [PATCH 056/102] mark softirq_vec as __ro_after_init
+Subject: [PATCH 056/100] mark softirq_vec as __ro_after_init
 
 Note: __cacheline_aligned_in_smp conflicts with __ro_after_init on x86.
 
@@ -14,9 +14,7 @@ diff --git a/kernel/softirq.c b/kernel/softirq.c
 index 77a8b50b05339..e445a92bfa57b 100644
 --- a/kernel/softirq.c
 +++ b/kernel/softirq.c
-@@ -55,11 +55,11 @@
- #ifndef __ARCH_IRQ_STAT
- DEFINE_PER_CPU_ALIGNED(irq_cpustat_t, irq_stat);
+@@ -57,7 +57,7 @@ DEFINE_PER_CPU_ALIGNED(irq_cpustat_t, irq_stat);
  EXPORT_PER_CPU_SYMBOL(irq_stat);
  #endif
  
@@ -25,8 +23,4 @@ index 77a8b50b05339..e445a92bfa57b 100644
  
  DEFINE_PER_CPU(struct task_struct *, ksoftirqd);
  
- const char * const softirq_to_name[NR_SOFTIRQS] = {
- 	"HI", "TIMER", "NET_TX", "NET_RX", "BLOCK", "IRQ_POLL",
--- 
-2.55.0
 

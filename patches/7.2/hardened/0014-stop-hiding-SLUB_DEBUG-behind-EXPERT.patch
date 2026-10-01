@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Sun, 14 May 2017 22:39:34 -0400
-Subject: [PATCH 014/102] stop hiding SLUB_DEBUG behind EXPERT
+Subject: [PATCH 014/100] stop hiding SLUB_DEBUG behind EXPERT
 
 It can make sense to disable this to reduce attack surface / complexity.
 ---
@@ -12,9 +12,7 @@ diff --git a/mm/Kconfig.debug b/mm/Kconfig.debug
 index 91b3e027b7535..fe46f89663e7c 100644
 --- a/mm/Kconfig.debug
 +++ b/mm/Kconfig.debug
-@@ -45,11 +45,11 @@ config DEBUG_PAGEALLOC_ENABLE_DEFAULT
- 	  Enable debug page memory allocations by default? This value
- 	  can be overridden by debug_pagealloc=off|on.
+@@ -47,7 +47,7 @@ config DEBUG_PAGEALLOC_ENABLE_DEFAULT
  
  config SLUB_DEBUG
  	default y
@@ -23,8 +21,4 @@ index 91b3e027b7535..fe46f89663e7c 100644
  	depends on SYSFS && !SLUB_TINY
  	select STACKDEPOT if STACKTRACE_SUPPORT
  	help
- 	  SLUB has extensive debug support features. Disabling these can
- 	  result in significant savings in code size. While /sys/kernel/slab
--- 
-2.55.0
 

@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Sun, 7 May 2017 18:28:33 -0400
-Subject: [PATCH 030/102] disable COMPAT_BRK by default
+Subject: [PATCH 030/100] disable COMPAT_BRK by default
 
 ---
  mm/Kconfig | 1 -
@@ -11,9 +11,7 @@ diff --git a/mm/Kconfig b/mm/Kconfig
 index 4274a8d61e81d..319cc38465da4 100644
 --- a/mm/Kconfig
 +++ b/mm/Kconfig
-@@ -344,11 +344,10 @@ config SHUFFLE_PAGE_ALLOCATOR
- 
- 	  Say Y if unsure.
+@@ -346,7 +346,6 @@ config SHUFFLE_PAGE_ALLOCATOR
  
  config COMPAT_BRK
  	bool "Disable heap randomization"
@@ -21,8 +19,4 @@ index 4274a8d61e81d..319cc38465da4 100644
  	help
  	  Randomizing heap placement makes heap exploits harder, but it
  	  also breaks ancient binaries (including anything libc5 based).
- 	  This option changes the bootup default to heap randomization
- 	  disabled, and can be overridden at runtime by setting
--- 
-2.55.0
 

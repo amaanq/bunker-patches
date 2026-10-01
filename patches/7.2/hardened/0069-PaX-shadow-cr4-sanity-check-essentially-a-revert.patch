@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Tue, 16 May 2017 00:59:48 -0400
-Subject: [PATCH 069/102] PaX shadow cr4 sanity check (essentially a revert)
+Subject: [PATCH 069/100] PaX shadow cr4 sanity check (essentially a revert)
 
 Signed-off-by: Daniel Micay <danielmicay@gmail.com>
 [levente@leventepolyak.net: Adapt to cpu_tlbstate moved out-of-line]
@@ -19,9 +19,7 @@ diff --git a/arch/x86/include/asm/tlbflush.h b/arch/x86/include/asm/tlbflush.h
 index 0545fe75c3fa1..d37c738cb23aa 100644
 --- a/arch/x86/include/asm/tlbflush.h
 +++ b/arch/x86/include/asm/tlbflush.h
-@@ -508,9 +508,10 @@ extern void enter_lazy_tlb(struct mm_struct *mm, struct task_struct *tsk)
- 	__compiletime_error("enter_lazy_tlb() should not be used in modules");
- #endif /* !MODULE */
+@@ -510,6 +510,7 @@ extern void enter_lazy_tlb(struct mm_struct *mm, struct task_struct *tsk)
  
  static inline void __native_tlb_flush_global(unsigned long cr4)
  {
@@ -29,14 +27,11 @@ index 0545fe75c3fa1..d37c738cb23aa 100644
  	native_write_cr4(cr4 ^ X86_CR4_PGE);
  	native_write_cr4(cr4);
  }
- #endif /* _ASM_X86_TLBFLUSH_H */
 diff --git a/arch/x86/kernel/cpu/common.c b/arch/x86/kernel/cpu/common.c
-index a3df21d264606..c0dbce3dd76d3 100644
+index 4c88bbe82a7ef..0269f6cc7514a 100644
 --- a/arch/x86/kernel/cpu/common.c
 +++ b/arch/x86/kernel/cpu/common.c
-@@ -495,10 +495,11 @@ EXPORT_SYMBOL_GPL(native_write_cr4);
- #endif
- 
+@@ -497,6 +497,7 @@ EXPORT_SYMBOL_GPL(native_write_cr4);
  void cr4_update_irqsoff(unsigned long set, unsigned long clear)
  {
  	unsigned long newval, cr4 = this_cpu_read(cpu_tlbstate.cr4);
@@ -44,15 +39,11 @@ index a3df21d264606..c0dbce3dd76d3 100644
  
  	lockdep_assert_irqs_disabled();
  
- 	newval = (cr4 & ~clear) | set;
- 	if (newval != cr4) {
 diff --git a/arch/x86/kernel/process.c b/arch/x86/kernel/process.c
 index 85435044e33cd..d3231770401d6 100644
 --- a/arch/x86/kernel/process.c
 +++ b/arch/x86/kernel/process.c
-@@ -705,10 +705,11 @@ void speculation_ctrl_update_current(void)
- }
- 
+@@ -707,6 +707,7 @@ void speculation_ctrl_update_current(void)
  static inline void cr4_toggle_bits_irqsoff(unsigned long mask)
  {
  	unsigned long newval, cr4 = this_cpu_read(cpu_tlbstate.cr4);
@@ -60,8 +51,4 @@ index 85435044e33cd..d3231770401d6 100644
  
  	newval = cr4 ^ mask;
  	if (newval != cr4) {
- 		this_cpu_write(cpu_tlbstate.cr4, newval);
- 		__write_cr4(newval);
--- 
-2.55.0
 

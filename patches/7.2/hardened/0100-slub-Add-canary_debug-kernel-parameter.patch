@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
 Date: Mon, 23 Mar 2026 09:47:13 +0100
-Subject: [PATCH 102/102] slub: Add canary_debug kernel parameter
+Subject: [PATCH 100/100] slub: Add canary_debug kernel parameter
 
 With canary_debug, a canary mismatch will print supposed canary values
 and the one that has been encountered.
@@ -13,12 +13,10 @@ Signed-off-by: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
  1 file changed, 36 insertions(+), 1 deletion(-)
 
 diff --git a/mm/slub.c b/mm/slub.c
-index 832159e2c56dd..45d1ab521c342 100644
+index 0a3b2fa7ca5dc..40135f9a56cf4 100644
 --- a/mm/slub.c
 +++ b/mm/slub.c
-@@ -938,14 +938,49 @@ static inline void set_canary(struct kmem_cache *s, void *object, unsigned long
- {
- 	unsigned long *canary = get_canary(s, object);
+@@ -946,10 +946,45 @@ static inline void set_canary(struct kmem_cache *s, void *object, unsigned long
  	*canary = get_canary_value(canary, value);
  }
  
@@ -65,8 +63,4 @@ index 832159e2c56dd..45d1ab521c342 100644
  }
  
  static inline void check_set_canary(struct kmem_cache *s, void *object, unsigned long check_value, unsigned long set_value)
- {
- 	if (object && !is_kfence_address(object)) {
--- 
-2.55.0
 

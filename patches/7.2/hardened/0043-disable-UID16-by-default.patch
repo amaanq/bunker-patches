@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Levente Polyak <levente@leventepolyak.net>
 Date: Tue, 22 Dec 2020 23:41:32 +0100
-Subject: [PATCH 043/102] disable UID16 by default
+Subject: [PATCH 043/100] disable UID16 by default
 
 ---
  init/Kconfig | 1 -
@@ -11,9 +11,7 @@ diff --git a/init/Kconfig b/init/Kconfig
 index e4faf862cfecd..365a853c99c4d 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -1715,11 +1715,10 @@ menuconfig EXPERT
- 	  Only use this if you really know what you are doing.
- 
+@@ -1717,7 +1717,6 @@ menuconfig EXPERT
  config UID16
  	bool "Enable 16-bit UID system calls"
  	depends on HAVE_UID16 && MULTIUSER
@@ -21,8 +19,4 @@ index e4faf862cfecd..365a853c99c4d 100644
  	help
  	  This enables the legacy 16-bit UID syscall wrappers.
  
- config MULTIUSER
- 	bool "Multiple users, groups and capabilities support" if EXPERT
--- 
-2.55.0
 

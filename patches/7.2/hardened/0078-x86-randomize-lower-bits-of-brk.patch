@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Thu, 1 Jun 2017 03:23:06 -0400
-Subject: [PATCH 078/102] x86: randomize lower bits of brk
+Subject: [PATCH 078/100] x86: randomize lower bits of brk
 
 Per PaX, but for this alternate brk randomization approach.
 
@@ -14,9 +14,7 @@ diff --git a/arch/x86/kernel/process.c b/arch/x86/kernel/process.c
 index d3231770401d6..83022daa6ac4d 100644
 --- a/arch/x86/kernel/process.c
 +++ b/arch/x86/kernel/process.c
-@@ -1026,13 +1026,13 @@ unsigned long arch_align_stack(unsigned long sp)
- }
- 
+@@ -1028,9 +1028,9 @@ unsigned long arch_align_stack(unsigned long sp)
  unsigned long arch_randomize_brk(struct mm_struct *mm)
  {
  	if (mmap_is_ia32())
@@ -28,8 +26,4 @@ index d3231770401d6..83022daa6ac4d 100644
  }
  
  /*
-  * Called from fs/proc with a reference on @p to find the function
-  * which called into schedule(). This needs to be done carefully
--- 
-2.55.0
 

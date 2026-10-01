@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Daniel Micay <danielmicay@gmail.com>
 Date: Wed, 3 May 2017 12:05:15 -0400
-Subject: [PATCH 003/102] enable SECURITY_DMESG_RESTRICT by default
+Subject: [PATCH 003/100] enable SECURITY_DMESG_RESTRICT by default
 
 Signed-off-by: Daniel Micay <danielmicay@gmail.com>
 ---
@@ -12,9 +12,7 @@ diff --git a/security/Kconfig b/security/Kconfig
 index f7bf6cdc6229e..3d5c65d2ca72b 100644
 --- a/security/Kconfig
 +++ b/security/Kconfig
-@@ -7,11 +7,11 @@ menu "Security options"
- 
- source "security/keys/Kconfig"
+@@ -9,7 +9,7 @@ source "security/keys/Kconfig"
  
  config SECURITY_DMESG_RESTRICT
  	bool "Restrict unprivileged access to the kernel syslog"
@@ -23,8 +21,4 @@ index f7bf6cdc6229e..3d5c65d2ca72b 100644
  	help
  	  This enforces restrictions on unprivileged users reading the kernel
  	  syslog via dmesg(8).
- 
- 	  If this option is not selected, no restrictions will be enforced
--- 
-2.55.0
 
