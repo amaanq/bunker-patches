@@ -1,0 +1,16 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Thu, 1 Oct 2026 00:00:00 -0400
+Subject: [PATCH] serial: 8250_mid: import the SERIAL_8250 namespace
+
+8250_mid calls serial8250_wait_for_xmitr(), which 8250_port exports in
+the SERIAL_8250 namespace, so modpost rejects the module.
+---
+diff --git a/drivers/tty/serial/8250/8250_mid.c b/drivers/tty/serial/8250/8250_mid.c
+--- a/drivers/tty/serial/8250/8250_mid.c
++++ b/drivers/tty/serial/8250/8250_mid.c
+@@ -415,3 +415,4 @@
+ MODULE_AUTHOR("Intel Corporation");
+ MODULE_LICENSE("GPL v2");
+ MODULE_DESCRIPTION("Intel MID UART driver");
++MODULE_IMPORT_NS("SERIAL_8250");

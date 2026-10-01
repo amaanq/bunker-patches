@@ -316,6 +316,7 @@ let
       ];
     };
     next = {
+      base = [ "bunker/0019" ]; # 8250_mid namespace import
       interactive = [ "zen/0020" ];
       extras = [ "cachyos/0020" ];
     };
