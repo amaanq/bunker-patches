@@ -3,6 +3,9 @@
 !.gitignore
 !flake.nix
 !module.nix
+!kconfig/
+!kconfig/*.nix
+!kconfig/*.nu
 
 !.tack/
 !.tack/default.nix
