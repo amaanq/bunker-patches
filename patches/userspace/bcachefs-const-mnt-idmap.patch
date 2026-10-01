@@ -1,0 +1,294 @@
+bcachefs: take const struct mnt_idmap like linux-next's VFS
+
+linux-next ported every inode operation and xattr handler to a const
+mnt_idmap (merge 0f30047dc83f), and bcachefs 1.39.6 still passes the
+mutable pointer, so its handlers no longer match the VFS prototypes.
+
+diff -ruN a/src/fs/bcachefs/fs/acl.c b/src/fs/bcachefs/fs/acl.c
+--- a/src/fs/bcachefs/fs/acl.c	2026-10-01 03:50:41.052336587 -0400
++++ b/src/fs/bcachefs/fs/acl.c	2026-10-01 03:50:46.126368852 -0400
+@@ -367,7 +367,7 @@
+ }
+ 
+ static int __bch2_set_acl(struct btree_trans *trans,
+-			  struct mnt_idmap *idmap,
++			  const struct mnt_idmap *idmap,
+ 			  struct bch_inode_info *inode,
+ 			  struct posix_acl *acl, int type)
+ {
+@@ -396,7 +396,7 @@
+ 	return 0;
+ }
+ 
+-int bch2_set_acl(struct mnt_idmap *idmap,
++int bch2_set_acl(const struct mnt_idmap *idmap,
+ 		 struct dentry *dentry,
+ 		 struct posix_acl *acl, int type)
+ {
+diff -ruN a/src/fs/bcachefs/fs/acl.h b/src/fs/bcachefs/fs/acl.h
+--- a/src/fs/bcachefs/fs/acl.h	2026-10-01 03:50:41.053336616 -0400
++++ b/src/fs/bcachefs/fs/acl.h	2026-10-01 03:50:46.127483438 -0400
+@@ -33,7 +33,7 @@
+ int bch2_set_acl_trans(struct btree_trans *, subvol_inum,
+ 		       struct bch_inode_unpacked *,
+ 		       struct posix_acl *, int);
+-int bch2_set_acl(struct mnt_idmap *, struct dentry *, struct posix_acl *, int);
++int bch2_set_acl(const struct mnt_idmap *, struct dentry *, struct posix_acl *, int);
+ int bch2_acl_chmod(struct btree_trans *, subvol_inum,
+ 		   struct bch_inode_unpacked *,
+ 		   umode_t, struct posix_acl **);
+diff -ruN a/src/fs/bcachefs/fs/xattr.c b/src/fs/bcachefs/fs/xattr.c
+--- a/src/fs/bcachefs/fs/xattr.c	2026-10-01 03:50:41.053336616 -0400
++++ b/src/fs/bcachefs/fs/xattr.c	2026-10-01 03:50:46.122483293 -0400
+@@ -355,7 +355,7 @@
+ }
+ 
+ static int bch2_xattr_set_handler(const struct xattr_handler *handler,
+-				  struct mnt_idmap *idmap,
++				  const struct mnt_idmap *idmap,
+ 				  struct dentry *dentry, struct inode *vinode,
+ 				  const char *name, const void *value,
+ 				  size_t size, int flags)
+@@ -501,7 +501,7 @@
+ }
+ 
+ static int __bch2_xattr_bcachefs_set(const struct xattr_handler *handler,
+-				     struct mnt_idmap *idmap,
++				     const struct mnt_idmap *idmap,
+ 				     struct dentry *dentry, struct inode *vinode,
+ 				     const char *name, const void *value,
+ 				     size_t size, int flags)
+@@ -574,7 +574,7 @@
+ }
+ 
+ static int bch2_xattr_bcachefs_set(const struct xattr_handler *handler,
+-				   struct mnt_idmap *idmap,
++				   const struct mnt_idmap *idmap,
+ 				   struct dentry *dentry, struct inode *vinode,
+ 				   const char *name, const void *value,
+ 				   size_t size, int flags)
+@@ -600,7 +600,7 @@
+ 
+ /* Noop - xattrs in the bcachefs_effective namespace are inherited */
+ static int bch2_xattr_bcachefs_set_effective(const struct xattr_handler *handler,
+-				   struct mnt_idmap *idmap,
++				   const struct mnt_idmap *idmap,
+ 				   struct dentry *dentry, struct inode *vinode,
+ 				   const char *name, const void *value,
+ 				   size_t size, int flags)
+diff -ruN a/src/fs/bcachefs/vfs/fs.c b/src/fs/bcachefs/vfs/fs.c
+--- a/src/fs/bcachefs/vfs/fs.c	2026-10-01 03:50:41.042336298 -0400
++++ b/src/fs/bcachefs/vfs/fs.c	2026-10-01 03:50:46.040480921 -0400
+@@ -750,7 +750,7 @@
+ DEFINE_FREE(posix_acl, struct posix_acl *, posix_acl_release(_T))
+ 
+ struct bch_inode_info *
+-__bch2_create(struct mnt_idmap *idmap,
++__bch2_create(const struct mnt_idmap *idmap,
+ 	      struct bch_inode_info *dir, struct dentry *dentry,
+ 	      umode_t mode, dev_t rdev, subvol_inum snapshot_src,
+ 	      unsigned flags)
+@@ -1091,7 +1091,7 @@
+ 	return d_splice_alias(vinode, dentry);
+ }
+ 
+-static int bch2_mknod(struct mnt_idmap *idmap,
++static int bch2_mknod(const struct mnt_idmap *idmap,
+ 		      struct inode *vdir, struct dentry *dentry,
+ 		      umode_t mode, dev_t rdev)
+ {
+@@ -1108,11 +1108,11 @@
+ }
+ 
+ #if LINUX_VERSION_CODE < KERNEL_VERSION(7, 3, 0)
+-static int bch2_create(struct mnt_idmap *idmap,
++static int bch2_create(const struct mnt_idmap *idmap,
+ 		       struct inode *vdir, struct dentry *dentry,
+ 		       umode_t mode, bool excl)
+ #else
+-static int bch2_create(struct mnt_idmap *idmap,
++static int bch2_create(const struct mnt_idmap *idmap,
+ 		       struct inode *vdir, struct dentry *dentry,
+ 		       umode_t mode)
+ #endif
+@@ -1207,7 +1207,7 @@
+ 	return bch2_err_class(ret);
+ }
+ 
+-static int bch2_symlink(struct mnt_idmap *idmap,
++static int bch2_symlink(const struct mnt_idmap *idmap,
+ 			struct inode *vdir, struct dentry *dentry,
+ 			const char *symname)
+ {
+@@ -1240,13 +1240,13 @@
+ 	return bch2_err_class(ret);
+ }
+ 
+-static struct dentry *bch2_mkdir(struct mnt_idmap *idmap,
++static struct dentry *bch2_mkdir(const struct mnt_idmap *idmap,
+ 				 struct inode *vdir, struct dentry *dentry, umode_t mode)
+ {
+ 	return ERR_PTR(bch2_mknod(idmap, vdir, dentry, mode|S_IFDIR, 0));
+ }
+ 
+-static int bch2_rename2(struct mnt_idmap *idmap,
++static int bch2_rename2(const struct mnt_idmap *idmap,
+ 			struct inode *src_vdir, struct dentry *src_dentry,
+ 			struct inode *dst_vdir, struct dentry *dst_dentry,
+ 			unsigned flags)
+@@ -1387,7 +1387,7 @@
+ 	return bch2_err_class(ret);
+ }
+ 
+-static void bch2_setattr_copy(struct mnt_idmap *idmap,
++static void bch2_setattr_copy(const struct mnt_idmap *idmap,
+ 			      struct bch_inode_info *inode,
+ 			      struct bch_inode_unpacked *bi,
+ 			      struct iattr *attr)
+@@ -1430,7 +1430,7 @@
+ }
+ 
+ static int bch2_setattr_nonsize_trans(struct btree_trans *trans,
+-				      struct mnt_idmap *idmap,
++				      const struct mnt_idmap *idmap,
+ 				      struct bch_inode_info *inode,
+ 				      struct iattr *attr)
+ {
+@@ -1459,7 +1459,7 @@
+ 	return 0;
+ }
+ 
+-int bch2_setattr_nonsize(struct mnt_idmap *idmap,
++int bch2_setattr_nonsize(const struct mnt_idmap *idmap,
+ 			 struct bch_inode_info *inode,
+ 			 struct iattr *attr)
+ {
+@@ -1499,7 +1499,7 @@
+ 	return ret;
+ }
+ 
+-static int bch2_getattr(struct mnt_idmap *idmap,
++static int bch2_getattr(const struct mnt_idmap *idmap,
+ 			const struct path *path, struct kstat *stat,
+ 			u32 request_mask, unsigned query_flags)
+ {
+@@ -1557,7 +1557,7 @@
+ 	return 0;
+ }
+ 
+-static int bch2_setattr(struct mnt_idmap *idmap,
++static int bch2_setattr(const struct mnt_idmap *idmap,
+ 			struct dentry *dentry, struct iattr *iattr)
+ {
+ 	struct bch_inode_info *inode = to_bch_ei(dentry->d_inode);
+@@ -1574,7 +1574,7 @@
+ 	return bch2_err_class(ret);
+ }
+ 
+-static int bch2_tmpfile(struct mnt_idmap *idmap,
++static int bch2_tmpfile(const struct mnt_idmap *idmap,
+ 			struct inode *vdir, struct file *file, umode_t mode)
+ {
+ 	struct bch_inode_info *inode =
+@@ -1888,7 +1888,7 @@
+ 	return 0;
+ }
+ 
+-static int bch2_fileattr_set(struct mnt_idmap *idmap,
++static int bch2_fileattr_set(const struct mnt_idmap *idmap,
+ 			     struct dentry *dentry,
+ 			     struct file_kattr *fa)
+ {
+diff -ruN a/src/fs/bcachefs/vfs/fs.h b/src/fs/bcachefs/vfs/fs.h
+--- a/src/fs/bcachefs/vfs/fs.h	2026-10-01 03:50:41.042336298 -0400
++++ b/src/fs/bcachefs/vfs/fs.h	2026-10-01 03:50:46.044481037 -0400
+@@ -197,7 +197,7 @@
+ #ifndef NO_BCACHEFS_FS
+ 
+ struct bch_inode_info *
+-__bch2_create(struct mnt_idmap *, struct bch_inode_info *,
++__bch2_create(const struct mnt_idmap *, struct bch_inode_info *,
+ 	      struct dentry *, umode_t, dev_t, subvol_inum, unsigned);
+ 
+ #if IS_ENABLED(CONFIG_UNICODE)
+@@ -244,7 +244,7 @@
+ int __must_check bch2_write_inode(struct bch_fs *, struct bch_inode_info *,
+ 				  inode_set_fn, void *, unsigned);
+ 
+-int bch2_setattr_nonsize(struct mnt_idmap *,
++int bch2_setattr_nonsize(const struct mnt_idmap *,
+ 			 struct bch_inode_info *,
+ 			 struct iattr *);
+ int __bch2_unlink(struct inode *, struct dentry *, bool);
+diff -ruN a/src/fs/bcachefs/vfs/io.c b/src/fs/bcachefs/vfs/io.c
+--- a/src/fs/bcachefs/vfs/io.c	2026-10-01 03:50:41.042336298 -0400
++++ b/src/fs/bcachefs/vfs/io.c	2026-10-01 03:50:46.041480950 -0400
+@@ -443,7 +443,7 @@
+ 	return ret;
+ }
+ 
+-static int bch2_extend(struct mnt_idmap *idmap,
++static int bch2_extend(const struct mnt_idmap *idmap,
+ 		       struct bch_inode_info *inode,
+ 		       struct bch_inode_unpacked *inode_u,
+ 		       struct iattr *iattr)
+@@ -464,7 +464,7 @@
+ 	return bch2_setattr_nonsize(idmap, inode, iattr);
+ }
+ 
+-int bchfs_truncate(struct mnt_idmap *idmap,
++int bchfs_truncate(const struct mnt_idmap *idmap,
+ 		  struct bch_inode_info *inode, struct iattr *iattr)
+ {
+ 	struct bch_fs *c = inode->v.i_sb->s_fs_info;
+diff -ruN a/src/fs/bcachefs/vfs/ioctl.c b/src/fs/bcachefs/vfs/ioctl.c
+--- a/src/fs/bcachefs/vfs/ioctl.c	2026-10-01 03:50:41.042336298 -0400
++++ b/src/fs/bcachefs/vfs/ioctl.c	2026-10-01 03:50:46.043481007 -0400
+@@ -530,7 +530,7 @@
+ DEFINE_DARRAY_NAMED_FREE_ITEM(darray_inode, struct bch_inode_info *, bch2_iput);
+ 
+ static int bch2_check_path_accessible(struct btree_trans *trans,
+-				      struct mnt_idmap *idmap,
++				      const struct mnt_idmap *idmap,
+ 				      struct bch_subvolume *child,
+ 				      u32 child_subvol, u32 parent_subvol)
+ {
+@@ -585,7 +585,7 @@
+ }
+ 
+ static int bch2_subvol_readdir_emit(struct btree_trans *trans,
+-				    struct mnt_idmap *idmap,
++				    const struct mnt_idmap *idmap,
+ 				    u32 parent, u32 child_subvol,
+ 				    char __user *buf, u32 buf_size,
+ 				    u32 *used, u32 *pos)
+@@ -665,7 +665,7 @@
+ 		return bch_err_throw(c, EINVAL_subvol_readdir_pad);
+ 
+ 	u32 parent = inode_inum(file_bch_inode(filp)).subvol;
+-	struct mnt_idmap *idmap = file_mnt_idmap(filp);
++	const struct mnt_idmap *idmap = file_mnt_idmap(filp);
+ 
+ 	char __user *buf = (char __user *)(unsigned long)arg.buf;
+ 	u32 used = 0;
+@@ -877,7 +877,7 @@
+  * path_not_accessible to skip; racing renames and unreachable parents skip.
+  */
+ static int readdir_recursive_path_accessible(struct btree_trans *trans,
+-					     struct mnt_idmap *idmap,
++					     const struct mnt_idmap *idmap,
+ 					     subvol_inum n, subvol_inum dir)
+ {
+ 	struct bch_inode_info *inode = bch2_vfs_inode_get_trans(trans, n, __func__);
+diff -ruN a/src/fs/bcachefs/vfs/io.h b/src/fs/bcachefs/vfs/io.h
+--- a/src/fs/bcachefs/vfs/io.h	2026-10-01 03:50:41.042336298 -0400
++++ b/src/fs/bcachefs/vfs/io.h	2026-10-01 03:50:46.038480863 -0400
+@@ -166,7 +166,7 @@
+ int bch2_fsync(struct file *, loff_t, loff_t, int);
+ 
+ void bch2_zero_pagecache_posteof(struct bch_inode_info *);
+-int bchfs_truncate(struct mnt_idmap *, struct bch_inode_info *, struct iattr *);
++int bchfs_truncate(const struct mnt_idmap *, struct bch_inode_info *, struct iattr *);
+ long bch2_fallocate_dispatch(struct file *, int, loff_t, loff_t);
+ 
+ loff_t bch2_remap_file_range(struct file *, loff_t, struct file *,

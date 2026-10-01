@@ -1593,9 +1593,12 @@ let
       bcachefs =
         let
           bcachefs = prev.bcachefs.overrideAttrs (old: {
-            patches = (old.patches or [ ]) ++ [
-              (patchFile ./patches/userspace/bcachefs-btree-cache-dirty-throttle-half.patch)
-            ];
+            patches =
+              (old.patches or [ ])
+              ++ [ (patchFile ./patches/userspace/bcachefs-btree-cache-dirty-throttle-half.patch) ]
+              ++ lib.optional (cfg.version == "next") (
+                patchFile ./patches/userspace/bcachefs-const-mnt-idmap.patch
+              );
           });
         in
         pkgsKernel.runCommand "${bcachefs.name}-stripped"
