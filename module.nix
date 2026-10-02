@@ -594,6 +594,8 @@ let
       DYNAMIC_DEBUG = option no; # Runtime pr_debug control
       FUNCTION_TRACER = option no; # ftrace (stronger than sysctl disable)
       FUNCTION_GRAPH_TRACER = option no; # ftrace graph tracer
+      STACK_TRACER = option no; # nixpkgs enables it, and it selects FUNCTION_TRACER
+      FUNCTION_PROFILER = option no; # depends on FUNCTION_TRACER, nixpkgs sets it as a hard yes
       PM_DEBUG = option no; # Power management debug
       PM_ADVANCED_DEBUG = option no; # Advanced PM debug
       PM_SLEEP_DEBUG = option no; # PM sleep debug
