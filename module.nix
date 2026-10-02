@@ -1876,8 +1876,8 @@ in
         "kernel.kptr_restrict" = 2;
         # Disable bpf() JIT (eliminates spray attacks).
         "net.core.bpf_jit_enable" = false;
-        # Disable ftrace debugging.
-        "kernel.ftrace_enabled" = false;
+        # Disable ftrace debugging. 7.3 deprecated the knob and rejects 0 with EOPNOTSUPP.
+        "kernel.ftrace_enabled" = if lib.versionOlder kernelMajorMinor "7.3" then false else null;
         # Restrict dmesg to root (CONFIG_SECURITY_DMESG_RESTRICT equivalent).
         "kernel.dmesg_restrict" = 1;
         # Prevent unintentional fifo writes.
