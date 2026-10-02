@@ -1,0 +1,20 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Thu, 1 Oct 2026 00:00:00 -0400
+Subject: [PATCH] landlock: drop __counted_by from domain handled_masks
+
+Clang 21 reads the counter of this union-nested flex array from the
+array itself, so FORTIFY panics on any nested landlock_restrict_self.
+---
+diff --git a/security/landlock/domain.h b/security/landlock/domain.h
+--- a/security/landlock/domain.h
++++ b/security/landlock/domain.h
+@@ -244,7 +244,7 @@
+ 			 * and never changed for the lifetime of the domain.
+ 			 */
+ 			struct access_masks
+-				handled_masks[] __counted_by(num_layers);
++				handled_masks[];
+ 		};
+ 	};
+ };

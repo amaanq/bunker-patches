@@ -316,7 +316,10 @@ let
       ];
     };
     next = {
-      base = [ "bunker/0019" ]; # 8250_mid namespace import
+      base = [
+        "bunker/0019" # 8250_mid namespace import
+        "bunker/0020" # landlock handled_masks counted_by miscompile
+      ];
       interactive = [ "zen/0020" ];
       extras = [ "cachyos/0020" ];
     };
