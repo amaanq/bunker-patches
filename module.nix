@@ -171,6 +171,9 @@ let
       "bunker/0010" # rust: backlight device abstraction
       "clear/0012" # PCI PME interval
     ];
+    rustBtf = [
+      "bunker/0021" # rust: allow BTF with LTO
+    ];
     openrgbSmbus = [
       "bunker/0009" # i2c-nct6775: OpenRGB SMBus for gaming motherboard RGB
     ];
@@ -337,7 +340,8 @@ let
   ++ lib.optional cfg.drivers "drivers"
   ++ lib.optional cfg.extras "extras"
   ++ lib.optional cfg.openrgbSmbus "openrgbSmbus"
-  ++ lib.optional cfg.octeon "octeon";
+  ++ lib.optional cfg.octeon "octeon"
+  ++ lib.optional (cfg.rust && cfg.debugInfo) "rustBtf";
 
   enabledNumbers = concatMap (g: patchGroups.${g}) enabledGroups;
 
@@ -1252,22 +1256,20 @@ let
   };
 
   rustLtoConfig = optionalAttrs (cfg.rust && cfg.lto != "none") (forceAll {
-    DEBUG_INFO_BTF = option no;
     NOVA_CORE = option no;
-    NET_SCH_BPF = option no;
-    SCHED_CLASS_EXT = option no;
-    MODULE_ALLOW_BTF_MISMATCH = option no;
     MODVERSIONS = no;
   });
 
-  # nixpkgs keeps DEBUG_INFO=yes for BTF and crashkernel, but BTF is already
-  # off under rust+LTO, hardened disables kdump, and preFixup strips vmlinux
-  # and the modules anyway, so DWARF info makes no sense to add.
+  # nixpkgs keeps DEBUG_INFO=yes for BTF and crashkernel, but hardened
+  # disables kdump and preFixup strips vmlinux and the modules anyway, so
+  # without BTF the DWARF info makes no sense to add.
   debugInfoConfig = optionalAttrs (!cfg.debugInfo) (forceAll {
     DEBUG_INFO = option no;
     DEBUG_INFO_NONE = yes;
     DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT = no;
     DEBUG_INFO_BTF = option no;
+    NET_SCH_BPF = option no;
+    SCHED_CLASS_EXT = option no;
     MODULE_ALLOW_BTF_MISMATCH = option no;
   });
 
@@ -1836,11 +1838,10 @@ in
       type = types.bool;
       default = false;
       description = ''
-        Build with DWARF debug info. This is off by default because BTF is
-        already off under the default rust + LTO combo and the build strips
-        vmlinux and the modules anyway, so the DWARF only slows the build down.
-        Enable it for eBPF/CO-RE tooling or kernel debugging, together with
-        `lto = "none"` if you want BTF back.
+        Build with DWARF debug info and BTF. This is off by default because
+        the build strips vmlinux and the modules anyway, so outside of BTF the
+        DWARF only slows the build down. Enable it for BPF LSM, fentry and
+        CO-RE tooling.
       '';
     };
   };
