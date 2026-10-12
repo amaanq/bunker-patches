@@ -1229,19 +1229,24 @@ let
 
   networkingConfig = optionalAttrs cfg.networking (
     {
-      TCP_CONG_BBR = option yes;
       NET_SCH_DEFAULT = yes;
       DEFAULT_FQ_CODEL = option yes;
     }
     // (
       # 7.1+ exposes BBRv3 as "bbr3", while older patch sets expose it as "bbr".
+      # Built-in v1 next to v3 duplicates tcp_bbr_check_kfunc_ids and the static
+      # bbr_* kfuncs in vmlinux, which fails resolve_btfids without a message.
       if lib.versionAtLeast kernelMajorMinor "7.1" then
         {
+          TCP_CONG_BBR = option module;
           TCP_CONG_BBR3 = option yes;
           DEFAULT_BBR3 = option yes;
         }
       else
-        { DEFAULT_BBR = option yes; }
+        {
+          TCP_CONG_BBR = option yes;
+          DEFAULT_BBR = option yes;
+        }
     )
   );
 
