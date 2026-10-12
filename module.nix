@@ -596,7 +596,6 @@ let
       JBD2_DEBUG = option no; # ext4 journaling debug
       SLUB_DEBUG = option no; # SLUB allocator debug
       DYNAMIC_DEBUG = option no; # Runtime pr_debug control
-      FUNCTION_TRACER = option no; # ftrace (stronger than sysctl disable)
       FUNCTION_GRAPH_TRACER = option no; # ftrace graph tracer
       STACK_TRACER = option no; # nixpkgs enables it, and it selects FUNCTION_TRACER
       FUNCTION_PROFILER = option no; # depends on FUNCTION_TRACER, nixpkgs sets it as a hard yes
@@ -615,6 +614,10 @@ let
       # Child options of disabled security parents
       X86_SGX_KVM = option no;
     }
+    # fentry attaches through the __fentry__ call the function tracer compiles in
+    // optionalAttrs (!cfg.debugInfo) (forceAll {
+      FUNCTION_TRACER = option no; # ftrace (stronger than sysctl disable)
+    })
   );
 
   trimmedConfig = optionalAttrs cfg.trimmed (
@@ -1846,7 +1849,8 @@ in
         Build with DWARF debug info and BTF. This is off by default because
         the build strips vmlinux and the modules anyway, so outside of BTF the
         DWARF only slows the build down. Enable it for BPF LSM, fentry and
-        CO-RE tooling.
+        CO-RE tooling, which under `hardened` also keeps the function tracer
+        and the BPF JIT.
       '';
     };
   };
@@ -1882,10 +1886,12 @@ in
         "kernel.sysrq" = 0;
         # Hide kptrs even for processes with CAP_SYSLOG.
         "kernel.kptr_restrict" = 2;
-        # Disable bpf() JIT (eliminates spray attacks).
-        "net.core.bpf_jit_enable" = false;
+        # Disable bpf() JIT (eliminates spray attacks). fentry trampolines and
+        # bpf_loop callbacks refuse to load without it.
+        "net.core.bpf_jit_enable" = cfg.debugInfo;
         # Disable ftrace debugging. 7.3 deprecated the knob and rejects 0 with EOPNOTSUPP.
-        "kernel.ftrace_enabled" = if lib.versionOlder kernelMajorMinor "7.3" then false else null;
+        "kernel.ftrace_enabled" =
+          if cfg.debugInfo || !lib.versionOlder kernelMajorMinor "7.3" then null else false;
         # Restrict dmesg to root (CONFIG_SECURITY_DMESG_RESTRICT equivalent).
         "kernel.dmesg_restrict" = 1;
         # Prevent unintentional fifo writes.
