@@ -110,21 +110,21 @@ let
       "xanmod/0006"
       "xanmod/0007"
       "xanmod/0014"
-      # clear: sched/fair cpu, timer slack, mmput, memcg, compaction, branch hints
+      # clear: sched/fair cpu, timer slack, memcg, compaction, branch hints
       "clear/0005"
       "clear/0006"
       "clear/0007"
       "clear/0008"
       "clear/0009"
       "clear/0010"
-      "clear/0011"
-      # bunker: VM_READAHEAD_PAGES
+      # bunker: VM_READAHEAD_PAGES, exit mm teardown on the unbound workqueue
       "bunker/0005"
+      "bunker/0022"
     ];
     hardened =
       # 7.1 onward tracks anthraxx's official 101-patch series and picks
       # up three extra GrapheneOS patches.
-      (lib.genList (i: "hardened/${lib.fixedWidthString 4 "0" (toString (i + 1))}") (
+      (lib.genList (i: "hardened/${lib.fixedWidthString 4 "0" (toString (i + 1))}")
         {
           "6.19" = 101;
           "7.0" = 105;
@@ -134,7 +134,7 @@ let
           next = 101;
         }
         .${majorMinor}
-      ))
+      )
       ++ (lib.genList (i: "grapheneos/${lib.fixedWidthString 4 "0" (toString (i + 1))}") (
         if lib.versionAtLeast kernelMajorMinor "7.1" then 8 else 5
       ))
@@ -169,7 +169,7 @@ let
       "bunker/0013" # r8125: disable vendor /proc debug files (must follow cachyos/0018)
       "bunker/0002"
       "bunker/0010" # rust: backlight device abstraction
-      "clear/0012" # PCI PME interval
+      "clear/0011" # PCI PME interval
     ];
     rustBtf = [
       "bunker/0021" # rust: allow BTF with LTO
