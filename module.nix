@@ -1877,7 +1877,7 @@ in
       # NixOS's bcachefs module creates its own module instance via
       # callPackage, bypassing our kernel packages overlay.  Point it
       # at the stripped version explicitly.
-      boot.bcachefs.modulePackage = kernelPackage.bcachefs;
+      boot.bcachefs.modulePackage = config.boot.kernelPackages.bcachefs;
     }
 
     (mkIf cfg.hardened {
