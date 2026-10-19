@@ -52,8 +52,8 @@ let
     "7.0" = "7.0.13";
     "7.1" = "7.1.5";
     "7.2" = "7.2.8";
-    "7.3" = "7.3-rc5";
-    next = "7.3-rc5-next-20260930";
+    "7.3" = "7.3";
+    next = "7.3-next-20261019";
   };
 
   resolvedVersion =
@@ -319,10 +319,6 @@ let
       ];
     };
     next = {
-      base = [
-        "bunker/0019" # 8250_mid namespace import
-        "bunker/0020" # landlock handled_masks counted_by miscompile
-      ];
       interactive = [ "zen/0020" ];
       extras = [ "cachyos/0020" ];
     };
@@ -412,8 +408,8 @@ let
       "7.0.13" = "sha256-PIHt0PcWrKPdSN/2kWgYJ1gMxT01qO7DvkfTRtH4mRM=";
       "7.1.5" = "sha256-IqAZazy83zTcJ7d1YfTQQFhf00R+3JqzUxoax54wQec=";
       "7.2.8" = "sha256-EujVqXPRrXxaXGmILkAisTHtcV23AD/c12Dd+MPlGUE=";
-      "7.3-rc5" = "sha256-OC1qpIZANR332mMh4VbDkVW0qZsJhdQ3D35ghymYdFM=";
-      "7.3-rc5-next-20260930" = "sha256-QC0jrHN8ZkoaiJlVOLE2FS/pJzqT1yoqUT9CK8w74pQ=";
+      "7.3" = "sha256-hzY8JPEOBjIes2J2VSEJTpRHH2v/i84taz5A858ASVM=";
+      "7.3-next-20261019" = "sha256-heedBMt3H35uRcEKnPJVwsieIGZ+MqncpRfPISKmBLs=";
     }
     .${resolvedVersion};
 
@@ -459,6 +455,9 @@ let
     # linux-next renamed it COREBOOT_FIRMWARE and left the old name transitional
     GOOGLE_FIRMWARE = mkForce (option yes);
     COREBOOT_FIRMWARE = option yes;
+
+    # linux-next made KVM MMIO unconditional and deleted the symbol
+    KVM_MMIO = mkForce (option yes);
   }
   // optionalAttrs isX86 {
     MICROCODE = yes;

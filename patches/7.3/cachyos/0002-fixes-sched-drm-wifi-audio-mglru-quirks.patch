@@ -6,10 +6,9 @@ Subject: [PATCH] fixes
 Signed-off-by: Peter Jung <admin@ptr1337.dev>
 ---
 diff --git a/arch/arm/include/asm/mmu_context.h b/arch/arm/include/asm/mmu_context.h
-index db2cb06aa8cf5e..bebde469f81ae6 100644
 --- a/arch/arm/include/asm/mmu_context.h
 +++ b/arch/arm/include/asm/mmu_context.h
-@@ -80,7 +80,7 @@ static inline void check_and_switch_context(struct mm_struct *mm,
+@@ -80,7 +80,7 @@
  #ifndef MODULE
  #define finish_arch_post_lock_switch \
  	finish_arch_post_lock_switch
@@ -19,7 +18,6 @@ index db2cb06aa8cf5e..bebde469f81ae6 100644
  	struct mm_struct *mm = current->mm;
  
 diff --git a/arch/riscv/include/asm/sync_core.h b/arch/riscv/include/asm/sync_core.h
-index 9153016da8f14b..2fe6b7fe6b12d0 100644
 --- a/arch/riscv/include/asm/sync_core.h
 +++ b/arch/riscv/include/asm/sync_core.h
 @@ -6,7 +6,7 @@
@@ -32,10 +30,9 @@ index 9153016da8f14b..2fe6b7fe6b12d0 100644
  	asm volatile ("fence.i" ::: "memory");
  }
 diff --git a/arch/s390/include/asm/mmu_context.h b/arch/s390/include/asm/mmu_context.h
-index bd1ef5e2d2ebf8..95d03be2ce4561 100644
 --- a/arch/s390/include/asm/mmu_context.h
 +++ b/arch/s390/include/asm/mmu_context.h
-@@ -93,7 +93,7 @@ static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
+@@ -93,7 +93,7 @@
  }
  
  #define finish_arch_post_lock_switch finish_arch_post_lock_switch
@@ -45,10 +42,9 @@ index bd1ef5e2d2ebf8..95d03be2ce4561 100644
  	struct task_struct *tsk = current;
  	struct mm_struct *mm = tsk->mm;
 diff --git a/arch/sparc/include/asm/mmu_context_64.h b/arch/sparc/include/asm/mmu_context_64.h
-index 78bbacc14d2d9b..d1967214ef25f9 100644
 --- a/arch/sparc/include/asm/mmu_context_64.h
 +++ b/arch/sparc/include/asm/mmu_context_64.h
-@@ -160,7 +160,7 @@ static inline void arch_start_context_switch(struct task_struct *prev)
+@@ -160,7 +160,7 @@
  }
  
  #define finish_arch_post_lock_switch	finish_arch_post_lock_switch
@@ -58,10 +54,9 @@ index 78bbacc14d2d9b..d1967214ef25f9 100644
  	/* Restore the state of MCDPER register for the new process
  	 * just switched to.
 diff --git a/arch/x86/include/asm/sync_core.h b/arch/x86/include/asm/sync_core.h
-index df22113db9cd79..3b0ed46dfc233d 100644
 --- a/arch/x86/include/asm/sync_core.h
 +++ b/arch/x86/include/asm/sync_core.h
-@@ -93,7 +93,7 @@ static __always_inline void sync_core(void)
+@@ -93,7 +93,7 @@
   * to user-mode. x86 implements return to user-space through sysexit,
   * sysrel, and sysretq, which are not core serializing.
   */
@@ -70,29 +65,10 @@ index df22113db9cd79..3b0ed46dfc233d 100644
  {
  	/* With PTI, we unconditionally serialize before running user code. */
  	if (cpu_feature_enabled(X86_FEATURE_PTI))
-diff --git a/arch/x86/kernel/cpu/amd.c b/arch/x86/kernel/cpu/amd.c
-index 54e14ed276b521..0befde2a9c415c 100644
---- a/arch/x86/kernel/cpu/amd.c
-+++ b/arch/x86/kernel/cpu/amd.c
-@@ -1044,11 +1044,8 @@ static const struct x86_cpu_id zen5_rdseed_microcode[] = {
- 
- static void init_amd_zen5(struct cpuinfo_x86 *c)
- {
--	if (!x86_match_min_microcode_rev(zen5_rdseed_microcode)) {
--		clear_cpu_cap(c, X86_FEATURE_RDSEED);
--		msr_clear_bit(MSR_AMD64_CPUID_FN_7, 18);
--		pr_emerg_once("RDSEED32 is broken. Disabling the corresponding CPUID bit.\n");
--	}
-+	if (!x86_match_min_microcode_rev(zen5_rdseed_microcode))
-+		pr_emerg_once("RDSEED32 is broken. Please update your firmware.\n");
- }
- 
- static void init_amd(struct cpuinfo_x86 *c)
 diff --git a/drivers/bluetooth/btusb.c b/drivers/bluetooth/btusb.c
-index 002b9f975710fa..bad63275fcf5d3 100644
 --- a/drivers/bluetooth/btusb.c
 +++ b/drivers/bluetooth/btusb.c
-@@ -570,6 +570,8 @@ static const struct usb_device_id quirks_table[] = {
+@@ -587,6 +587,8 @@
  						     BTUSB_WIDEBAND_SPEECH },
  	{ USB_DEVICE(0x13d3, 0x3612), .driver_info = BTUSB_REALTEK |
  						     BTUSB_WIDEBAND_SPEECH },
@@ -101,7 +77,7 @@ index 002b9f975710fa..bad63275fcf5d3 100644
  	{ USB_DEVICE(0x0489, 0xe122), .driver_info = BTUSB_REALTEK |
  						     BTUSB_WIDEBAND_SPEECH },
  
-@@ -700,6 +702,8 @@ static const struct usb_device_id quirks_table[] = {
+@@ -717,6 +719,8 @@
  	{ USB_DEVICE(0x13d3, 0x3596), .driver_info = BTUSB_MEDIATEK |
  						     BTUSB_WIDEBAND_SPEECH },
  	/* MediaTek MT7922 Bluetooth devices */
@@ -111,10 +87,9 @@ index 002b9f975710fa..bad63275fcf5d3 100644
  						     BTUSB_WIDEBAND_SPEECH },
  	{ USB_DEVICE(0x13d3, 0x3610), .driver_info = BTUSB_MEDIATEK |
 diff --git a/drivers/gpu/drm/gud/gud_connector.c b/drivers/gpu/drm/gud/gud_connector.c
-index 8141c3a1e30ad9..5c0065c876a77f 100644
 --- a/drivers/gpu/drm/gud/gud_connector.c
 +++ b/drivers/gpu/drm/gud/gud_connector.c
-@@ -399,11 +399,8 @@ static int gud_connector_add_tv_mode(struct gud_device *gdrm, struct drm_connect
+@@ -399,11 +399,8 @@
  	for (i = 0; i < num_modes; i++) {
  		char *mode = &buf[i * GUD_CONNECTOR_TV_MODE_NAME_LEN];
  
@@ -128,8 +103,62 @@ index 8141c3a1e30ad9..5c0065c876a77f 100644
  		modes[i] = mode;
  	}
  
+diff --git a/drivers/gpu/drm/i915/display/intel_dp.c b/drivers/gpu/drm/i915/display/intel_dp.c
+--- a/drivers/gpu/drm/i915/display/intel_dp.c
++++ b/drivers/gpu/drm/i915/display/intel_dp.c
+@@ -4785,6 +4785,38 @@
+ 	intel_edp_set_data_override_rates(intel_dp);
+ }
+ 
++static void intel_edp_wake_sink(struct intel_dp *intel_dp)
++{
++	u8 value = 0;
++	int ret;
++
++	/*
++	 * Read the current sink power state. drm_dp_dpcd_read_byte() already
++	 * retries the AUX transaction internally, so a single read suffices.
++	 * First commercial eDP panels are Ver1.0 or 1.1, on which DPCD
++	 * DP_SET_POWER is supported.
++	 */
++	ret = drm_dp_dpcd_read_byte(&intel_dp->aux, DP_SET_POWER, &value);
++
++	/*
++	 * If the AUX read failed the sink may be asleep and not responding,
++	 * or it read back D3; in either case wake it up to D0.
++	 * In case of AUX read failure which is usually a POR case, the
++	 * remaining bits of register 0x600 is set to '0' on POR. So a bare
++	 * write should be fine.
++	 */
++	if (ret < 0 || value == DP_SET_POWER_D3) {
++		value &= ~DP_SET_POWER_MASK;
++		value |= DP_SET_POWER_D0;
++		drm_dp_dpcd_write_byte(&intel_dp->aux, DP_SET_POWER,
++				       value);
++		/* After setting to D0 need a min of 1ms to wake (Spec DP2.1 sec 2.3.1.2) */
++		fsleep(1000);
++		drm_dp_dpcd_write_byte(&intel_dp->aux, DP_SET_POWER,
++				       value);
++	}
++}
++
+ static bool
+ intel_edp_init_dpcd(struct intel_dp *intel_dp, struct intel_connector *connector)
+ {
+@@ -4795,6 +4827,12 @@
+ 	/* this function is meant to be called only once */
+ 	drm_WARN_ON(display->drm, intel_dp->dpcd[DP_DPCD_REV] != 0);
+ 
++	/*
++	 * Spec DP2.1 Section 3.5.2.16 page 966.
++	 * Also if sink is asleep, this will wake the sink.
++	 */
++	intel_edp_wake_sink(intel_dp);
++
+ 	if (drm_dp_read_dpcd_caps(&intel_dp->aux, intel_dp->dpcd) != 0)
+ 		return false;
+ 
 diff --git a/drivers/gpu/drm/i915/gt/intel_rc6.c b/drivers/gpu/drm/i915/gt/intel_rc6.c
-index e91e5cdca26ca6..a0361f82361027 100644
 --- a/drivers/gpu/drm/i915/gt/intel_rc6.c
 +++ b/drivers/gpu/drm/i915/gt/intel_rc6.c
 @@ -2,9 +2,9 @@
@@ -143,7 +172,7 @@ index e91e5cdca26ca6..a0361f82361027 100644
  
  #include <drm/drm_print.h>
  #include <drm/intel/intel_pcode_regs.h>
-@@ -499,6 +499,17 @@ static bool rc6_supported(struct intel_rc6 *rc6)
+@@ -499,6 +499,17 @@
  	if (!HAS_RC6(i915))
  		return false;
  
@@ -162,10 +191,9 @@ index e91e5cdca26ca6..a0361f82361027 100644
  		return false;
  
 diff --git a/drivers/i2c/i2c-core-acpi.c b/drivers/i2c/i2c-core-acpi.c
-index 8f3bdd50186e39..e5b27375af3171 100644
 --- a/drivers/i2c/i2c-core-acpi.c
 +++ b/drivers/i2c/i2c-core-acpi.c
-@@ -371,6 +371,7 @@ static const struct acpi_device_id i2c_acpi_force_100khz_device_ids[] = {
+@@ -371,6 +371,7 @@
  	 * the device works without issues on Windows at what is expected to be
  	 * a 400KHz frequency. The root cause of the issue is not known.
  	 */
@@ -173,30 +201,10 @@ index 8f3bdd50186e39..e5b27375af3171 100644
  	{ "DLL0945", 0 },
  	{ "ELAN0678", 0 },
  	{ "ELAN06FA", 0 },
-diff --git a/drivers/net/wireguard/queueing.h b/drivers/net/wireguard/queueing.h
-index 79b6d70de236bc..663b19b7839533 100644
---- a/drivers/net/wireguard/queueing.h
-+++ b/drivers/net/wireguard/queueing.h
-@@ -78,12 +78,14 @@ static inline void wg_reset_packet(struct sk_buff *skb, bool encapsulating)
- 	u8 l4_hash = skb->l4_hash;
- 	u8 sw_hash = skb->sw_hash;
- 	u32 hash = skb->hash;
-+	u8 tstamp_type = skb->tstamp_type;
- 	skb_scrub_packet(skb, true);
- 	memset(&skb->headers, 0, sizeof(skb->headers));
- 	if (encapsulating) {
- 		skb->l4_hash = l4_hash;
- 		skb->sw_hash = sw_hash;
- 		skb->hash = hash;
-+		skb->tstamp_type = tstamp_type;
- 	}
- 	skb->queue_mapping = 0;
- 	skb->nohdr = 0;
 diff --git a/drivers/net/wireless/intel/iwlwifi/mld/mac80211.c b/drivers/net/wireless/intel/iwlwifi/mld/mac80211.c
-index 3a4c8fda68d0a4..a007acbe71d012 100644
 --- a/drivers/net/wireless/intel/iwlwifi/mld/mac80211.c
 +++ b/drivers/net/wireless/intel/iwlwifi/mld/mac80211.c
-@@ -516,6 +516,10 @@ iwl_mld_mac80211_tx(struct ieee80211_hw *hw,
+@@ -516,6 +516,10 @@
  	u32 link_id = u32_get_bits(info->control.flags,
  				   IEEE80211_TX_CTRL_MLO_LINK);
  
@@ -208,10 +216,9 @@ index 3a4c8fda68d0a4..a007acbe71d012 100644
  	 * so the FW can't translate the MLD addr to the link addr. Do it here
  	 */
 diff --git a/drivers/net/wireless/intel/iwlwifi/mld/tx.c b/drivers/net/wireless/intel/iwlwifi/mld/tx.c
-index 2df6643a5aa80f..7db7554ceae181 100644
 --- a/drivers/net/wireless/intel/iwlwifi/mld/tx.c
 +++ b/drivers/net/wireless/intel/iwlwifi/mld/tx.c
-@@ -987,6 +987,9 @@ void iwl_mld_tx_from_txq(struct iwl_mld *mld, struct ieee80211_txq *txq)
+@@ -987,6 +987,9 @@
  	struct sk_buff *skb = NULL;
  	u8 zero_addr[ETH_ALEN] = {};
  
@@ -222,10 +229,9 @@ index 2df6643a5aa80f..7db7554ceae181 100644
  	 * Don't transmit during firmware restart. The firmware is dead,
  	 * so iwl_trans_tx() would return -EIO for each frame. Avoid the
 diff --git a/drivers/usb/core/message.c b/drivers/usb/core/message.c
-index 75e2bfd744a984..1d83f8be04f57a 100644
 --- a/drivers/usb/core/message.c
 +++ b/drivers/usb/core/message.c
-@@ -1052,6 +1052,25 @@ int usb_string(struct usb_device *dev, int index, char *buf, size_t size)
+@@ -1052,6 +1052,25 @@
  			UTF16_LITTLE_ENDIAN, buf, size);
  	buf[err] = 0;
  
@@ -252,10 +258,9 @@ index 75e2bfd744a984..1d83f8be04f57a 100644
  		dev_dbg(&dev->dev,
  			"wrong descriptor type %02x for string %d (\"%s\")\n",
 diff --git a/include/linux/perf_event.h b/include/linux/perf_event.h
-index 5842552294c195..2c163e28dddc3e 100644
 --- a/include/linux/perf_event.h
 +++ b/include/linux/perf_event.h
-@@ -1632,7 +1632,7 @@ static inline void perf_event_task_migrate(struct task_struct *task)
+@@ -1616,7 +1616,7 @@
  		task->sched_migrated = 1;
  }
  
@@ -265,10 +270,9 @@ index 5842552294c195..2c163e28dddc3e 100644
  {
  	if (static_branch_unlikely(&perf_sched_events))
 diff --git a/include/linux/sched/mm.h b/include/linux/sched/mm.h
-index d7c6a942aa7e02..99d555f26b614d 100644
 --- a/include/linux/sched/mm.h
 +++ b/include/linux/sched/mm.h
-@@ -32,7 +32,7 @@ extern struct mm_struct *mm_alloc(void);
+@@ -32,7 +32,7 @@
   * See also <Documentation/mm/active_mm.rst> for an in-depth explanation
   * of &mm_struct.mm_count vs &mm_struct.mm_users.
   */
@@ -277,7 +281,7 @@ index d7c6a942aa7e02..99d555f26b614d 100644
  {
  	atomic_inc(&mm->mm_count);
  }
-@@ -44,7 +44,7 @@ static inline void smp_mb__after_mmgrab(void)
+@@ -44,7 +44,7 @@
  
  extern void __mmdrop(struct mm_struct *mm);
  
@@ -286,7 +290,7 @@ index d7c6a942aa7e02..99d555f26b614d 100644
  {
  	/*
  	 * The implicit full barrier implied by atomic_dec_and_test() is
-@@ -71,27 +71,27 @@ static inline void __mmdrop_delayed(struct rcu_head *rhp)
+@@ -71,27 +71,27 @@
   * Invoked from finish_task_switch(). Delegates the heavy lifting on RT
   * kernels via RCU.
   */
@@ -318,7 +322,7 @@ index d7c6a942aa7e02..99d555f26b614d 100644
  {
  	if (IS_ENABLED(CONFIG_MMU_LAZY_TLB_REFCOUNT)) {
  		mmdrop(mm);
-@@ -104,7 +104,7 @@ static inline void mmdrop_lazy_tlb(struct mm_struct *mm)
+@@ -104,7 +104,7 @@
  	}
  }
  
@@ -327,7 +331,7 @@ index d7c6a942aa7e02..99d555f26b614d 100644
  {
  	if (IS_ENABLED(CONFIG_MMU_LAZY_TLB_REFCOUNT))
  		mmdrop_sched(mm);
-@@ -128,12 +128,12 @@ static inline void mmdrop_lazy_tlb_sched(struct mm_struct *mm)
+@@ -128,12 +128,12 @@
   * See also <Documentation/mm/active_mm.rst> for an in-depth explanation
   * of &mm_struct.mm_count vs &mm_struct.mm_users.
   */
@@ -342,7 +346,7 @@ index d7c6a942aa7e02..99d555f26b614d 100644
  {
  	return atomic_inc_not_zero(&mm->mm_users);
  }
-@@ -531,7 +531,7 @@ enum {
+@@ -531,7 +531,7 @@
  #include <asm/membarrier.h>
  #endif
  
@@ -352,10 +356,9 @@ index d7c6a942aa7e02..99d555f26b614d 100644
  	/*
  	 * The atomic_read() below prevents CSE. The following should
 diff --git a/include/linux/tick.h b/include/linux/tick.h
-index b121c5d53e308c..ea7002ad7d02e3 100644
 --- a/include/linux/tick.h
 +++ b/include/linux/tick.h
-@@ -172,7 +172,7 @@ extern cpumask_var_t tick_nohz_full_mask;
+@@ -172,7 +172,7 @@
  #ifdef CONFIG_NO_HZ_FULL
  extern bool tick_nohz_full_running;
  
@@ -364,7 +367,7 @@ index b121c5d53e308c..ea7002ad7d02e3 100644
  {
  	if (!context_tracking_enabled())
  		return false;
-@@ -296,7 +296,7 @@ static inline void __tick_nohz_task_switch(void) { }
+@@ -296,7 +296,7 @@
  static inline void tick_nohz_full_setup(cpumask_var_t cpumask) { }
  #endif
  
@@ -374,10 +377,9 @@ index b121c5d53e308c..ea7002ad7d02e3 100644
  	if (tick_nohz_full_enabled())
  		__tick_nohz_task_switch();
 diff --git a/include/linux/vtime.h b/include/linux/vtime.h
-index 82825e7754993f..ce83fc74387d11 100644
 --- a/include/linux/vtime.h
 +++ b/include/linux/vtime.h
-@@ -89,24 +89,24 @@ static __always_inline void vtime_account_guest_exit(void)
+@@ -89,24 +89,24 @@
   * For now vtime state is tied to context tracking. We might want to decouple
   * those later if necessary.
   */
@@ -407,10 +409,9 @@ index 82825e7754993f..ce83fc74387d11 100644
  	if (vtime_accounting_enabled_this_cpu())
  		vtime_task_switch_generic(prev);
 diff --git a/kernel/sched/core.c b/kernel/sched/core.c
-index 7885ff76e69f28..9a66ece3544a5d 100644
 --- a/kernel/sched/core.c
 +++ b/kernel/sched/core.c
-@@ -5090,7 +5090,7 @@ static inline void prepare_task(struct task_struct *next)
+@@ -5097,7 +5097,7 @@
  	WRITE_ONCE(next->on_cpu, 1);
  }
  
@@ -419,7 +420,7 @@ index 7885ff76e69f28..9a66ece3544a5d 100644
  {
  	/*
  	 * This must be the very last reference to @prev from this CPU. After
-@@ -5134,7 +5134,7 @@ static void zap_balance_callbacks(struct rq *rq)
+@@ -5141,7 +5141,7 @@
  	rq->balance_callback = found ? &balance_push_callback : NULL;
  }
  
@@ -428,7 +429,7 @@ index 7885ff76e69f28..9a66ece3544a5d 100644
  {
  	void (*func)(struct rq *rq);
  	struct balance_callback *next;
-@@ -5169,7 +5169,7 @@ struct balance_callback balance_push_callback = {
+@@ -5176,7 +5176,7 @@
  	.func = balance_push,
  };
  
@@ -437,7 +438,7 @@ index 7885ff76e69f28..9a66ece3544a5d 100644
  __splice_balance_callbacks(struct rq *rq, bool split)
  {
  	struct balance_callback *head = rq->balance_callback;
-@@ -5243,7 +5243,7 @@ prepare_lock_switch(struct rq *rq, struct task_struct *next, struct rq_flags *rf
+@@ -5250,7 +5250,7 @@
  	__acquire(__rq_lockp(this_rq()));
  }
  
@@ -446,7 +447,7 @@ index 7885ff76e69f28..9a66ece3544a5d 100644
  	__releases(__rq_lockp(rq))
  {
  	/*
-@@ -5277,7 +5277,7 @@ static inline void kmap_local_sched_out(void)
+@@ -5284,7 +5284,7 @@
  #endif
  }
  
@@ -455,7 +456,7 @@ index 7885ff76e69f28..9a66ece3544a5d 100644
  {
  #ifdef CONFIG_KMAP_LOCAL
  	if (unlikely(current->kmap_ctrl.idx))
-@@ -5331,7 +5331,7 @@ prepare_task_switch(struct rq *rq, struct task_struct *prev,
+@@ -5338,7 +5338,7 @@
   * past. 'prev == current' is still correct but we need to recalculate this_rq
   * because prev may have moved to another CPU.
   */
@@ -465,10 +466,9 @@ index 7885ff76e69f28..9a66ece3544a5d 100644
  {
  	struct rq *rq = this_rq();
 diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
-index 7455a83a6a9907..034912f6c34789 100644
 --- a/kernel/sched/fair.c
 +++ b/kernel/sched/fair.c
-@@ -13542,12 +13542,15 @@ static int sched_balance_rq(int this_cpu, struct rq *this_rq,
+@@ -13814,12 +13814,15 @@
  		 * still unbalanced. ld_moved simply stays zero, so it is
  		 * correctly treated as an imbalance.
  		 */
@@ -487,10 +487,9 @@ index 7455a83a6a9907..034912f6c34789 100644
  		 * cur_ld_moved - load moved in current iteration
  		 * ld_moved     - cumulative load moved across iterations
 diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
-index e656c7059bf864..530e1ebbcf3b2f 100644
 --- a/kernel/sched/sched.h
 +++ b/kernel/sched/sched.h
-@@ -1482,12 +1482,12 @@ static inline struct cpumask *sched_group_span(struct sched_group *sg);
+@@ -1481,12 +1481,12 @@
  
  DECLARE_STATIC_KEY_FALSE(__sched_core_enabled);
  
@@ -505,7 +504,7 @@ index e656c7059bf864..530e1ebbcf3b2f 100644
  {
  	return !static_branch_unlikely(&__sched_core_enabled);
  }
-@@ -1496,7 +1496,7 @@ static inline bool sched_core_disabled(void)
+@@ -1495,7 +1495,7 @@
   * Be careful with this function; not for general use. The return value isn't
   * stable unless you actually hold a relevant rq->__lock.
   */
@@ -514,7 +513,7 @@ index e656c7059bf864..530e1ebbcf3b2f 100644
  {
  	if (sched_core_enabled(rq))
  		return &rq->core->__lock;
-@@ -1504,7 +1504,7 @@ static inline raw_spinlock_t *rq_lockp(struct rq *rq)
+@@ -1503,7 +1503,7 @@
  	return &rq->__lock;
  }
  
@@ -523,7 +522,7 @@ index e656c7059bf864..530e1ebbcf3b2f 100644
  	__returns_ctx_lock(rq_lockp(rq)) /* alias them */
  {
  	if (rq->core_enabled)
-@@ -1607,12 +1607,12 @@ static inline bool sched_core_disabled(void)
+@@ -1606,12 +1606,12 @@
  	return true;
  }
  
@@ -538,7 +537,7 @@ index e656c7059bf864..530e1ebbcf3b2f 100644
  	__returns_ctx_lock(rq_lockp(rq)) /* alias them */
  {
  	return &rq->__lock;
-@@ -1672,33 +1672,33 @@ extern void raw_spin_rq_lock_nested(struct rq *rq, int subclass)
+@@ -1671,33 +1671,33 @@
  extern bool raw_spin_rq_trylock(struct rq *rq)
  	__cond_acquires(true, __rq_lockp(rq));
  
@@ -577,7 +576,7 @@ index e656c7059bf864..530e1ebbcf3b2f 100644
  	__acquires(__rq_lockp(rq))
  {
  	unsigned long flags;
-@@ -1709,7 +1709,7 @@ static inline unsigned long _raw_spin_rq_lock_irqsave(struct rq *rq)
+@@ -1708,7 +1708,7 @@
  	return flags;
  }
  
@@ -587,10 +586,9 @@ index e656c7059bf864..530e1ebbcf3b2f 100644
  {
  	raw_spin_rq_unlock(rq);
 diff --git a/mm/slub.c b/mm/slub.c
-index 54ec1250335711..db83b1257440b4 100644
 --- a/mm/slub.c
 +++ b/mm/slub.c
-@@ -422,6 +422,7 @@ struct node_barn {
+@@ -422,6 +422,7 @@
  	spinlock_t lock;
  	struct list_head sheaves_full;
  	struct list_head sheaves_empty;
@@ -598,7 +596,7 @@ index 54ec1250335711..db83b1257440b4 100644
  	unsigned int nr_full;
  	unsigned int nr_empty;
  };
-@@ -3298,6 +3299,7 @@ static void barn_init(struct node_barn *barn)
+@@ -3298,6 +3299,7 @@
  	spin_lock_init(&barn->lock);
  	INIT_LIST_HEAD(&barn->sheaves_full);
  	INIT_LIST_HEAD(&barn->sheaves_empty);
@@ -606,7 +604,7 @@ index 54ec1250335711..db83b1257440b4 100644
  	barn->nr_full = 0;
  	barn->nr_empty = 0;
  }
-@@ -3315,6 +3317,10 @@ static void barn_shrink(struct kmem_cache *s, struct node_barn *barn)
+@@ -3315,6 +3317,10 @@
  	barn->nr_full = 0;
  	list_splice_init(&barn->sheaves_empty, &empty_list);
  	barn->nr_empty = 0;
@@ -617,7 +615,7 @@ index 54ec1250335711..db83b1257440b4 100644
  
  	spin_unlock_irqrestore(&barn->lock, flags);
  
-@@ -5073,12 +5079,87 @@ void *kmem_cache_alloc_node_noprof(struct kmem_cache *s, gfp_t gfpflags, int nod
+@@ -5073,12 +5079,87 @@
  }
  EXPORT_SYMBOL(kmem_cache_alloc_node_noprof);
  
@@ -706,10 +704,9 @@ index 54ec1250335711..db83b1257440b4 100644
  	if (gfp_pfmemalloc_allowed(gfp))
  		gfp_nomemalloc |= __GFP_NOWARN;
 diff --git a/sound/soc/intel/boards/sof_sdw.c b/sound/soc/intel/boards/sof_sdw.c
-index 72fe013fffe868..60b4d868a00afe 100644
 --- a/sound/soc/intel/boards/sof_sdw.c
 +++ b/sound/soc/intel/boards/sof_sdw.c
-@@ -845,6 +845,15 @@ static const struct dmi_system_id sof_sdw_quirk_table[] = {
+@@ -845,6 +845,15 @@
  		},
  		.driver_data = (void *)(SOC_SDW_PCH_DMIC),
  	},

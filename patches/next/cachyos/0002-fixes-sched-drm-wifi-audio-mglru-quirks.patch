@@ -65,23 +65,6 @@ diff --git a/arch/x86/include/asm/sync_core.h b/arch/x86/include/asm/sync_core.h
  {
  	/* With PTI, we unconditionally serialize before running user code. */
  	if (cpu_feature_enabled(X86_FEATURE_PTI))
-diff --git a/arch/x86/kernel/cpu/amd.c b/arch/x86/kernel/cpu/amd.c
---- a/arch/x86/kernel/cpu/amd.c
-+++ b/arch/x86/kernel/cpu/amd.c
-@@ -1044,11 +1044,8 @@
- 
- static void init_amd_zen5(struct cpuinfo_x86 *c)
- {
--	if (!x86_match_min_microcode_rev(zen5_rdseed_microcode)) {
--		clear_cpu_cap(c, X86_FEATURE_RDSEED);
--		msr_clear_bit(MSR_AMD64_CPUID_FN_7, 18);
--		pr_emerg_once("RDSEED32 is broken. Disabling the corresponding CPUID bit.\n");
--	}
-+	if (!x86_match_min_microcode_rev(zen5_rdseed_microcode))
-+		pr_emerg_once("RDSEED32 is broken. Please update your firmware.\n");
- }
- 
- static void init_amd(struct cpuinfo_x86 *c)
 diff --git a/drivers/gpu/drm/gud/gud_connector.c b/drivers/gpu/drm/gud/gud_connector.c
 --- a/drivers/gpu/drm/gud/gud_connector.c
 +++ b/drivers/gpu/drm/gud/gud_connector.c
@@ -131,35 +114,6 @@ diff --git a/drivers/gpu/drm/i915/gt/intel_rc6.c b/drivers/gpu/drm/i915/gt/intel
  	if (intel_vgpu_active(i915))
  		return false;
  
-diff --git a/drivers/i2c/i2c-core-acpi.c b/drivers/i2c/i2c-core-acpi.c
---- a/drivers/i2c/i2c-core-acpi.c
-+++ b/drivers/i2c/i2c-core-acpi.c
-@@ -371,6 +371,7 @@
- 	 * the device works without issues on Windows at what is expected to be
- 	 * a 400KHz frequency. The root cause of the issue is not known.
- 	 */
-+	{ "ASUE140D", 0 },
- 	{ "DELL0A86", 0 },
- 	{ "DLL0945", 0 },
- 	{ "ELAN0678", 0 },
-diff --git a/drivers/net/wireguard/queueing.h b/drivers/net/wireguard/queueing.h
---- a/drivers/net/wireguard/queueing.h
-+++ b/drivers/net/wireguard/queueing.h
-@@ -78,12 +78,14 @@
- 	u8 l4_hash = skb->l4_hash;
- 	u8 sw_hash = skb->sw_hash;
- 	u32 hash = skb->hash;
-+	u8 tstamp_type = skb->tstamp_type;
- 	skb_scrub_packet(skb, true);
- 	memset(&skb->headers, 0, sizeof(skb->headers));
- 	if (encapsulating) {
- 		skb->l4_hash = l4_hash;
- 		skb->sw_hash = sw_hash;
- 		skb->hash = hash;
-+		skb->tstamp_type = tstamp_type;
- 	}
- 	skb->queue_mapping = 0;
- 	skb->nohdr = 0;
 diff --git a/drivers/net/wireless/intel/iwlwifi/mld/mac80211.c b/drivers/net/wireless/intel/iwlwifi/mld/mac80211.c
 --- a/drivers/net/wireless/intel/iwlwifi/mld/mac80211.c
 +++ b/drivers/net/wireless/intel/iwlwifi/mld/mac80211.c
