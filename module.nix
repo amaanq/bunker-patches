@@ -517,8 +517,8 @@ let
     }
     // forceAll {
       TRANSPARENT_HUGEPAGE = yes;
-      TRANSPARENT_HUGEPAGE_ALWAYS = yes;
-      TRANSPARENT_HUGEPAGE_MADVISE = no;
+      TRANSPARENT_HUGEPAGE_ALWAYS = no;
+      TRANSPARENT_HUGEPAGE_MADVISE = yes;
       MQ_IOSCHED_KYBER = yes;
       BLK_WBT = no;
       BLK_WBT_MQ = option no;
