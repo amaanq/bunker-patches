@@ -53,7 +53,7 @@ let
     "7.1" = "7.1.5";
     "7.2" = "7.2.8";
     "7.3" = "7.3";
-    next = "7.3-next-20261019";
+    next = "7.3-next-20261022";
   };
 
   resolvedVersion =
@@ -409,7 +409,7 @@ let
       "7.1.5" = "sha256-IqAZazy83zTcJ7d1YfTQQFhf00R+3JqzUxoax54wQec=";
       "7.2.8" = "sha256-EujVqXPRrXxaXGmILkAisTHtcV23AD/c12Dd+MPlGUE=";
       "7.3" = "sha256-hzY8JPEOBjIes2J2VSEJTpRHH2v/i84taz5A858ASVM=";
-      "7.3-next-20261019" = "sha256-heedBMt3H35uRcEKnPJVwsieIGZ+MqncpRfPISKmBLs=";
+      "7.3-next-20261022" = "sha256-VAmgNjyRNGx2LQPsIQNbU804F1u5R2MyfFMbgDsRRfs=";
     }
     .${resolvedVersion};
 

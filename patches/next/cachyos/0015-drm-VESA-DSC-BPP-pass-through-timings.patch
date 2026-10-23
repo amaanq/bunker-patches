@@ -1,8 +1,7 @@
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
-index c8a1ab8c3b169d..a0764e89160bd0 100644
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
-@@ -961,6 +961,11 @@ STATIC_IFN_KUNIT void fill_stream_properties_from_drm_display_mode(
+@@ -983,6 +983,11 @@
  
  	stream->output_color_space = amdgpu_dm_get_output_color_space(timing_out, connector_state);
  	stream->content_type = get_output_content_type(connector_state);
@@ -14,15 +13,15 @@ index c8a1ab8c3b169d..a0764e89160bd0 100644
  }
  EXPORT_IF_KUNIT(fill_stream_properties_from_drm_display_mode);
  
-@@ -1436,6 +1441,7 @@ create_stream_for_sink(struct drm_connector *connector,
+@@ -1485,6 +1490,7 @@
  	struct drm_display_mode mode;
  	struct drm_display_mode saved_mode;
  	struct drm_display_mode *freesync_mode = NULL;
 +	struct drm_display_mode *dsc_passthru_mode = NULL;
- 	bool native_mode_found = false;
  	bool recalculate_timing = false;
+ 	bool unadvertised_mode = false;
  	bool scale = dm_state->scaling != RMX_OFF;
-@@ -1527,6 +1533,16 @@ create_stream_for_sink(struct drm_connector *connector,
+@@ -1583,6 +1589,16 @@
  		}
  	}
  
@@ -40,10 +39,9 @@ index c8a1ab8c3b169d..a0764e89160bd0 100644
  		drm_mode_set_crtcinfo(&saved_mode, 0);
  
 diff --git a/drivers/gpu/drm/amd/display/dc/dml/dsc/qp_tables.h b/drivers/gpu/drm/amd/display/dc/dml/dsc/qp_tables.h
-index dcff0dd2b6a123..622abb69ea0075 100644
 --- a/drivers/gpu/drm/amd/display/dc/dml/dsc/qp_tables.h
 +++ b/drivers/gpu/drm/amd/display/dc/dml/dsc/qp_tables.h
-@@ -63,7 +63,7 @@ static const qp_table   qp_table_444_8bpc_max = {
+@@ -63,7 +63,7 @@
  	{ 6.5, { 4, 6, 7, 8, 8, 8, 9, 10, 11, 11, 12, 12, 12, 13, 15} },
  	{   7, { 4, 5, 7, 7, 8, 8, 8, 9, 10, 11, 11, 12, 12, 13, 14} },
  	{ 7.5, { 4, 5, 6, 7, 7, 8, 8, 9, 10, 10, 11, 11, 12, 13, 14} },
@@ -52,7 +50,7 @@ index dcff0dd2b6a123..622abb69ea0075 100644
  	{ 8.5, { 4, 4, 5, 6, 7, 7, 7, 8, 9, 10, 10, 11, 11, 12, 13} },
  	{   9, { 3, 4, 5, 6, 7, 7, 7, 8, 9, 9, 10, 10, 11, 11, 13} },
  	{ 9.5, { 3, 4, 5, 6, 7, 7, 7, 8, 9, 9, 10, 10, 11, 11, 13} },
-@@ -211,7 +211,7 @@ static const qp_table   qp_table_444_8bpc_min = {
+@@ -211,7 +211,7 @@
  	{ 6.5, { 0, 1, 2, 3, 4, 4, 5, 5, 5, 5, 6, 6, 6, 9, 14} },
  	{   7, { 0, 0, 2, 2, 4, 4, 4, 4, 4, 5, 5, 6, 6, 9, 13} },
  	{ 7.5, { 0, 0, 2, 2, 3, 4, 4, 4, 4, 4, 5, 5, 6, 9, 13} },
@@ -62,10 +60,9 @@ index dcff0dd2b6a123..622abb69ea0075 100644
  	{   9, { 0, 0, 1, 1, 3, 3, 3, 3, 3, 3, 5, 5, 5, 7, 12} },
  	{ 9.5, { 0, 0, 1, 1, 3, 3, 3, 3, 3, 3, 5, 5, 5, 7, 12} },
 diff --git a/drivers/gpu/drm/amd/display/dc/dml/dsc/rc_calc_fpu.c b/drivers/gpu/drm/amd/display/dc/dml/dsc/rc_calc_fpu.c
-index b8fc27a5361e85..9ae3057a2b618b 100644
 --- a/drivers/gpu/drm/amd/display/dc/dml/dsc/rc_calc_fpu.c
 +++ b/drivers/gpu/drm/amd/display/dc/dml/dsc/rc_calc_fpu.c
-@@ -123,7 +123,7 @@ static void get_ofs_set(qp_set ofs, enum colour_mode mode, float bpp)
+@@ -122,7 +122,7 @@
  		*p++ = (int)((bpp <= 12) ? (-8) : ((bpp >= 15) ? (-6) : (-8 + dsc_roundf((bpp - 12) * (2 / 3.0)))));
  		*p++ = (int)((bpp <= 12) ? (-10) : ((bpp >= 15) ? (-8) : (-10 + dsc_roundf((bpp - 12) * (2 / 3.0)))));
  		*p++ = -10;
@@ -74,16 +71,15 @@ index b8fc27a5361e85..9ae3057a2b618b 100644
  		*p++ = -12;
  		*p++ = -12;
  		*p++ = -12;
-@@ -257,4 +257,3 @@ void _do_calc_rc_params(struct rc_params *rc,
+@@ -256,4 +256,3 @@
  	rc->rc_buf_thresh[12] = 8000;
  	rc->rc_buf_thresh[13] = 8064;
  }
 -
 diff --git a/drivers/gpu/drm/drm_displayid_internal.h b/drivers/gpu/drm/drm_displayid_internal.h
-index ef7e6c9bd4dbf4..4b87fcd2802dd0 100644
 --- a/drivers/gpu/drm/drm_displayid_internal.h
 +++ b/drivers/gpu/drm/drm_displayid_internal.h
-@@ -97,6 +97,7 @@ struct displayid_header {
+@@ -97,6 +97,7 @@
  	u8 ext_count;
  } __packed;
  
@@ -91,7 +87,7 @@ index ef7e6c9bd4dbf4..4b87fcd2802dd0 100644
  struct displayid_block {
  	u8 tag;
  	u8 rev;
-@@ -125,6 +126,7 @@ struct displayid_detailed_timings_1 {
+@@ -125,6 +126,7 @@
  	__le16 vsw;
  } __packed;
  
@@ -99,7 +95,7 @@ index ef7e6c9bd4dbf4..4b87fcd2802dd0 100644
  struct displayid_detailed_timing_block {
  	struct displayid_block base;
  	struct displayid_detailed_timings_1 timings[];
-@@ -137,6 +139,7 @@ struct displayid_formula_timings_9 {
+@@ -137,6 +139,7 @@
  	u8 vrefresh;
  } __packed;
  
@@ -107,7 +103,7 @@ index ef7e6c9bd4dbf4..4b87fcd2802dd0 100644
  struct displayid_formula_timing_block {
  	struct displayid_block base;
  	struct displayid_formula_timings_9 timings[];
-@@ -166,14 +169,22 @@ struct displayid_display_params_block {
+@@ -166,14 +169,22 @@
  	u8 gamma_eotf;
  } __packed;
  
@@ -131,10 +127,9 @@ index ef7e6c9bd4dbf4..4b87fcd2802dd0 100644
  
  /*
 diff --git a/drivers/gpu/drm/drm_edid.c b/drivers/gpu/drm/drm_edid.c
-index 07970e5b5f65e5..368a7011955385 100644
 --- a/drivers/gpu/drm/drm_edid.c
 +++ b/drivers/gpu/drm/drm_edid.c
-@@ -45,6 +45,7 @@
+@@ -46,6 +46,7 @@
  #include <drm/drm_edid.h>
  #include <drm/drm_eld.h>
  #include <drm/drm_encoder.h>
@@ -142,7 +137,7 @@ index 07970e5b5f65e5..368a7011955385 100644
  #include <drm/drm_print.h>
  
  #include "drm_crtc_internal.h"
-@@ -6598,12 +6599,13 @@ static void drm_get_monitor_range(struct drm_connector *connector,
+@@ -6730,12 +6731,13 @@
  		    info->monitor_range.min_vfreq, info->monitor_range.max_vfreq);
  }
  
@@ -158,7 +153,7 @@ index 07970e5b5f65e5..368a7011955385 100644
  
  	if (block->num_bytes < 3) {
  		drm_dbg_kms(connector->dev,
-@@ -6615,51 +6617,73 @@ static void drm_parse_vesa_mso_data(struct drm_connector *connector,
+@@ -6747,51 +6749,73 @@
  	if (oui(vesa->oui[0], vesa->oui[1], vesa->oui[2]) != VESA_IEEE_OUI)
  		return;
  
@@ -259,7 +254,7 @@ index 07970e5b5f65e5..368a7011955385 100644
  {
  	const struct displayid_block *block;
  	struct displayid_iter iter;
-@@ -6667,7 +6691,7 @@ static void drm_update_mso(struct drm_connector *connector,
+@@ -6799,7 +6823,7 @@
  	displayid_iter_edid_begin(drm_edid, &iter);
  	displayid_iter_for_each(block, &iter) {
  		if (block->tag == DATA_BLOCK_2_VENDOR_SPECIFIC)
@@ -268,7 +263,7 @@ index 07970e5b5f65e5..368a7011955385 100644
  	}
  	displayid_iter_end(&iter);
  }
-@@ -6704,6 +6728,7 @@ static void drm_reset_display_info(struct drm_connector *connector)
+@@ -6836,6 +6860,7 @@
  	info->mso_stream_count = 0;
  	info->mso_pixel_overlap = 0;
  	info->max_dsc_bpp = 0;
@@ -276,7 +271,7 @@ index 07970e5b5f65e5..368a7011955385 100644
  
  	kfree(info->vics);
  	info->vics = NULL;
-@@ -6878,7 +6903,7 @@ static void update_display_info(struct drm_connector *connector,
+@@ -7010,7 +7035,7 @@
  	if (edid->features & DRM_EDID_FEATURE_RGB_YCRCB422)
  		info->color_formats |= BIT(DRM_OUTPUT_COLOR_FORMAT_YCBCR422);
  
@@ -285,7 +280,7 @@ index 07970e5b5f65e5..368a7011955385 100644
  
  out:
  	if (drm_edid_has_internal_quirk(connector, EDID_QUIRK_NON_DESKTOP)) {
-@@ -6908,8 +6933,8 @@ static void update_display_info(struct drm_connector *connector,
+@@ -7040,8 +7065,8 @@
  }
  
  static struct drm_display_mode *drm_mode_displayid_detailed(struct drm_device *dev,
@@ -296,7 +291,7 @@ index 07970e5b5f65e5..368a7011955385 100644
  {
  	struct drm_display_mode *mode;
  	unsigned int pixel_clock = (timings->pixel_clock[0] |
-@@ -6925,11 +6950,16 @@ static struct drm_display_mode *drm_mode_displayid_detailed(struct drm_device *d
+@@ -7057,11 +7082,16 @@
  	unsigned int vsync_width = le16_to_cpu(timings->vsw) + 1;
  	bool hsync_positive = le16_to_cpu(timings->hsync) & (1 << 15);
  	bool vsync_positive = le16_to_cpu(timings->vsync) & (1 << 15);
@@ -313,7 +308,7 @@ index 07970e5b5f65e5..368a7011955385 100644
  	/* resolution is kHz for type VII, and 10 kHz for type I */
  	mode->clock = type_7 ? pixel_clock : pixel_clock * 10;
  	mode->hdisplay = hactive;
-@@ -6962,7 +6992,6 @@ static int add_displayid_detailed_1_modes(struct drm_connector *connector,
+@@ -7094,7 +7124,6 @@
  	int num_timings;
  	struct drm_display_mode *newmode;
  	int num_modes = 0;
@@ -321,7 +316,7 @@ index 07970e5b5f65e5..368a7011955385 100644
  	/* blocks must be multiple of 20 bytes length */
  	if (block->num_bytes % 20)
  		return 0;
-@@ -6971,7 +7000,7 @@ static int add_displayid_detailed_1_modes(struct drm_connector *connector,
+@@ -7103,7 +7132,7 @@
  	for (i = 0; i < num_timings; i++) {
  		struct displayid_detailed_timings_1 *timings = &det->timings[i];
  
@@ -330,7 +325,7 @@ index 07970e5b5f65e5..368a7011955385 100644
  		if (!newmode)
  			continue;
  
-@@ -7018,7 +7047,8 @@ static int add_displayid_formula_modes(struct drm_connector *connector,
+@@ -7150,7 +7179,8 @@
  	struct drm_display_mode *newmode;
  	int num_modes = 0;
  	bool type_10 = block->tag == DATA_BLOCK_2_TYPE_10_FORMULA_TIMING;
@@ -341,27 +336,25 @@ index 07970e5b5f65e5..368a7011955385 100644
  	/* extended blocks are not supported yet */
  	if (timing_size != 6)
 diff --git a/include/drm/drm_connector.h b/include/drm/drm_connector.h
-index a0cf0268de483a..7f2308ed250e88 100644
 --- a/include/drm/drm_connector.h
 +++ b/include/drm/drm_connector.h
-@@ -960,6 +960,12 @@ struct drm_display_info {
- 	 */
+@@ -1029,6 +1029,12 @@
  	u32 max_dsc_bpp;
  
-+	/**
+ 	/**
 +	 * @dp_dsc_bpp: DP Display-Stream-Compression (DSC) timing's target
 +	 * DSC bits per pixel in 6.4 fixed point format. 0 means undefined.
 +	 */
 +	u16 dp_dsc_bpp_x16;
 +
- 	/**
++	/**
  	 * @vics: Array of vics_len VICs. Internal to EDID parsing.
  	 */
+ 	u8 *vics;
 diff --git a/include/drm/drm_modes.h b/include/drm/drm_modes.h
-index 6e3eccc3c349c7..9d06c6a3872bec 100644
 --- a/include/drm/drm_modes.h
 +++ b/include/drm/drm_modes.h
-@@ -418,6 +418,16 @@ struct drm_display_mode {
+@@ -418,6 +418,16 @@
  	 */
  	enum hdmi_picture_aspect picture_aspect_ratio;
  

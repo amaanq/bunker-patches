@@ -285,7 +285,7 @@ diff --git a/include/uapi/linux/tcp.h b/include/uapi/linux/tcp.h
 diff --git a/net/ipv4/Kconfig b/net/ipv4/Kconfig
 --- a/net/ipv4/Kconfig
 +++ b/net/ipv4/Kconfig
-@@ -669,15 +669,33 @@
+@@ -681,15 +681,33 @@
  	default n
  	help
  
@@ -328,7 +328,7 @@ diff --git a/net/ipv4/Kconfig b/net/ipv4/Kconfig
  
  choice
  	prompt "Default TCP congestion control"
-@@ -716,6 +734,9 @@
+@@ -728,6 +746,9 @@
  	config DEFAULT_BBR
  		bool "BBR" if TCP_CONG_BBR=y
  
@@ -338,7 +338,7 @@ diff --git a/net/ipv4/Kconfig b/net/ipv4/Kconfig
  	config DEFAULT_RENO
  		bool "Reno"
  endchoice
-@@ -740,6 +761,7 @@
+@@ -752,6 +773,7 @@
  	default "dctcp" if DEFAULT_DCTCP
  	default "cdg" if DEFAULT_CDG
  	default "bbr" if DEFAULT_BBR
@@ -354,13 +354,13 @@ diff --git a/net/ipv4/Makefile b/net/ipv4/Makefile
  obj-$(CONFIG_INET_RAW_DIAG) += raw_diag.o
  obj-$(CONFIG_TCP_CONG_BBR) += tcp_bbr.o
 +obj-$(CONFIG_TCP_CONG_BBR3) += tcp_bbr3.o
+ obj-$(CONFIG_TCP_CONG_ROCCET) += tcp_roccet.o
  obj-$(CONFIG_TCP_CONG_BIC) += tcp_bic.o
  obj-$(CONFIG_TCP_CONG_CDG) += tcp_cdg.o
- obj-$(CONFIG_TCP_CONG_CUBIC) += tcp_cubic.o
 diff --git a/net/ipv4/tcp.c b/net/ipv4/tcp.c
 --- a/net/ipv4/tcp.c
 +++ b/net/ipv4/tcp.c
-@@ -3480,6 +3480,7 @@
+@@ -3482,6 +3482,7 @@
  	tp->rx_opt.dsack = 0;
  	tp->rx_opt.num_sacks = 0;
  	tp->rcv_ooopack = 0;
@@ -368,7 +368,7 @@ diff --git a/net/ipv4/tcp.c b/net/ipv4/tcp.c
  
  
  	/* Clean up fastopen related fields */
-@@ -4265,6 +4266,8 @@
+@@ -4267,6 +4268,8 @@
  		info->tcpi_options |= TCPI_OPT_ECN;
  	if (tp->ecn_flags & TCP_ECN_SEEN)
  		info->tcpi_options |= TCPI_OPT_ECN_SEEN;

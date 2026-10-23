@@ -86,6 +86,22 @@ diff --git a/drivers/bluetooth/btusb.c b/drivers/bluetooth/btusb.c
  	{ USB_DEVICE(0x13d3, 0x3585), .driver_info = BTUSB_MEDIATEK |
  						     BTUSB_WIDEBAND_SPEECH },
  	{ USB_DEVICE(0x13d3, 0x3610), .driver_info = BTUSB_MEDIATEK |
+diff --git a/drivers/cpufreq/amd-pstate.c b/drivers/cpufreq/amd-pstate.c
+--- a/drivers/cpufreq/amd-pstate.c
++++ b/drivers/cpufreq/amd-pstate.c
+@@ -524,8 +524,10 @@
+ 		return 0;
+ 	}
+ 
+-	ret = cppc_set_auto_sel(cpudata->cpu,
+-			(cppc_state == AMD_PSTATE_PASSIVE) ? 0 : 1);
++	if ((cppc_state != AMD_PSTATE_PASSIVE) == auto_sel)
++		return 0;
++
++	ret = cppc_set_auto_sel(cpudata->cpu, !auto_sel);
+ 
+ 	if (ret)
+ 		pr_warn("failed to set auto_sel, ret: %d\n", ret);
 diff --git a/drivers/gpu/drm/gud/gud_connector.c b/drivers/gpu/drm/gud/gud_connector.c
 --- a/drivers/gpu/drm/gud/gud_connector.c
 +++ b/drivers/gpu/drm/gud/gud_connector.c
