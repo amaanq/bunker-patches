@@ -28,16 +28,15 @@ fs/file.c | 1 +
 1 file changed, 1 insertion(+)
 
 diff --git a/fs/file.c b/fs/file.c
-index 0616f7962387..737dc5f195c7 100644
 --- a/fs/file.c
 +++ b/fs/file.c
-@@ -887,6 +887,7 @@ struct file *file_close_fd(unsigned int fd)
- 
- 	return file;
+@@ -894,6 +894,7 @@ static inline unsigned int last_fd_to_cl
+ 	}
+ 	return n;
  }
 +EXPORT_SYMBOL(file_close_fd);
  
- void do_close_on_exec(struct files_struct *files)
- {
+ static inline void __range_close(struct files_struct *files,
+ 				 struct fd_range *range)
 -- 
 GitLab

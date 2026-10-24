@@ -41,10 +41,9 @@ caused by rebalancing too many tasks at once.
  3 files changed, 21 insertions(+), 1 deletion(-)
 
 diff --git a/init/Kconfig b/init/Kconfig
-index dca77e2e1dbf9f..d5132b37a37943 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -221,6 +221,13 @@ config BUNKER
+@@ -37,6 +37,13 @@ config BUNKER
  
  	    Background-reclaim hugepages...:   no   ->   yes
  
@@ -59,10 +58,9 @@ index dca77e2e1dbf9f..d5132b37a37943 100644
  	bool
  	help
 diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
-index ab4114712be740..41f5ed78d4da51 100644
 --- a/kernel/sched/fair.c
 +++ b/kernel/sched/fair.c
-@@ -76,10 +76,19 @@ unsigned int sysctl_sched_tunable_scaling = SCHED_TUNABLESCALING_LOG;
+@@ -82,10 +82,19 @@ unsigned int sysctl_sched_tunable_scalin
   *
   * (default: 0.70 msec * (1 + ilog(ncpus)), units: nanoseconds)
   */
@@ -82,7 +80,7 @@ index ab4114712be740..41f5ed78d4da51 100644
  
  static int __init setup_sched_thermal_decay_shift(char *str)
  {
-@@ -122,8 +131,12 @@ int __weak arch_asym_cpu_priority(int cpu)
+@@ -128,8 +137,12 @@ int __weak arch_asym_cpu_priority(int cp
   *
   * (default: 5 msec, units: microseconds)
   */
@@ -96,12 +94,11 @@ index ab4114712be740..41f5ed78d4da51 100644
  #ifdef CONFIG_NUMA_BALANCING
  /* Restrict the NUMA promotion throughput (MB/s) for each target node. */
 diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
-index e20ed9f07bb153..029cdf18b8b751 100644
 --- a/kernel/sched/sched.h
 +++ b/kernel/sched/sched.h
-@@ -3007,7 +3007,7 @@ extern void deactivate_task(struct rq *rq, struct task_struct *p, int flags);
- 
- extern void wakeup_preempt(struct rq *rq, struct task_struct *p, int flags);
+@@ -3209,7 +3209,7 @@ static inline void __attach_tasks(struct
+ 	}
+ }
  
 -#ifdef CONFIG_PREEMPT_RT
 +#if defined(CONFIG_PREEMPT_RT) || defined(CONFIG_BUNKER)

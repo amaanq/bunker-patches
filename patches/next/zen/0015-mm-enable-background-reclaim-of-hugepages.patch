@@ -31,12 +31,11 @@ Reasoning and details in the original patch: https://lwn.net/Articles/711248/
  2 files changed, 8 insertions(+)
 
 diff --git a/init/Kconfig b/init/Kconfig
-index 7e7a71088a1d8a..dca77e2e1dbf9f 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -217,6 +217,10 @@ config BUNKER
+@@ -33,6 +33,10 @@ config BUNKER
+ 
  	    Default scheduler for SQ..: mq-deadline ->   bfq
- 	    Default scheduler for MQ..:        none ->   kyber
  
 +	  --- Virtual Memory Subsystem ---------------------------
 +
@@ -46,10 +45,9 @@ index 7e7a71088a1d8a..dca77e2e1dbf9f 100644
  	bool
  	help
 diff --git a/mm/huge_memory.c b/mm/huge_memory.c
-index b298cba853ab95..90fd91e4ae2240 100644
 --- a/mm/huge_memory.c
 +++ b/mm/huge_memory.c
-@@ -63,7 +63,11 @@ unsigned long transparent_hugepage_flags __read_mostly =
+@@ -65,7 +65,11 @@ unsigned long transparent_hugepage_flags
  #ifdef CONFIG_TRANSPARENT_HUGEPAGE_MADVISE
  	(1<<TRANSPARENT_HUGEPAGE_REQ_MADV_FLAG)|
  #endif

@@ -10,7 +10,6 @@ Signed-off-by: Eric Naim <dnaim@cachyos.org>
  2 files changed, 6 deletions(-)
 
 diff --git a/scripts/Makefile.clang b/scripts/Makefile.clang
-index b67636b28c35..062ee0211c9c 100644
 --- a/scripts/Makefile.clang
 +++ b/scripts/Makefile.clang
 @@ -34,9 +34,7 @@ endif
@@ -24,7 +23,6 @@ index b67636b28c35..062ee0211c9c 100644
  KBUILD_CPPFLAGS	+= $(CLANG_FLAGS)
  export CLANG_FLAGS
 diff --git a/scripts/Makefile.warn b/scripts/Makefile.warn
-index 5567da6c7dfe..439a3c126cc4 100644
 --- a/scripts/Makefile.warn
 +++ b/scripts/Makefile.warn
 @@ -13,7 +13,6 @@ KBUILD_CFLAGS += -Wundef
@@ -35,7 +33,7 @@ index 5567da6c7dfe..439a3c126cc4 100644
  KBUILD_CFLAGS += -Wno-format-security
  KBUILD_CFLAGS += -Wno-trigraphs
  KBUILD_CFLAGS += -Wno-frame-address
-@@ -101,9 +100,6 @@ KBUILD_CFLAGS += $(KBUILD_CFLAGS-y) $(CONFIG_CC_IMPLICIT_FALLTHROUGH)
+@@ -96,9 +95,6 @@ KBUILD_CFLAGS += $(KBUILD_CFLAGS-y) $(CO
  # Prohibit date/time macros, which would make the build non-deterministic
  KBUILD_CFLAGS += -Werror=date-time
  
@@ -43,7 +41,7 @@ index 5567da6c7dfe..439a3c126cc4 100644
 -KBUILD_CFLAGS += -Werror=incompatible-pointer-types
 -
  # Require designated initializers for all marked structures
- KBUILD_CFLAGS += $(call cc-option,-Werror=designated-init)
+ KBUILD_CFLAGS += $(CONFIG_CC_OPT_WERROR_DESIGNATED_INIT)
  
 -- 
 2.53.0

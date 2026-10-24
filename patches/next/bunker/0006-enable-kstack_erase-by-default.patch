@@ -18,14 +18,14 @@ Recommended by KSPP and included in upstream hardening.config.
 diff --git a/security/Kconfig.hardening b/security/Kconfig.hardening
 --- a/security/Kconfig.hardening
 +++ b/security/Kconfig.hardening
-@@ -88,6 +88,7 @@ endchoice
+@@ -88,6 +88,7 @@ config CC_HAS_SANCOV_STACK_DEPTH_CALLBAC
  config KSTACK_ERASE
  	bool "Poison kernel stack before returning from syscalls"
  	depends on HAVE_ARCH_KSTACK_ERASE
 +	default y
  	depends on GCC_PLUGINS || CC_HAS_SANCOV_STACK_DEPTH_CALLBACK
  	help
- 	  Wipe the kernel stack before returning to user mode at the end of
+ 	  This option makes the kernel erase the kernel stack before
 -- 
 2.47.1
 

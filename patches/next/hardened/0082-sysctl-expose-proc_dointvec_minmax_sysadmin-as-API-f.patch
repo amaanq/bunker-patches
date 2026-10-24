@@ -18,10 +18,9 @@ Signed-off-by: Nicolas Bouchinet <nicolas.bouchinet@ssi.gouv.fr>
  3 files changed, 38 insertions(+), 9 deletions(-)
 
 diff --git a/include/linux/sysctl.h b/include/linux/sysctl.h
-index e5d7226ab6f5a..25d434d853927 100644
 --- a/include/linux/sysctl.h
 +++ b/include/linux/sysctl.h
-@@ -86,6 +86,8 @@ int proc_dointvec(const struct ctl_table *ctl, int dir, void *buf, size_t *lenp,
+@@ -86,6 +86,8 @@ int proc_dointvec(const struct ctl_table
  		  loff_t *ppos);
  int proc_dointvec_minmax(const struct ctl_table *ctl, int dir, void *buf,
  			 size_t *lenp, loff_t *ppos);
@@ -31,7 +30,6 @@ index e5d7226ab6f5a..25d434d853927 100644
  		   loff_t *ppos);
  int proc_douintvec_minmax(const struct ctl_table *ctl, int dir, void *buf,
 diff --git a/kernel/printk/sysctl.c b/kernel/printk/sysctl.c
-index f15732e93c2e9..1b8a2a652b195 100644
 --- a/kernel/printk/sysctl.c
 +++ b/kernel/printk/sysctl.c
 @@ -10,15 +10,6 @@
@@ -51,14 +49,12 @@ index f15732e93c2e9..1b8a2a652b195 100644
  	{
  		.procname	= "printk",
 diff --git a/kernel/sysctl.c b/kernel/sysctl.c
-index e7f8f06d5f2e1..dde6290100cd8 100644
 --- a/kernel/sysctl.c
 +++ b/kernel/sysctl.c
-@@ -848,6 +848,35 @@ int proc_douintvec(const struct ctl_table *table, int dir, void *buffer,
- 			   (union proc_vec_conv){ .uint_conv = do_proc_uint_conv });
+@@ -919,6 +919,35 @@ int proc_douintvec(const struct ctl_tabl
  }
  
-+/**
+ /**
 + * proc_dointvec_minmax_sysadmin - read a vector of integers with min/max values
 + * checking CAP_SYS_ADMIN on write
 + * @table: the sysctl table
@@ -87,10 +83,11 @@ index e7f8f06d5f2e1..dde6290100cd8 100644
 +	return proc_dointvec_minmax(table, dir, buffer, lenp, ppos);
 +}
 +
- /**
++/**
   * proc_dointvec_minmax - read a vector of integers with min/max values
   * @table: the sysctl table
-@@ -1346,6 +1375,12 @@ int proc_doulongvec_minmax(const struct ctl_table *table, int dir,
+  * @dir: %TRUE if this is a write to the sysctl file
+@@ -1516,6 +1545,12 @@ int proc_doulongvec_minmax(const struct
  	return -ENOSYS;
  }
  
@@ -103,7 +100,7 @@ index e7f8f06d5f2e1..dde6290100cd8 100644
  int proc_doulongvec_conv(const struct ctl_table *table, int dir,
  				void *buffer, size_t *lenp, loff_t *ppos,
  				int (*conv)(bool *negp, ulong *u_ptr, ulong *k_ptr,
-@@ -1474,6 +1509,7 @@ EXPORT_SYMBOL(proc_dointvec);
+@@ -1554,6 +1589,7 @@ EXPORT_SYMBOL(proc_dointvec);
  EXPORT_SYMBOL(proc_douintvec);
  EXPORT_SYMBOL(proc_dointvec_minmax);
  EXPORT_SYMBOL_GPL(proc_douintvec_minmax);
@@ -111,4 +108,3 @@ index e7f8f06d5f2e1..dde6290100cd8 100644
  EXPORT_SYMBOL(proc_dostring);
  EXPORT_SYMBOL(proc_doulongvec_minmax);
  EXPORT_SYMBOL(proc_do_large_bitmap);
-

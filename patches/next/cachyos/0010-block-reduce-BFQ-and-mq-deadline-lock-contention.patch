@@ -10,10 +10,9 @@ Subject: [PATCH 45/190] block: reduce BFQ and mq-deadline lock contention
  3 files changed, 96 insertions(+), 16 deletions(-)
 
 diff --git a/block/bfq-iosched.c b/block/bfq-iosched.c
-index 6e54b1d3d8bc..5436d0db8ee2 100644
 --- a/block/bfq-iosched.c
 +++ b/block/bfq-iosched.c
-@@ -458,10 +458,25 @@ static struct bfq_io_cq *bfq_bic_lookup(struct request_queue *q)
+@@ -458,10 +458,25 @@ static struct bfq_io_cq *bfq_bic_lookup(
  		return NULL;
  
  	return icq_to_bic(ioc_lookup_icq(q));
@@ -39,7 +38,7 @@ index 6e54b1d3d8bc..5436d0db8ee2 100644
   * driver that will restart queueing.
   */
  void bfq_schedule_dispatch(struct bfq_data *bfqd)
-@@ -2446,15 +2461,26 @@ static void bfq_remove_request(struct request_queue *q,
+@@ -2446,15 +2461,26 @@ static void bfq_remove_request(struct re
  
  static bool bfq_bio_merge(struct request_queue *q, struct bio *bio,
  		unsigned int nr_segs)
@@ -68,7 +67,7 @@ index 6e54b1d3d8bc..5436d0db8ee2 100644
  		/*
  		 * Make sure cgroup info is uptodate for current process before
  		 * considering the merge.
-@@ -5299,10 +5325,22 @@ static struct request *bfq_dispatch_request(struct blk_mq_hw_ctx *hctx)
+@@ -5300,10 +5326,22 @@ static struct request *bfq_dispatch_requ
  	struct bfq_data *bfqd = hctx->queue->elevator->elevator_data;
  	struct request *rq;
  	struct bfq_queue *in_serv_queue;
@@ -91,7 +90,7 @@ index 6e54b1d3d8bc..5436d0db8ee2 100644
  	in_serv_queue = bfqd->in_service_queue;
  	waiting_rq = in_serv_queue && bfq_bfqq_wait_request(in_serv_queue);
  
-@@ -5310,10 +5348,11 @@ static struct request *bfq_dispatch_request(struct blk_mq_hw_ctx *hctx)
+@@ -5311,10 +5349,11 @@ static struct request *bfq_dispatch_requ
  	if (in_serv_queue == bfqd->in_service_queue) {
  		idle_timer_disabled =
  			waiting_rq && !bfq_bfqq_wait_request(in_serv_queue);
@@ -103,7 +102,7 @@ index 6e54b1d3d8bc..5436d0db8ee2 100644
  			idle_timer_disabled ? in_serv_queue : NULL,
  				idle_timer_disabled);
  
-@@ -6231,14 +6270,13 @@ static inline void bfq_update_insert_stats(struct request_queue *q,
+@@ -6232,14 +6271,13 @@ static inline void bfq_update_insert_sta
  					   blk_opf_t cmd_flags) {}
  #endif /* CONFIG_BFQ_CGROUP_DEBUG */
  
@@ -119,7 +118,7 @@ index 6e54b1d3d8bc..5436d0db8ee2 100644
  	bool idle_timer_disabled = false;
  	blk_opf_t cmd_flags;
  	LIST_HEAD(free);
-@@ -6296,11 +6334,11 @@ static void bfq_insert_requests(struct blk_mq_hw_ctx *hctx,
+@@ -6297,11 +6335,11 @@ static void bfq_insert_requests(struct b
  	while (!list_empty(list)) {
  		struct request *rq;
  
@@ -132,7 +131,9 @@ index 6e54b1d3d8bc..5436d0db8ee2 100644
  
  static void bfq_update_hw_tag(struct bfq_data *bfqd)
  {
-@@ -7216,8 +7254,10 @@ static int bfq_init_queue(struct request_queue *q, struct elevator_queue *eq)
+@@ -7204,10 +7242,12 @@ static int bfq_init_queue(struct request
+ 		return -ENOMEM;
+ 
  	eq->elevator_data = bfqd;
  	q->elevator = eq;
  
@@ -143,8 +144,8 @@ index 6e54b1d3d8bc..5436d0db8ee2 100644
  	 * Grab a permanent reference to it, so that the normal code flow
  	 * will not attempt to free it.
  	 * Set zero as actuator index: we will pretend that
-@@ -7333,12 +7373,10 @@ static int bfq_init_queue(struct request_queue *q, struct elevator_queue *eq)
- 	bfqd->peak_rate = ref_rate[blk_queue_nonrot(bfqd->queue)] * 2 / 3;
+@@ -7319,12 +7359,10 @@ static int bfq_init_queue(struct request
+ 	bfqd->peak_rate = ref_rate[!blk_queue_rot(bfqd->queue)] * 2 / 3;
  
  	/* see comments on the definition of next field inside bfq_data */
  	bfqd->actuator_load_threshold = 4;
@@ -157,7 +158,6 @@ index 6e54b1d3d8bc..5436d0db8ee2 100644
  	 * (bfq_create_group_hierarchy->blkcg_activate_policy->
  	 * blk_mq_freeze_queue) that may lead to the invocation of the
 diff --git a/block/bfq-iosched.h b/block/bfq-iosched.h
-index 355a731e2c04..57ef24820957 100644
 --- a/block/bfq-iosched.h
 +++ b/block/bfq-iosched.h
 @@ -502,16 +502,26 @@ struct bfq_io_cq {
@@ -201,7 +201,6 @@ index 355a731e2c04..57ef24820957 100644
  	 * be able to perform the bic lookup, needed by bio-merge
  	 * functions, before the scheduler lock is taken, and thus
 diff --git a/block/mq-deadline.c b/block/mq-deadline.c
-index 7ae1f38fc964..0ec5b928801c 100644
 --- a/block/mq-deadline.c
 +++ b/block/mq-deadline.c
 @@ -76,14 +76,24 @@ struct dd_per_prio {
@@ -229,7 +228,8 @@ index 7ae1f38fc964..0ec5b928801c 100644
  	struct dd_per_prio per_prio[DD_PRIO_COUNT];
  
  	/* Data direction of latest dispatched request. */
-@@ -97,11 +107,9 @@ struct deadline_data {
+@@ -97,12 +107,10 @@ struct deadline_data {
+ 	int fifo_expire[DD_DIR_COUNT];
  	int fifo_batch;
  	int writes_starved;
  	int front_merges;
@@ -241,7 +241,7 @@ index 7ae1f38fc964..0ec5b928801c 100644
  /* Maps an I/O priority class to a deadline scheduler priority. */
  static const enum dd_prio ioprio_class_to_prio[] = {
  	[IOPRIO_CLASS_NONE]	= DD_BE_PRIO,
-@@ -455,10 +463,22 @@ static struct request *dd_dispatch_request(struct blk_mq_hw_ctx *hctx)
+@@ -451,10 +459,22 @@ static struct request *dd_dispatch_reque
  	struct deadline_data *dd = hctx->queue->elevator->elevator_data;
  	const unsigned long now = jiffies;
  	struct request *rq;
@@ -264,7 +264,7 @@ index 7ae1f38fc964..0ec5b928801c 100644
  	if (!list_empty(&dd->dispatch)) {
  		rq = list_first_entry(&dd->dispatch, struct request, queuelist);
  		list_del_init(&rq->queuelist);
-@@ -479,10 +499,11 @@ static struct request *dd_dispatch_request(struct blk_mq_hw_ctx *hctx)
+@@ -475,10 +495,11 @@ static struct request *dd_dispatch_reque
  		if (rq || dd_queued(dd, prio))
  			break;
  	}
@@ -276,7 +276,7 @@ index 7ae1f38fc964..0ec5b928801c 100644
  	return rq;
  }
  
-@@ -553,10 +574,13 @@ static int dd_init_sched(struct request_queue *q, struct elevator_queue *eq)
+@@ -533,10 +554,13 @@ static int dd_init_sched(struct request_
  		return -ENOMEM;
  
  	eq->elevator_data = dd;
@@ -290,9 +290,9 @@ index 7ae1f38fc964..0ec5b928801c 100644
  
  		INIT_LIST_HEAD(&per_prio->fifo_list[DD_READ]);
  		INIT_LIST_HEAD(&per_prio->fifo_list[DD_WRITE]);
-@@ -568,11 +592,10 @@ static int dd_init_sched(struct request_queue *q, struct elevator_queue *eq)
+@@ -548,11 +572,10 @@ static int dd_init_sched(struct request_
  	dd->writes_starved = writes_starved;
- 	dd->front_merges = 0;
+ 	dd->front_merges = 1;
  	dd->last_dir = DD_WRITE;
  	dd->fifo_batch = fifo_batch;
  	dd->prio_aging_expire = prio_aging_expire;
@@ -302,7 +302,7 @@ index 7ae1f38fc964..0ec5b928801c 100644
  	blk_queue_flag_set(QUEUE_FLAG_SQ_SCHED, q);
  
  	q->elevator = eq;
-@@ -621,11 +644,23 @@ static bool dd_bio_merge(struct request_queue *q, struct bio *bio,
+@@ -602,11 +625,23 @@ static bool dd_bio_merge(struct request_
  {
  	struct deadline_data *dd = q->elevator->elevator_data;
  	struct request *free = NULL;
@@ -327,7 +327,7 @@ index 7ae1f38fc964..0ec5b928801c 100644
  
  	if (free)
  		blk_mq_free_request(free);
-@@ -634,14 +669,13 @@ static bool dd_bio_merge(struct request_queue *q, struct bio *bio,
+@@ -615,14 +650,13 @@ static bool dd_bio_merge(struct request_
  }
  
  /*
@@ -343,7 +343,7 @@ index 7ae1f38fc964..0ec5b928801c 100644
  	u16 ioprio = req_get_ioprio(rq);
  	u8 ioprio_class = IOPRIO_PRIO_CLASS(ioprio);
  	struct dd_per_prio *per_prio;
-@@ -695,11 +729,11 @@ static void dd_insert_requests(struct blk_mq_hw_ctx *hctx,
+@@ -676,11 +710,11 @@ static void dd_insert_requests(struct bl
  	while (!list_empty(list)) {
  		struct request *rq;
  

@@ -9,15 +9,13 @@ Signed-off-by: Daniel Micay <danielmicay@gmail.com>
  1 file changed, 1 insertion(+)
 
 diff --git a/mm/Kconfig.debug b/mm/Kconfig.debug
-index 4708529cb7936..db1f9e9ba8f69 100644
 --- a/mm/Kconfig.debug
 +++ b/mm/Kconfig.debug
-@@ -189,6 +189,7 @@ config DEBUG_WX
+@@ -186,6 +186,7 @@ config PTDUMP_DEBUGFS
+ 	depends on DEBUG_FS
  	depends on ARCH_HAS_PTDUMP
- 	depends on MMU
  	select PTDUMP
 +	default y
  	help
- 	  Generate a warning if any W+X mappings are found at boot.
- 
-
+ 	  Say Y here if you want to show the kernel pagetable layout in a
+ 	  debugfs file. This information is only useful for kernel developers

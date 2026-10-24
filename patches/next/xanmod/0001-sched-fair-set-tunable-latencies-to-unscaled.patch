@@ -9,10 +9,9 @@ Signed-off-by: Alexandre Frade <kernel@xanmod.org>
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
-index ab4114712be7..521e5222f180 100644
 --- a/kernel/sched/fair.c
 +++ b/kernel/sched/fair.c
-@@ -69,7 +69,7 @@
+@@ -73,7 +73,7 @@
   *
   * (default SCHED_TUNABLESCALING_LOG = *(1+ilog(ncpus))
   */
@@ -20,7 +19,7 @@ index ab4114712be7..521e5222f180 100644
 +unsigned int sysctl_sched_tunable_scaling = SCHED_TUNABLESCALING_NONE;
  
  /*
-  * Minimal preemption granularity for CPU-bound tasks:
+  * Default base time slice (request size r_i) for SCHED_NORMAL/SCHED_BATCH:
 -- 
 GitLab
 

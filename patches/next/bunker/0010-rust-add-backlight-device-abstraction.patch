@@ -11,12 +11,11 @@ Subject: [PATCH] rust: add backlight device abstraction
  create mode 100644 rust/kernel/backlight.rs
 
 diff --git a/rust/bindings/bindings_helper.h b/rust/bindings/bindings_helper.h
-index a067038b4b422..3525db6886e84 100644
 --- a/rust/bindings/bindings_helper.h
 +++ b/rust/bindings/bindings_helper.h
-@@ -34,10 +34,11 @@
- #include <drm/drm_file.h>
- #include <drm/drm_gem.h>
+@@ -37,10 +37,11 @@
+ #include <drm/drm_gem_shmem_helper.h>
+ #include <drm/drm_gpuvm.h>
  #include <drm/drm_ioctl.h>
  #include <kunit/test.h>
  #include <linux/auxiliary_bus.h>
@@ -28,7 +27,6 @@ index a067038b4b422..3525db6886e84 100644
  #include <linux/clk.h>
 diff --git a/rust/kernel/backlight.rs b/rust/kernel/backlight.rs
 new file mode 100644
-index 0000000000000..d421896c5eb75
 --- /dev/null
 +++ b/rust/kernel/backlight.rs
 @@ -0,0 +1,341 @@
@@ -374,10 +372,9 @@ index 0000000000000..d421896c5eb75
 +/// Update reason: sysfs.
 +pub const BACKLIGHT_UPDATE_SYSFS: u32 = 1;
 diff --git a/rust/kernel/lib.rs b/rust/kernel/lib.rs
-index f812cf1200428..e2bdbb3ed76a2 100644
 --- a/rust/kernel/lib.rs
 +++ b/rust/kernel/lib.rs
-@@ -66,11 +66,13 @@
+@@ -45,10 +45,12 @@ pub use ffi;
  
  pub mod acpi;
  pub mod alloc;
@@ -390,7 +387,6 @@ index f812cf1200428..e2bdbb3ed76a2 100644
  pub mod bits;
  #[cfg(CONFIG_BLOCK)]
  pub mod block;
- pub mod bug;
 -- 
 2.53.0
 

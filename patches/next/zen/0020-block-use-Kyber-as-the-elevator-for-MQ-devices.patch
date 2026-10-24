@@ -14,10 +14,9 @@ hurting throughput and eating CPU waiting for spinlocks.
  2 files changed, 5 insertions(+)
 
 diff --git a/block/elevator.c b/block/elevator.c
-index 3f831b69e7c48a..1e7ec7c1dd160b 100644
 --- a/block/elevator.c
 +++ b/block/elevator.c
-@@ -750,7 +750,11 @@ void elevator_set_default(struct request_queue *q)
+@@ -750,7 +750,11 @@ void elevator_set_default(struct request
  	 * to "none".
  	 */
  	if (q->nr_hw_queues != 1 && !blk_mq_is_shared_tags(q->tag_set->flags))
@@ -30,14 +29,13 @@ index 3f831b69e7c48a..1e7ec7c1dd160b 100644
  	ctx.type = elevator_find_get(ctx.name);
  	if (!ctx.type)
 diff --git a/init/Kconfig b/init/Kconfig
-index 876ee5ae949b1a..7e7a71088a1d8a 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -215,6 +215,7 @@ config BUNKER
+@@ -32,6 +32,7 @@ config BUNKER
  	  --- Block Layer ----------------------------------------
  
  	    Default scheduler for SQ..: mq-deadline ->   bfq
 +	    Default scheduler for MQ..:        none ->   kyber
  
- config BROKEN
- 	bool
+ 	  --- Virtual Memory Subsystem ---------------------------
+ 

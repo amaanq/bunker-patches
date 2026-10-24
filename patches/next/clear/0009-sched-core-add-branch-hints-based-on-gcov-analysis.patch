@@ -15,42 +15,18 @@ Signed-off-by: Colin Ian King <colin.i.king@intel.com>
 diff --git a/kernel/sched/core.c b/kernel/sched/core.c
 --- a/kernel/sched/core.c
 +++ b/kernel/sched/core.c
-@@ -635,7 +635,7 @@
-
- 	/* Matches synchronize_rcu() in __sched_core_enable() */
- 	preempt_disable();
+@@ -676 +676 @@ void raw_spin_rq_lock_nested(struct rq *
 -	if (sched_core_disabled()) {
 +	if (likely(sched_core_disabled())) {
- 		raw_spin_lock_nested(&rq->__lock, subclass);
- 		/* preempt_count *MUST* be > 1 */
- 		preempt_enable_no_resched();
-@@ -842,7 +842,7 @@
- 	scx_rq_clock_update(rq, clock);
-
- 	delta = clock - rq->clock;
+@@ -888 +888 @@ void update_rq_clock(struct rq *rq)
 -	if (delta < 0)
 +	if (unlikely(delta < 0))
- 		return;
- 	rq->clock += delta;
-
-@@ -5974,7 +5974,7 @@
- 	struct rq *rq_i;
- 	bool need_sync;
-
+@@ -6307 +6307 @@ pick_next_task(struct rq *rq, struct rq_
 -	if (!sched_core_enabled(rq))
 +	if (likely(!sched_core_enabled(rq)))
- 		return __pick_next_task(rq, rf);
-
- 	cpu = cpu_of(rq);
-@@ -7369,7 +7369,7 @@
- #if !defined(CONFIG_PREEMPTION) || defined(CONFIG_PREEMPT_DYNAMIC)
- int __sched __cond_resched(void)
- {
+@@ -7861 +7861 @@ int __sched __cond_resched(void)
 -	if (should_resched(0) && !irqs_disabled()) {
 +	if (unlikely(should_resched(0) && !irqs_disabled())) {
- 		preempt_schedule_common();
- 		return 1;
- 	}
 -- 
 2.47.1
 

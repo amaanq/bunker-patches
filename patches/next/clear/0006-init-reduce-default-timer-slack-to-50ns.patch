@@ -13,10 +13,9 @@ Signed-off-by: Arjan van de Ven <arjan@linux.intel.com>
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/init/init_task.c b/init/init_task.c
-index a1b2c3d4e5f6..b2c3d4e5f6a7 100644
 --- a/init/init_task.c
 +++ b/init/init_task.c
-@@ -170,7 +170,7 @@ struct task_struct init_task __aligned(L1_CACHE_BYTES) = {
+@@ -181,9 +181,9 @@ struct task_struct init_task __aligned(L
  	.journal_info	= NULL,
  	INIT_CPU_TIMERS(init_task)
  	.pi_lock	= __RAW_SPIN_LOCK_UNLOCKED(init_task.pi_lock),
@@ -26,5 +25,6 @@ index a1b2c3d4e5f6..b2c3d4e5f6a7 100644
  	.thread_pid	= &init_struct_pid,
  	.thread_node	= LIST_HEAD_INIT(init_signals.thread_head),
  #ifdef CONFIG_AUDIT
+ 	.loginuid	= INVALID_UID,
 -- 
 2.47.1
