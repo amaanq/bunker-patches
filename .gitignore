@@ -7,6 +7,11 @@
 !kconfig/
 !kconfig/*.nix
 !kconfig/*.nu
+!kconfig/*.config
+!series/
+!series/*
+!tools/
+!tools/*.nu
 
 !.tack/
 !.tack/default.nix
