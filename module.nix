@@ -385,15 +385,7 @@ let
 
   kernelPatches = map (e: { inherit (e) name patch; }) selectedPatches;
 
-  kernelLlvmPackages = pkgsKernel.pkgsBuildTarget.llvmPackages.overrideScope (
-    _: prev: {
-      lld = prev.lld.overrideAttrs (old: {
-        patches = (old.patches or [ ]) ++ [
-          (patchFile ./patches/userspace/lld-initialize-symbol-fields-in-constructor.patch)
-        ];
-      });
-    }
-  );
+  kernelLlvmPackages = pkgsKernel.pkgsBuildTarget.llvmPackages;
 
   # Keep hostPlatform as the kernel target; swap only build-native LLVM tools.
   llvmStdenv = pkgsKernel.overrideCC pkgsKernel.llvmPackages.stdenv (
