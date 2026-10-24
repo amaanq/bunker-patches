@@ -3,6 +3,7 @@
 !.gitignore
 !flake.nix
 !module.nix
+!plan.nix
 !kconfig/
 !kconfig/*.nix
 !kconfig/*.nu

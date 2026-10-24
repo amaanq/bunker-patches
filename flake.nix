@@ -11,6 +11,8 @@
       };
     in
     {
+      lib = import ./plan.nix;
+
       nixosModules.default = import ./module.nix flake;
 
       checks.x86_64-linux.boot = nixpkgs.legacyPackages.x86_64-linux.testers.runNixOSTest {
