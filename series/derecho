@@ -1,5 +1,6 @@
 next/bunker/0001-init-add-CONFIG_BUNKER-base-config-item.patch
 next/bunker/0016-powerpc-drop-kunit-from-ppc64-defconfig.patch
+next/bunker/0023-libbpf-keep-caller-string-pointers-valid-across-btf-string-lookups.patch
 next/zen/0009-mm-set-default-max-map-count-to-INT_MAX-5.patch
 next/zen/0010-mm-stop-kswapd-early-when-nothing-s-waiting-for-it-t.patch
 next/zen/0012-kernel-Kconfig.preempt-remove-EXPERT-conditional-on-.patch
