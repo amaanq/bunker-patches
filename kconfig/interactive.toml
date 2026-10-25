@@ -1,3 +1,4 @@
+# overlaps repkgs linux's desktop and common groups, dedupe once NixOS hosts boot repkgs kernels and module.nix goes
 HZ                           = "1000"
 HZ_1000                      = "y"
 MQ_IOSCHED_ADIOS             = "y"

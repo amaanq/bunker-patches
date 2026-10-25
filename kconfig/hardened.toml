@@ -1,3 +1,4 @@
+# overlaps repkgs linux's hardened and common groups, dedupe once NixOS hosts boot repkgs kernels and module.nix goes
 # CFI follows the pinned LLVM kernel stdenv, not the consumer stdenv.
 CFI                     = "y"
 CFI_PERMISSIVE          = "n"

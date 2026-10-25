@@ -1,5 +1,8 @@
+# overlaps repkgs linux's common group, dedupe once NixOS hosts boot repkgs kernels and module.nix goes
 NET_SCH_DEFAULT  = "y"
+DEFAULT_FQ       = "n"
 DEFAULT_FQ_CODEL = "y"
+NET_SCH_FQ       = "m"
 
 ["<7.1"]
 TCP_CONG_BBR = "y"
@@ -13,4 +16,5 @@ DEFAULT_BBR3  = "n"
 [">=7.1"]
 TCP_CONG_BBR  = "m"
 TCP_CONG_BBR3 = "y"
+DEFAULT_BBR   = "n"
 DEFAULT_BBR3  = "y"

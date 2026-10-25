@@ -1,3 +1,4 @@
+# overlaps repkgs linux's common group, dedupe once NixOS hosts boot repkgs kernels and module.nix goes
 BUNKER                  = "y"
 LOCALVERSION            = "-bunker"
 MODULE_DECOMPRESS       = "y" # in-kernel module decompression
