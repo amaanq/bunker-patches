@@ -380,5 +380,5 @@ let
     };
 in
 {
-  inherit defaults plan;
+  inherit defaults plan release;
 }

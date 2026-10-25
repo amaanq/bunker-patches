@@ -5,10 +5,13 @@
 # or has an id that other x86 code creates devices for by name, like
 # x86-android-tablets and ipu-bridge do.
 #
-#   nu kconfig/x86-devicetree-only.nu <tree>:<config>... > kconfig/x86-devicetree-only.nix
+#   nu kconfig/x86-devicetree-only.nu derecho > kconfig/x86-devicetree-only.nix
 #
-# Give it a patched tree and x86 config per supported version, and it prints
-# the symbols that are Devicetree-only in every one of them.
+# Per supported version it resolves the host's config with the list empty and
+# prints the modular symbols that are Devicetree-only in that patched tree,
+# leaving out what the config asks for, the same rule linux-bunker's build
+# applies in repkgs. The host is a nixosConfigurations entry in the dotfiles
+# flake, evaluated with its tack bunker pin pointed at this tree.
 
 const named_buses = [i2c spi platform]
 
@@ -34,20 +37,37 @@ const device_creators = [
    'MFD_CELL_\w+'
 ]
 
-# Intersects the per-version lists and prints them as a Nix list.
-def main [...targets: string] {
-   $targets
-   | par-each --keep-order {|t| let pair = $t | split row ':'; cull $pair.0 $pair.1 }
-   | reduce {|list, acc| $acc | where $it in $list }
-   | each {|sym| $'  "($sym)"' }
-   | prepend '['
-   | append ']'
+def main [flavor: string, --dotfiles: path = ~/dotfiles] {
+   let root = $env.FILE_PWD | path dirname
+   let dots = mktemp --directory --tmpdir bunker-devicetree.XXXXXX
+
+   ^rsync --archive --exclude .jj --exclude .git $"($dotfiles | path expand)/" $"($dots)/"
+
+   let lock = $dots | path join .tack pins.lock.json
+   open --raw $lock | from json | upsert bunker { type: path, path: $root } | to json --indent 2 | save --force $lock
+
+   let versions = ^nix eval --impure --json --expr $"builtins.attrNames \(import ($root)/plan.nix\).release" | from json
+   let lists = $versions | each {|version|
+      let host = $"\(\(builtins.getFlake \"path:($dots)\"\).nixosConfigurations.($flavor).extendModules { modules = [ \({ lib, ... }: { bunker.kernel.version = lib.mkForce \"($version)\"; bunker.kernel.devicetreeOnly = [ ]; }\) ]; }\)"
+      let kernel = $"($host).config.boot.kernelPackages.kernel"
+      let config = ^nix build --impure --no-link --print-out-paths --expr $"($kernel).configfile"
+      let tree = ^nix build --impure --no-link --print-out-paths --expr $"($host).pkgs.applyPatches { name = \"bunker-tree\"; inherit \(($kernel)\) src patches; }"
+      let requested = ^nix eval --impure --json --expr $"builtins.attrNames ($kernel).configfile.structuredConfig" | from json
+      { version: $version, symbols: (cull $tree $config $requested) }
+   }
+   rm --recursive $dots | ignore
+
+   $lists
+   | each {|list| [$'  "($list.version)" = [' ...($list.symbols | each {|sym| $'    "($sym)"' }) '  ];'] }
+   | flatten
+   | prepend '{'
+   | append '}'
    | str join "\n"
 }
 
 # Modular symbols in one tree whose drivers are all Devicetree-only.
-def cull [tree: path, config: path]: nothing -> list<string> {
-   let modular = open --raw $config | lines | parse -r '^CONFIG_(?<sym>\w+)=m$' | get sym | to-set
+def cull [tree: path, config: path, requested: list<string>]: nothing -> list<string> {
+   let modular = open --raw $config | lines | parse -r '^CONFIG_(?<sym>\w+)=m$' | get sym | where $it not-in $requested | to-set
    let named = instantiated-names $tree
    let selected = selected-symbols $tree
 
