@@ -1,0 +1,3 @@
+CHROME_PLATFORMS = "y"
+CROS_EC          = "m"
+CROS_EC_LPC      = "m"

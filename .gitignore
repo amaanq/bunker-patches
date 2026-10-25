@@ -8,6 +8,7 @@
 !kconfig/*.nix
 !kconfig/*.nu
 !kconfig/*.config
+!kconfig/*.toml
 !series/
 !series/*
 !tools/

@@ -1,0 +1,2 @@
+# r8169 loses these IDs when the vendor driver patch is enabled.
+R8125 = "m"

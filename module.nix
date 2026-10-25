@@ -13,7 +13,6 @@ let
     mkOption
     mkIf
     mkForce
-    mkOverride
     optionalAttrs
     types
     ;
@@ -26,7 +25,6 @@ let
     ;
 
   cfg = config.bunker.kernel;
-  forceAll = mapAttrs (_: mkForce);
 
   # Pin only the kernel build chain; module integration stays consumer-driven.
   # Forward both buildPlatform and hostPlatform so the pinned nixpkgs keeps
@@ -77,988 +75,131 @@ let
     else
       pkgsKernel.fetchurl bunkerPlan.source;
 
-  # Per-group structured kconfig.
-  # Uses optionalAttrs (not mkIf) because these are merged with // into buildLinux,
-  # which is outside the module system's merging.
-  baseConfig = {
-    BUNKER = yes;
-    LOCALVERSION = freeform "-bunker";
-    RUST = mkForce (if cfg.rust then option yes else option no);
-    MODULE_DECOMPRESS = option yes; # in-kernel module decompression
-    FW_LOADER_COMPRESS_ZSTD = option yes; # zstd firmware compression
+  isBigEndian = pkgsKernel.stdenv.hostPlatform.isBigEndian;
 
-    BPF_SYSCALL = yes;
-    BPF_JIT = yes;
-    PSI = yes; # Pressure Stall Information (systemd-oomd)
-
-    # nixpkgs forces all three but 7.2 removed or de-prompted them
-    CRYPTO_DRBG_HASH = mkForce (option yes);
-    CRYPTO_DRBG_CTR = mkForce (option yes);
-    RANDOM_KMALLOC_CACHES = mkForce (option yes);
-
-    # linux-next renamed it COREBOOT_FIRMWARE and left the old name transitional
-    GOOGLE_FIRMWARE = mkForce (option yes);
-    COREBOOT_FIRMWARE = option yes;
-
-    # linux-next made KVM MMIO unconditional and deleted the symbol
-    KVM_MMIO = mkForce (option yes);
-  }
-  // optionalAttrs isX86 {
-    MICROCODE = yes;
-  }
-  // optionalAttrs isAarch64 (forceAll {
-    ARM64_64K_PAGES = yes; # 64K pages — 10-15% compilation speedup from TLB coverage
-    ARM64_4K_PAGES = no;
-  })
-  // optionalAttrs isPpc64 (forceAll {
-    PPC_64K_PAGES = yes; # 64K pages — native PPC64 page size
-    PPC_4K_PAGES = no;
-  })
-  // forceAll {
-    MODULE_COMPRESS_ZSTD = option yes;
-    MODULE_COMPRESS_XZ = option no;
-  };
-
-  interactiveConfig = optionalAttrs cfg.interactive (
-    {
-      HZ = freeform "1000";
-      HZ_1000 = yes;
-      MQ_IOSCHED_ADIOS = yes;
-      FUTEX = yes;
-      FUTEX_PI = yes;
-      NTSYNC = yes;
-      TREE_RCU = yes;
-      PREEMPT_RCU = yes;
-      RCU_EXPERT = yes;
-      TREE_SRCU = yes;
-      TASKS_RCU_GENERIC = yes;
-      TASKS_RCU = yes;
-      TASKS_RUDE_RCU = option yes;
-      TASKS_TRACE_RCU = yes;
-      RCU_STALL_COMMON = yes;
-      RCU_NEED_SEGCBLIST = yes;
-      RCU_FANOUT = freeform "64";
-      RCU_FANOUT_LEAF = freeform "16";
-      RCU_BOOST = yes;
-      RCU_BOOST_DELAY = option (freeform "500");
-      RCU_NOCB_CPU = yes;
-      RCU_LAZY = yes;
-      RCU_DOUBLE_CHECK_CB_TIME = yes;
-      LRU_GEN = yes; # Multi-gen LRU — better memory reclaim under pressure
-      LRU_GEN_ENABLED = yes;
-    }
-    // optionalAttrs isX86 {
-      X86_AMD_PSTATE = yes;
-      X86_AMD_PSTATE_DEFAULT_MODE = freeform "3";
-      X86_FRED = yes; # Flexible Return and Event Delivery (Zen 5+ / Arrow Lake+)
-      PERF_EVENTS_AMD_POWER = yes; # AMD power events for perf profiling
-    }
-    // mapAttrs (_: mkOverride 90) {
-      PREEMPT = yes;
-      PREEMPT_LAZY = option no;
-      PREEMPT_VOLUNTARY = option no; # removed on archs with ARCH_HAS_PREEMPT_LAZY in 7.0+
-      IOSCHED_BFQ = yes;
-    }
-    // forceAll {
-      TRANSPARENT_HUGEPAGE = yes;
-      TRANSPARENT_HUGEPAGE_ALWAYS = no;
-      TRANSPARENT_HUGEPAGE_MADVISE = yes;
-      MQ_IOSCHED_KYBER = yes;
-      BLK_WBT = no;
-      BLK_WBT_MQ = option no;
-    }
+  # kconfig/<group>.toml holds SYMBOL = value, with subtables under a cpu or a
+  # version key, the same files linux-bunker in repkgs reads. Every value is
+  # forced so bunker wins over common-config, and optional because an `n` on a
+  # symbol whose dependencies hide it is never asked, which generate-config.pl
+  # would reject.
+  cpuKeys = [
+    "x86_64"
+    "aarch64"
+    "riscv64"
+    "loongarch64"
+    "powerpc64"
+    "mips64"
+  ];
+  cpuKey =
+    if isX86 then
+      "x86_64"
+    else if isAarch64 then
+      "aarch64"
+    else if isPpc64 then
+      "powerpc64"
+    else if isMips then
+      "mips64"
+    else
+      null;
+  # next keeps the Makefile version of the release it forked from, as the
+  # version gates do with kernelMajorMinor
+  admitted =
+    clause:
+    let
+      parts = builtins.match "(>=|>|<=|<)?([0-9.]+)" clause;
+      operator = builtins.elemAt parts 0;
+      bound = builtins.elemAt parts 1;
+    in
+    if clause == "next" then
+      cfg.version == "next"
+    else if clause == "!next" then
+      cfg.version != "next"
+    else if parts == null then
+      throw "bunker: ${clause} is neither a cpu nor a version range"
+    else if operator == ">=" then
+      lib.versionAtLeast kernelMajorMinor bound
+    else if operator == ">" then
+      lib.versionOlder bound kernelMajorMinor
+    else if operator == "<=" then
+      !(lib.versionOlder bound kernelMajorMinor)
+    else if operator == "<" then
+      lib.versionOlder kernelMajorMinor bound
+    else
+      kernelMajorMinor == bound || lib.hasPrefix "${bound}." kernelMajorMinor;
+  applies =
+    key: if lib.elem key cpuKeys then key == cpuKey else lib.all admitted (lib.splitString "," key);
+  flatten = lib.concatMapAttrs (
+    key: value:
+    if builtins.isAttrs value then optionalAttrs (applies key) (flatten value) else { ${key} = value; }
   );
-
-  hardenedConfig = optionalAttrs cfg.hardened (
-    {
-      # CFI follows the pinned LLVM kernel stdenv, not the consumer stdenv.
-      CFI = yes;
-      CFI_PERMISSIVE = no;
-      ZERO_CALL_USED_REGS = yes;
-      SLAB_BUCKETS = yes; # dedicated slab buckets — prevents cross-cache attacks (KSPP)
-      SECURITY_SAFESETID = yes;
-      BUG_ON_DATA_CORRUPTION = yes; # panic on slab/list corruption
-      SECURITY_DMESG_RESTRICT = yes; # restrict dmesg before sysctl runs
-      USER_NS_UNPRIVILEGED = option yes; # upstream default n breaks bwrap/rootless
-      # --- ASLR maximization ---
-      RANDOMIZE_KSTACK_OFFSET_DEFAULT = yes; # randomize kernel stack per syscall
-
-      # --- Integrity & verified boot ---
-      TRUSTED_KEYS = yes; # TPM-sealed keys
-      ENCRYPTED_KEYS = yes; # kernel-managed encrypted keys (dm-crypt, IMA)
-      FS_VERITY = yes; # file-level Merkle tree integrity
-      FS_VERITY_BUILTIN_SIGNATURES = yes; # verify fs-verity against built-in X.509
-      DM_VERITY_VERIFY_ROOTHASH_SIG = option yes; # signature check on dm-verity root hash
-      FS_ENCRYPTION_INLINE_CRYPT = option yes; # hardware crypto offload for fscrypt
-    }
-    // optionalAttrs (cfg.hardened && isX86) {
-      X86_KERNEL_IBT = yes; # Intel CET indirect branch tracking — hardware CFI complement
-      ARCH_MMAP_RND_BITS = freeform "32"; # max ASLR entropy for mmap (default 28)
-      ARCH_MMAP_RND_COMPAT_BITS = freeform "16"; # max ASLR for 32-bit compat
-    }
-    // optionalAttrs (cfg.hardened && isAarch64) {
-      ARM64_BTI_KERNEL = option yes; # branch target identification for kernel code
-    }
-    // forceAll {
-      # --- Disabled features — attack surface reduction, debug infra, etc. ---
-      STRICT_DEVMEM = option no;
-      IO_STRICT_DEVMEM = option no;
-
-      # Attack surface reduction (KSPP)
-      USELIB = option no; # a.out uselib() syscall
-      SYSFS_SYSCALL = option no; # old sysfs() syscall
-      KEXEC = option no; # bypasses secure boot chain
-      KEXEC_JUMP = option no; # kexec hibernation variant
-      BOOT_CONFIG = option no; # extra kernel params via initrd bootconfig
-      X86_IOPL_IOPERM = option no; # IOPL/IOPERM syscalls
-      X86_VSYSCALL_EMULATION = option no; # legacy vsyscall page
-      X86_X32_ABI = option no; # x32 ABI (exotic, deprecated)
-      X86_SGX = option no; # Intel SGX enclaves
-      DEVPORT = option no; # /dev/port I/O port access
-
-      # Unused security modules
-      SECURITY_SELINUX = option no; # SELinux (~20k LOC, NixOS uses AppArmor)
-      SECURITY_TOMOYO = option no; # TOMOYO (~10k LOC, unused on NixOS)
-
-      # Obsolete crypto
-      CRYPTO_USER_API_ENABLE_OBSOLETE = option no; # Gates ANUBIS/KHAZAD/SEED/TEA
-      CRYPTO_FCRYPT = option no; # fcrypt (only for dead AFS/RxRPC)
-
-      # Debug/testing infrastructure
-      KCOV = option no; # Syzkaller fuzzing infra
-      GCOV_KERNEL = option no; # Kernel code coverage
-      FAULT_INJECTION = option no; # Debug fault injection framework
-      KASAN = option no; # Kernel Address Sanitizer
-      KMEMLEAK = option no; # Kernel memory leak detector
-      PROVE_LOCKING = option no; # Lock dependency validator (lockdep)
-      LOCK_STAT = option no; # Lock contention statistics
-      NOTIFIER_ERROR_INJECTION = option no; # Error injection for notifier chains
-      DEBUG_PAGEALLOC = option no; # Debug page allocation
-      KUNIT = option no; # Kernel unit testing framework
-      EXT4_DEBUG = option no; # ext4 debug
-      JBD2_DEBUG = option no; # ext4 journaling debug
-      SLUB_DEBUG = option no; # SLUB allocator debug
-      DYNAMIC_DEBUG = option no; # Runtime pr_debug control
-      FUNCTION_GRAPH_TRACER = option no; # ftrace graph tracer
-      STACK_TRACER = option no; # nixpkgs enables it, and it selects FUNCTION_TRACER
-      FUNCTION_PROFILER = option no; # depends on FUNCTION_TRACER, nixpkgs sets it as a hard yes
-      PM_DEBUG = option no; # Power management debug
-      PM_ADVANCED_DEBUG = option no; # Advanced PM debug
-      PM_SLEEP_DEBUG = option no; # PM sleep debug
-      ACPI_DEBUG = option no; # ACPI debug
-      SCHED_DEBUG = option no; # Scheduler debug
-      LATENCYTOP = option no; # Latency measurement infrastructure
-      DEBUG_PREEMPT = option no; # Preemption debug
-      DEBUG_MISC = option no; # Miscellaneous debug
-      GENERIC_IRQ_DEBUGFS = option no; # IRQ debug filesystem
-      X86_MCE_INJECT = option no; # MCE injection for testing
-      HIBERNATION = option no; # writes unencrypted memory to disk
-
-      # Child options of disabled security parents
-      X86_SGX_KVM = option no;
-    }
-    # fentry attaches through the __fentry__ call the function tracer compiles in
-    // optionalAttrs (!cfg.debugInfo) (forceAll {
-      FUNCTION_TRACER = option no; # ftrace (stronger than sysctl disable)
-    })
-  );
-
-  trimmedConfig = optionalAttrs cfg.trimmed (
-    forceAll {
-      # --- Dead network hardware ---
-      ARCNET = option no; # 1970s token-passing network
-      FDDI = option no; # 1980s fiber ring
-      HIPPI = option no; # 1990s supercomputer interconnect
-      PLIP = option no; # Parallel Line IP
-      WAN = option no; # Leased-line WAN cards and HDLC
-      EQUALIZER = option no; # Serial/PLIP link load balancer
-
-      # --- Dead network protocols ---
-      ATALK = option no; # Appletalk
-      ATM = option no; # Async Transfer Mode
-      AX25 = option no; # Amateur radio X.25
-      CAN = option no; # Controller Area Network
-      DECNET = option no; # DECnet
-      HAMRADIO = option no; # Amateur radio umbrella (ax25/netrom/rose)
-      IEEE802154 = option no; # Wireless sensor networks
-      IP_DCCP = option no; # Datagram Congestion Control
-      IP_SCTP = option no; # Stream Control Transmission
-      IPX = option no; # Internetwork Packet Exchange
-      NETROM = option no; # Amateur radio NetRom
-      N_HDLC = option no; # HDLC line discipline
-      ROSE = option no; # Amateur radio ROSE
-      RDS = option no; # Reliable Datagram Sockets
-      TIPC = option no; # Transparent IPC
-      X25 = option no; # X.25 packet switching
-      AF_RXRPC = option no; # RxRPC sessions (only for AFS)
-      AF_KCM = option no; # Kernel Connection Multiplexor
-      PHONET = option no; # Nokia Phonet
-      CAIF = option no; # ST-Ericsson modem IPC
-      "6LOWPAN" = option no; # IPv6 over low-power networks
-      NFC = option no; # Near Field Communication
-      WIMAX = option no; # WiMAX (dead standard)
-      MCTP = option no; # Management Component Transport
-      HSR = option no; # High-availability Seamless Redundancy
-      OPENVSWITCH = option no; # Open vSwitch (selects MPLS)
-      MPLS = option no;
-      BATMAN_ADV = option no; # B.A.T.M.A.N. mesh
-      NET_DSA = option no; # Distributed Switch Architecture
-
-      # --- Server/cloud networking ---
-      GENEVE = option no; # Cloud overlay
-      NET_TEAM = option no; # Network teaming
-      MACSEC = option no; # 802.1AE MAC encryption
-      NET_SWITCHDEV = option no; # Switch offload
-
-      # --- Dead/unused filesystems ---
-      ADFS_FS = option no;
-      AFFS_FS = option no;
-      AFS_FS = option no; # Andrew File System
-      BEFS_FS = option no;
-      BFS_FS = option no;
-      CEPH_FS = option no;
-      CIFS = option no; # NixOS might enable
-      CRAMFS = option no;
-      EFS_FS = option no;
-      EROFS_FS = option no;
-      EROFS_FS_ZIP_DEFLATE = option no;
-      EROFS_FS_ZIP_ZSTD = option no;
-      EXT2_FS = option no; # Ext4 supports ext2 filesystems
-      EXT2_FS_POSIX_ACL = option no;
-      EXT2_FS_SECURITY = option no;
-      EXT2_FS_XATTR = option no;
-      F2FS_FS = option no;
-      GFS2_FS = option no;
-      HFS_FS = option no;
-      HFSPLUS_FS = option no;
-      HPFS_FS = option no;
-      JFFS2_FS = option no;
-      JFS_FS = option no;
-      MINIX_FS = option no;
-      NILFS2_FS = option no;
-      OCFS2_FS = option no;
-      OMFS_FS = option no;
-      ORANGEFS_FS = option no;
-      QNX4FS_FS = option no;
-      QNX6FS_FS = option no;
-      REISERFS_FS = option no;
-      SMB_SERVER = option no; # ksmbd
-      SQUASHFS = option no; # NixOS might enable
-      SYSV_FS = option no;
-      UDF_FS = option no;
-      VXFS_FS = option no; # freevxfs
-      ZONEFS_FS = option no;
-      CODA_FS = option no; # Coda distributed filesystem
-      ROMFS_FS = option no; # ROM filesystem (embedded)
-      UBIFS_FS = option no; # UBI flash filesystem (embedded)
-      NTFS_FS = option no; # prefer NTFS3 over 7.1's revived classic driver
-      NTFS_FS_POSIX_ACL = option no; # child of NTFS_FS; nixpkgs forces =y on 7.1+, but parent is off
-      NTFS_FS_WOF_COMPRESSION = option no; # same, nixpkgs forces =y on 7.3+
-      MSDOS_FS = option no; # 8.3 FAT (VFAT supersedes)
-
-      # --- Dead subsystems ---
-      FIREWIRE = option no; # IEEE 1394
-      PROVIDE_OHCI1394_DMA_INIT = option no; # FireWire remote debug on boot
-      INFINIBAND = option no; # RDMA/InfiniBand
-      ISDN = option no; # ISDN telephony
-      PCMCIA = option no; # CardBus
-      PARPORT = option no; # Parallel port
-      INPUT_JOYSTICK = option no; # Disables all gameport joystick drivers (bool, not tristate)
-      GAMEPORT = option no; # Legacy gameport (freed by INPUT_JOYSTICK=n)
-      COMEDI = option no; # Data acquisition
-      GREYBUS = option no; # Project Ara
-      STAGING = option no; # Experimental drivers
-
-      # --- Dead buses/subsystems (industrial/embedded/ARM) ---
-      VME_BUS = option no; # VMEbus (1980s industrial crate bus)
-      RAPIDIO = option no; # Telecom/DSP interconnect
-      IPACK = option no; # IndustryPack automation
-      SIOX = option no; # Eckelmann industrial protocol
-      HSI = option no; # Nokia modem serial (one dead chipset)
-      MOST = option no; # Automotive infotainment bus
-      SPMI = option no; # Qualcomm ARM power management bus
-      SLIMBUS = option no; # Qualcomm ARM audio codec bus
-      INTERCONNECT = option no; # ARM SoC interconnect framework
-      BATTERY_DS2780 = option no; # niche battery chip (selects W1)
-      BATTERY_DS2781 = option no; # niche battery chip (selects W1)
-      W1 = option no; # 1-Wire bus
-      NTB = option no; # Non-Transparent Bridge (multi-host PCIe)
-      COUNTER = option no; # Embedded quadrature encoders
-      GNSS = option no; # GPS/GNSS receivers over serial
-      MELLANOX_PLATFORM = option no; # Mellanox switch ASICs (not ConnectX NICs)
-      PCCARD = option no; # 16-bit PC Card (dead since ~2005)
-      AGP = option no; # Accelerated Graphics Port (all GPUs use PCIe)
-      EISA = option no; # Extended ISA bus (dead since ~2000)
-      I3C = option no; # MIPI I3C bus (embedded/phone only)
-      MTD = option no; # Memory Technology Devices (raw flash, embedded)
-      YENTA = option no; # Yenta PCMCIA - Old laptop bus (removed in 6.14)
-
-      # --- Dead memory technologies ---
-      X86_PMEM_LEGACY = option no; # non-standard NVDIMMs (selects LIBNVDIMM)
-      ACPI_NFIT = option no; # NVDIMM firmware table (selects LIBNVDIMM)
-      LIBNVDIMM = option no; # persistent memory
-      DEV_DAX = option no; # DAX devices for persistent memory
-      CXL_BUS = option no; # Compute Express Link (bleeding-edge server)
-
-      # --- Dead GPU drivers ---
-      DRM_SIS = option no; # SiS GPUs (dead vendor ~2008)
-      DRM_VIA = option no; # VIA GPUs (dead GPU division)
-      DRM_SAVAGE = option no; # S3 Savage GPUs (dead ~2003)
-      DRM_NOUVEAU = option no; # NVIDIA open-source (use proprietary or AMD)
-      DRM_RADEON = option no; # Pre-GCN AMD GPUs (pre-2012, use AMDGPU)
-
-      # --- Dead misc hardware ---
-      MEMSTICK = option no; # Sony Memory Stick (dead format)
-      PHONE = option no; # ISA/PCI telephony cards
-      AUXDISPLAY = option no; # Character LCD displays (parallel port)
-      ACRN_GUEST = option no; # ACRN hypervisor guest (dead hypervisor)
-      RAW_DRIVER = option no; # /dev/raw (deprecated, use O_DIRECT)
-      INTEL_IOATDMA = option no; # old Xeon DMA engine (selects DCA)
-      DCA = option no; # Direct Cache Access
-      HANGCHECK_TIMER = option no; # Server cluster heartbeat
-      HOTPLUG_PCI_CPCI = option no; # CompactPCI hotplug (industrial)
-      BLK_DEV_DRBD = option no; # DRBD distributed block replication
-      MOUSE_SERIAL = option no; # Serial mice (RS-232)
-      SERIO_SERPORT = option no; # Serial port input devices
-      # Modules that `select SERIO_SERPORT` — must also be disabled to avoid
-      # a kconfig select conflict (repeated-question failure on aarch64).
-      I2C_TAOS_EVM = option no;
-      USB_EXTRON_DA_HD_4K_PLUS_CEC = option no;
-      USB_PULSE8_CEC = option no;
-      USB_RAINSHADOW_CEC = option no;
-      SND_ISA = option no; # ISA sound cards
-      # Legacy PCI sound cards (select SND_OPL3_LIB / SND_MPU401_UART)
-      SND_ALS300 = option no;
-      SND_ALS4000 = option no;
-      SND_ALI5451 = option no;
-      SND_AU8810 = option no;
-      SND_AU8820 = option no;
-      SND_AU8830 = option no;
-      SND_AZT3328 = option no;
-      SND_CMIPCI = option no;
-      SND_OXYGEN = option no;
-      SND_CS4281 = option no;
-      SND_ES1938 = option no;
-      SND_ES1968 = option no;
-      SND_FM801 = option no;
-      SND_ICE1712 = option no;
-      SND_RIPTIDE = option no;
-      SND_SE6X = option no;
-      SND_SONICVIBES = option no;
-      SND_TRIDENT = option no;
-      SND_VIA82XX = option no;
-      SND_VIRTUOSO = option no;
-      SND_YMFPCI = option no;
-      SND_HDA_CODEC_HDMI_NVIDIA_MCP = option no;
-      SND_MPU401 = option no; # standalone MPU-401 driver
-      SND_OPL3_LIB = option no;
-      SND_OPL4_LIB = option no;
-      SND_MPU401_UART = option no;
-      SND_SB_COMMON = option no; # SoundBlaster common (ISA-era)
-      SND_OSSEMUL = option no; # OSS API emulation (deprecated ~20yr)
-      SND_PCM_OSS = option no; # OSS /dev/dsp emulation
-      SND_MIXER_OSS = option no; # OSS /dev/mixer emulation
-      SND_SEQUENCER_OSS = option no; # OSS sequencer emulation
-      SND_SERIAL_U16550 = option no; # UART16550 serial MIDI
-
-      # --- Dead input devices ---
-      JOYSTICK_ANALOG = option no; # Analog gameport joystick
-      MOUSE_ATIXL = option no; # ATI XL bus mouse
-      MOUSE_INPORT = option no; # Microsoft InPort bus mouse
-      MOUSE_LOGIBM = option no; # Logitech bus mouse
-      KEYBOARD_LKKBD = option no; # DEC LK201/LK401 (serial)
-      KEYBOARD_NEWTON = option no; # Apple Newton keyboard
-      KEYBOARD_SUNKBD = option no; # Sun keyboard (serial)
-      KEYBOARD_STOWAWAY = option no; # Stowaway portable keyboard
-
-      # --- Dead platform drivers ---
-      SONYPI = option no; # Old Sony VAIO programmable I/O
-      ACPI_CMPC = option no; # Classmate PC (dead OLPC-like)
-      COMPAL_LAPTOP = option no; # Compal IFL90/JFL92 laptops
-      AMILO_RFKILL = option no; # Fujitsu Amilo RF kill
-      TOSHIBA_HAPS = option no; # Toshiba HDD Active Protection (SSD era)
-
-      # --- Dead block/storage hardware ---
-      BLK_DEV_FD = option no; # Floppy disk
-      PATA_LEGACY = option no; # ISA-era parallel ATA
-      PATA_ISAPNP = option no; # ISA PnP parallel ATA
-      BLK_DEV_DAC960 = option no; # Mylex DAC960 RAID (dead vendor)
-      BLK_DEV_UMEM = option no; # Micro Memory MM5415 RAM card
-      BLK_DEV_NULL_BLK = option no; # Null block device (testing only)
-      CRYPTO_842 = option no; # 842 compression algorithm (rarely used)
-      SATA_INIC162X = option no;
-      SATA_SX4 = option no;
-
-      # --- Dead cpufreq drivers ---
-      X86_SPEEDSTEP_CENTRINO = option no; # Pentium M/Centrino
-      X86_SPEEDSTEP_ICH = option no; # Old ICH chipsets
-      X86_SPEEDSTEP_SMI = option no; # SMI-based (ancient laptops)
-      X86_SPEEDSTEP_LIB = option no; # SpeedStep common code
-      X86_P4_CLOCKMOD = option no; # Pentium 4 clock modulation
-      X86_POWERNOW_K6 = option no; # AMD K6
-      X86_POWERNOW_K7 = option no; # AMD K7 (Athlon)
-      X86_POWERNOW_K8 = option no; # AMD K8 (Athlon 64)
-      X86_GX_SUSPMOD = option no; # Cyrix/NatSemi Geode GX
-      X86_LONGHAUL = option no; # VIA C3
-      X86_E_POWERSAVER = option no; # VIA C7
-      X86_LONGRUN = option no; # Transmeta (bankrupt)
-
-      # --- Dead misc drivers ---
-      APPLICOM = option no; # Industrial fieldbus cards
-      PHANTOM = option no; # SensAble PHANToM haptic device
-      MMC_TIFM_SD = option no; # TI flash media SD (selects TIFM_CORE)
-      MEMSTICK_TIFM_MS = option no; # TI flash media MemoryStick (selects TIFM_CORE)
-      TIFM_CORE = option no;
-      TELCLOCK = option no; # Telecom clock (MCPL0010)
-      ECHO = option no; # Telephony echo cancellation
-      RPMSG = option no; # Remote Processor Messaging (ARM)
-      REMOTEPROC = option no; # Remote Processor framework (ARM)
-
-      # --- Dead media ---
-      MEDIA_SUPPORT_FILTER = yes;
-      MEDIA_SUBDRV_AUTOSELECT = yes;
-      MEDIA_CAMERA_SUPPORT = yes;
-      MEDIA_PLATFORM_SUPPORT = yes;
-      MEDIA_ANALOG_TV_SUPPORT = option no; # Analog TV (shut off globally)
-      MEDIA_DIGITAL_TV_SUPPORT = option no; # DVB digital TV tuners
-      MEDIA_RADIO_SUPPORT = option no; # AM/FM receiver cards
-      DVB_CORE = option no; # Digital Video Broadcasting
-      MEDIA_SDR_SUPPORT = option no; # Software defined radio
-      VIDEO_ZORAN = option no; # Deprecated PCI MJPEG capture cards
-
-      # --- Dead network transports ---
-      SLIP = option no; # Serial Line IP (dialup)
-      ATA_OVER_ETH = option no; # ATA over Ethernet
-      LAPB = option no; # X.25 link layer
-      PKTGEN = option no; # Kernel packet generator (testing)
-      N_GSM = option no; # GSM 0710 mux for old serial modems
-      BT_CMTP = option no; # Bluetooth CAPI (ISDN over BT)
-
-      # --- Server block/storage ---
-      BLK_DEV_NBD = option no; # Network block device
-      BLK_DEV_RBD = option no; # Ceph/RADOS block
-      TARGET_CORE = option no; # SCSI target
-      ISCSI_TCP = option no; # iSCSI initiator
-      NVME_TARGET = option no; # NVMe-oF target
-
-      # --- Unused large subsystems ---
-      IP_VS = option no; # IPVS load balancer (~30k LOC, only k8s IPVS mode)
-      NFSD = option no; # NFS server (~25k LOC, client kept via NFS_FS)
-      QUOTA = option no; # Disk quotas (~10k LOC, multi-user server feature)
-      MD_BITMAP_FILE = option no; # Deprecated external MD bitmap files
-
-      # --- Legacy/deprecated hardware & interfaces ---
-      NET_KEY = option no; # Deprecated PF_KEY, maintained IKE uses XFRM netlink
-      NF_CONNTRACK_PROCFS = option no; # Superseded by conntrack netlink
-      PCSPKR_PLATFORM = option no; # PC speaker
-      CDROM_PKTCDVD = option no; # Packet writing to CD/DVDs
-      EFI_VARS = option no; # Old sysfs EFI vars (EFIVAR_FS supersedes)
-      RAID_AUTODETECT = option no; # Legacy MD RAID autodetect
-      FB_DEVICE = option no; # Legacy /dev/fb* (DRM/KMS supersedes)
-      FRAMEBUFFER_CONSOLE_LEGACY_ACCELERATION = option no; # Legacy fbcon hw accel
-      X86_MPPARSE = option no; # MPS tables (pre-ACPI SMP)
-      X86_EXTENDED_PLATFORM = option no; # Non-standard x86 platforms (SGI UV, etc.)
-      GART_IOMMU = option no; # AMD K8-era GART IOMMU (modern uses AMD-Vi)
-      REROUTE_FOR_BROKEN_BOOT_IRQS = option no; # Workaround for ancient BIOS IRQ routing
-      MSDOS_PARTITION = option no; # MBR partition table (GPT era)
-      BSD_DISKLABEL = option no; # nixpkgs forces this for some reason
-      ACCESSIBILITY = option no; # Speakup screen reader
-      TRACEFS_AUTOMOUNT_DEPRECATED = option no;
-
-      # --- Unused platform drivers ---
-      CHROME_PLATFORMS = option no; # ChromeOS platform drivers
-      MACINTOSH_DRIVERS = option no; # Apple hardware drivers
-      APPLE_PROPERTIES = option no; # Apple device properties
-      XEN = option no; # Xen hypervisor (we use KVM)
-      SURFACE_PLATFORMS = option no; # Microsoft Surface
-
-      # Obsolete Network (10/100 NICs from 1990s/2000s)
-      ADAPTEC_STARFIRE = option no; # Adaptec Starfire Ethernet - Old PCI NIC (1990s)
-      DE2104X = option no; # DEC 21x4x Tulip Ethernet - Ancient PCI NIC
-      TULIP = option no; # DEC Tulip Ethernet - Legacy 1990s NIC
-      WINBOND_840 = option no; # Winbond W89c840 Ethernet - Obsolete 10/100 NIC
-      DM9102 = option no; # Davicom DM9102 Ethernet - Old PCI NIC
-      ULI526X = option no; # ULi M526x Ethernet - Legacy 10/100 NIC
-      HAMACHI = option no; # Packet Engines Hamachi - Old Gigabit NIC
-      YELLOWFIN = option no; # Packet Engines Yellowfin - Old Gigabit NIC
-      NATSEMI = option no; # National Semiconductor DP8381x - Legacy 10/100 NIC
-      NS83820 = option no; # National Semiconductor DP83820 - Old Gigabit NIC
-      S2IO = option no; # Neterion S2IO 10GbE - Deprecated server NIC
-      NE2K_PCI = option no; # NE2000 PCI Ethernet - Ancient 10Mbps NIC
-      FORCEDETH = option no; # NVIDIA nForce Ethernet - Legacy chipset NIC
-      ETHOC = option no; # OpenCores Ethernet - FPGA embedded NIC
-      R6040 = option no; # RDC R6040 Ethernet - Embedded/industrial NIC
-      ATP = option no; # Realtek RTL8012 ATP - Ancient 10Mbps ISA NIC (removed in 6.x)
-
-      # Additional Ancient SCSI (pre-2010)
-      SCSI_3W_XXXX_RAID = option no; # 3ware Escalade RAID - Ancient RAID (pre-2005, removed in 6.x)
-      SCSI_3W_9XXX = option no; # 3ware 9000 series RAID - Legacy RAID controller
-      SCSI_3W_SAS = option no; # 3ware SAS RAID - Obsolete SAS RAID
-      SCSI_MVSAS = option no; # Marvell SAS/SATA - Old enterprise SAS
-      SCSI_MVUMI = option no; # Marvell UMI - Legacy RAID
-      SCSI_ADVANSYS = option no; # AdvanSys SCSI - Ancient SCSI card
-      SCSI_ARCMSR = option no; # Areca RAID - Legacy RAID controller
-      SCSI_ESAS2R = option no; # ATTO ESAS RAID - Old RAID controller
-      SCSI_HPTIOP = option no; # HighPoint RocketRAID - Legacy RAID
-      SCSI_BUSLOGIC = option no; # BusLogic SCSI - 1990s SCSI controller
-      SCSI_DMX3191D = option no; # DMX3191D SCSI - Obsolete SCSI
-      SCSI_FDOMAIN = option no; # Future Domain SCSI - Ancient SCSI card (forced to 'm' by deps in some kernels)
-      SCSI_ISCI = option no; # Intel C600 SAS - Old server chipset SAS
-      SCSI_IPS = option no; # IBM ServeRAID - Legacy IBM RAID
-      SCSI_INITIO = option no; # Initio SCSI - 1990s SCSI controller
-      SCSI_INIA100 = option no; # InitIO INI-A100U/W - Ancient SCSI
-      SCSI_PPA = option no; # Iomega PPA (parallel port) - Parallel port ZIP drive (removed in 6.x)
-      SCSI_IMM = option no; # Iomega IMM (parallel port) - Parallel port ZIP drive (removed in 6.x)
-      SCSI_STEX = option no; # Promise SuperTrak EX - Legacy RAID
-      SCSI_SYM53C8XX_2 = option no; # Symbios 53C8xx SCSI - 1990s SCSI controller
-      SCSI_QLOGIC_1280 = option no; # QLogic 1280 SCSI - Old SCSI controller
-      SCSI_DC395x = option no; # Tekram DC395x SCSI - 1990s SCSI card
-      SCSI_AM53C974 = option no; # AMD AM53C974 SCSI - Ancient SCSI
-      SCSI_WD719X = option no; # Western Digital WD719x - 1990s SCSI controller
-      SCSI_PMCRAID = option no; # PMC-Sierra RAID - Legacy RAID
-      SCSI_PM8001 = option no; # PMC-Sierra 8001 SAS - Old SAS controller
-      MEGARAID_LEGACY = option no;
-
-      # Legacy PATA/IDE Controllers (pre-SATA era)
-      PATA_ALI = option no; # ALI PATA - Legacy chipset IDE
-      PATA_ARTOP = option no; # ARTOP PATA - Old IDE controller
-      PATA_ATIIXP = option no; # ATI IXP PATA - Legacy IDE
-      PATA_ATP867X = option no; # ATP867X PATA - Obsolete IDE
-      PATA_CMD64X = option no; # CMD64x PATA - 1990s IDE controller
-      PATA_CYPRESS = option no; # Cypress PATA - Old IDE controller
-      PATA_EFAR = option no; # EFAR PATA - Legacy IDE
-      PATA_HPT366 = option no; # HPT366 PATA - Old IDE RAID
-      PATA_HPT37X = option no; # HPT37x PATA - Legacy IDE RAID
-      PATA_HPT3X2N = option no; # HPT3x2N PATA - Obsolete IDE RAID
-      PATA_IT8213 = option no; # IT8213 PATA - Old IDE controller
-      PATA_IT821X = option no; # IT821X PATA - Legacy IDE RAID
-      PATA_NETCELL = option no; # NetCell PATA - Obsolete IDE
-      PATA_OLDPIIX = option no; # Intel PIIX1/2 PATA - Ancient IDE (pre-2000)
-      PATA_CMD640_PCI = option no;
-      PATA_OPTI = option no;
-      PATA_OPTIDMA = option no;
-      PATA_PDC2027X = option no; # Promise PDC2027x - Legacy IDE RAID
-      PATA_PDC_OLD = option no; # Promise old PATA - Old IDE RAID
-      PATA_RADISYS = option no; # Radisys PATA - Obsolete IDE
-      PATA_RDC = option no; # RDC PATA - Legacy embedded IDE
-      PATA_TOSHIBA = option no; # Toshiba PATA - Old laptop IDE
-      PATA_TRIFLEX = option no; # Compaq Triflex PATA - Ancient IDE
-
-      # Old Wireless (Pre-WiFi 6 - 802.11b/g/n legacy)
-      ADM8211 = option no; # ADMtek ADM8211 WLAN - 802.11b (1999)
-      ATH5K = option no; # Atheros AR5xxx - 802.11a/b/g (pre-2008)
-      ATH9K = option no; # Atheros AR9xxx - 802.11n (old gen)
-      ATH9K_HTC = option no; # Atheros AR9271 USB - Old 802.11n USB
-      CARL9170 = option no; # Atheros AR9170 USB - Legacy 802.11n
-      ATH6KL = option no; # Atheros AR600x - Old embedded WiFi
-      AR5523 = option no; # Atheros AR5523 - Legacy 802.11g USB
-      IPW2100 = option no; # Intel PRO/Wireless 2100 - 802.11b (2003)
-      IPW2200 = option no; # Intel PRO/Wireless 2200BG - 802.11b/g (2004)
-      IWL3945 = option no; # Intel Wireless 3945ABG - 802.11a/b/g (2006)
-      IWL4965 = option no; # Intel Wireless 4965AGN - 802.11n draft (2007)
-      LIBERTAS = option no; # Marvell Libertas - 802.11b/g (old)
-      AT76C50X_USB = option no; # Atmel AT76C50x - 802.11b USB
-      B43 = option no; # Broadcom b43 - Legacy BCM43xx
-      B43LEGACY = option no; # Broadcom b43legacy - Ancient BCM430x
-      MWIFIEX = option no; # Marvell mwifiex - Old embedded WiFi
-      MWL8K = option no; # Marvell 88W8xxx - Legacy PCI WiFi
-      P54_COMMON = option no; # Prism54 - 802.11g (2004)
-      RT2X00 = option no; # Ralink RT2x00 - Old 802.11n
-      RT2500USB = option no; # Ralink RT2500 USB - 802.11g (2004, removed in 6.x)
-      RT73USB = option no; # Ralink RT73 USB - 802.11g (2005, removed in 6.x)
-      RT2800USB_RT53XX = option no; # Ralink RT2800USB RT53xx - removed in 6.x (nixpkgs common-config override)
-      RT2800USB_RT55XX = option no; # Ralink RT2800USB RT55xx - removed in 6.x (nixpkgs common-config override)
-      RTL8180 = option no; # Realtek RTL8180 - 802.11b PCI
-      RTL8187 = option no; # Realtek RTL8187 - 802.11g USB
-      RTL8192CU = option no; # Realtek RTL8192CU - Old 802.11n USB
-
-      # SoC-specific (ARM/MIPS only, not applicable to x86_64)
-      QCA7000 = option no; # Qualcomm QCA7000 - Embedded PLC (Power Line, forced 'm' by deps in some configs)
-      QCOM_EMAC = option no; # Qualcomm EMAC - ARM SoC Ethernet
-      RMNET = option no; # Qualcomm RMNET - Mobile modem interface
-      SPI_FSL_LIB = option no; # Freescale SPI - ARM SoC SPI (removed in 6.x)
-      SPI_FSL_SPI = option no; # Freescale SPI - ARM SoC SPI
-      SPI_LANTIQ_SSC = option no; # Lantiq SSC SPI - MIPS/embedded SoC
-      I2C_RK3X = option no; # Rockchip I2C - ARM SoC I2C
-
-      # Obsolete USB Ethernet Adapters (USB 1.1/2.0 era)
-      USB_CATC = option no; # CATC USB Ethernet - Obsolete USB 1.1 NIC
-      USB_KAWETH = option no; # Kawasaki LSI USB Ethernet - Ancient USB NIC
-      USB_RTL8150 = option no; # Realtek RTL8150 - USB 1.1 10Mbps NIC
-      USB_PEGASUS = option no; # Pegasus USB Ethernet - Old USB 1.1 NIC
-      USB_NET_DM9601 = option no; # Davicom DM9601 USB - Obsolete USB NIC
-      USB_NET_SR9700 = option no; # CoreChip SR9700 - Old USB 1.1 NIC
-      USB_NET_SR9800 = option no; # CoreChip SR9800 - Old USB 2.0 NIC
-      USB_NET_GL620A = option no; # Genesys GL620USB - Ancient USB host-to-host
-      USB_NET_PLUSB = option no; # Prolific PL2301/2302 - Old USB host-to-host
-      USB_NET_MCS7830 = option no; # MosChip MCS7830 - Obsolete USB NIC
-      USB_NET_ZAURUS = option no; # Zaurus USB net - PDA from 2000s
-      USB_NET_CX82310_ETH = option no; # Conexant CX82310 - Old USB modem
-      USB_NET_KALMIA = option no; # Samsung Kalmia - Old modem
-      USB_HSO = option no; # Option HSDPA modem - 3G USB modem
-      USB_NET_INT51X1 = option no; # Intellon PLC - Power line comms
-      USB_CDC_PHONET = option no; # Phonet USB - Nokia phone protocol (removed in 6.x)
-      USB_SIERRA_NET = option no; # Sierra Wireless - Old 3G/4G modem
-      USB_VL600 = option no; # Samsung VL600 - Old LTE modem
-      USB_NET_CH9200 = option no; # QinHeng CH9200 - Obsolete USB NIC
-
-      # --- Test-only drivers ---
-      ACPI_APEI_EINJ = option no;
-      ACPI_APEI_ERST_DEBUG = option no;
-      BLK_DEV_RUST_NULL = option no;
-      CRYPTO_BENCHMARK = option no;
-      DMABUF_SELFTESTS = option no;
-      DMAPOOL_TEST = option no;
-      DMATEST = option no;
-      DM_DELAY = option no;
-      DM_DUST = option no;
-      DUMMY_IRQ = option no;
-      FB_VIRTUAL = option no;
-      FIREWIRE_NOSY = option no;
-      GPIO_MOCKUP = option no;
-      GPIO_VIRTUSER = option no;
-      HWPOISON_INJECT = option no;
-      I2C_STUB = option no;
-      I2C_SLAVE_TESTUNIT = option no;
-      IIO_SIMPLE_DUMMY = option no;
-      IO_URING_MOCK_FILE = option no;
-      KPROBE_EVENT_GEN_TEST = option no;
-      MAC80211_HWSIM = option no;
-      MAILBOX_TEST = option no;
-      MEDIA_TEST_SUPPORT = option no;
-      MMC_TEST = option no;
-      PCI_ENDPOINT_TEST = option no;
-      PCIEAER_INJECT = option no;
-      PKCS7_TEST_KEY = option no;
-      PPS_CLIENT_KTIMER = option no;
-      PPS_GENERATOR_DUMMY = option no;
-      PREEMPTIRQ_DELAY_TEST = option no;
-      PRIME_NUMBERS = option no;
-      RC_LOOPBACK = option no;
-      RCU_REF_SCALE_TEST = option no;
-      RTC_DRV_TEST = option no;
-      SCF_TORTURE_TEST = option no;
-      SCSI_DEBUG = option no;
-      SCSI_UFS_DWC_TC_PCI = option no;
-      SCSI_UFS_DWC_TC_PLATFORM = option no;
-      SND_PCMTEST = option no;
-      SND_SOC_INTEL_AVS_MACH_I2S_TEST = option no;
-      SND_SOC_SDW_MOCKUP = option no;
-      SND_TEST_COMPONENT = option no;
-      SPI_LOOPBACK_TEST = option no;
-      STM_DUMMY = option no;
-      TEST_LOCKUP = option no;
-      TEST_POWER = option no;
-      THERMAL_CORE_TESTING = option no;
-      TRACE_REMOTE_TEST = option no;
-      USB4_DMA_TEST = option no;
-      USB_DUMMY_HCD = option no;
-      USB_EHSET_TEST_FIXTURE = option no;
-      USB_LINK_LAYER_TEST = option no;
-      USB_TEST = option no;
-      USB_ZERO = option no;
-      VIDEO_VIVID = option no; # Virtual video test driver
-      X86_AMD_PSTATE_UT = option no;
-
-      # --- Child options of disabled parents ---
-      # When a parent config is forced off, its children vanish from kconfig.
-      # common-config.nix sets these without `option`, so we override them here
-      # with `option` to suppress "unused option" errors.
-      AIC79XX_DEBUG_ENABLE = option no;
-      AIC7XXX_DEBUG_ENABLE = option no;
-      AIC94XX_DEBUG = option no;
-      CHROMEOS_LAPTOP = option no;
-      CHROMEOS_PSTORE = option no;
-      CHROMEOS_TBMC = option no;
-      CROS_EC = option no;
-      CROS_EC_I2C = option no;
-      CROS_EC_ISHTP = option no;
-      CROS_EC_LPC = option no;
-      CROS_EC_SPI = option no;
-      CROS_KBD_LED_BACKLIGHT = option no;
-      CEPH_FSCACHE = option no;
-      CEPH_FS_POSIX_ACL = option no;
-      CIFS_DFS_UPCALL = option no;
-      CIFS_FSCACHE = option no;
-      CIFS_UPCALL = option no;
-      CIFS_XATTR = option no;
-      DRM_NOUVEAU_SVM = option no;
-      F2FS_FS_COMPRESSION = option no;
-      INFINIBAND_IPOIB = option no;
-      INFINIBAND_IPOIB_CM = option no;
-      IP_VS_IPV6 = option no;
-      IP_VS_PROTO_AH = option no;
-      IP_VS_PROTO_ESP = option no;
-      IP_VS_PROTO_TCP = option no;
-      IP_VS_PROTO_UDP = option no;
-      JOYSTICK_PSXPAD_SPI_FF = option no;
-      MEGARAID_NEWGEN = option no;
-      MTD_COMPLEX_MAPPINGS = option no;
-      NFSD_V3_ACL = option no;
-      NFSD_V4 = option no;
-      NFSD_V4_SECURITY_LABEL = option no;
-      NFS_LOCALIO = option no;
-      NVME_TARGET_AUTH = option no;
-      NVME_TARGET_PASSTHRU = option no;
-      NVME_TARGET_TCP_TLS = option no;
-      SCSI_LOWLEVEL_PCMCIA = option no;
-      SLIP_COMPRESSED = option no;
-      SLIP_SMART = option no;
-      SQUASHFS_CHOICE_DECOMP_BY_MOUNT = option no;
-      SQUASHFS_FILE_DIRECT = option no;
-      SQUASHFS_LZ4 = option no;
-      SQUASHFS_LZO = option no;
-      SQUASHFS_XATTR = option no;
-      SQUASHFS_XZ = option no;
-      SQUASHFS_ZLIB = option no;
-      SQUASHFS_ZSTD = option no;
-      STAGING_MEDIA = option no;
-      FUNCTION_GRAPH_RETVAL = option no;
-      HID_BPF = option no;
-      MEDIA_ATTACH = option no;
-      PM_TRACE_RTC = option no;
-    }
-    // optionalAttrs isX86 (
-      forceAll (
-        {
-          # Keep EFI/VESA fallback and fbcon; drop pre-DRM hardware drivers.
-          FB_3DFX = option no;
-          FB_3DFX_ACCEL = option no;
-          FB_ARC = option no;
-          FB_ATY = option no;
-          FB_ATY128 = option no;
-          FB_ATY_CT = option no;
-          FB_ATY_GX = option no;
-          FB_CARMINE = option no;
-          FB_CIRRUS = option no;
-          FB_CYBER2000 = option no;
-          FB_HECUBA = option no;
-          FB_HGA = option no;
-          FB_I740 = option no;
-          FB_IBM_GXT4500 = option no;
-          FB_KYRO = option no;
-          FB_MB862XX = option no;
-          FB_METRONOME = option no;
-          FB_N411 = option no;
-          FB_NEOMAGIC = option no;
-          FB_NVIDIA = option no;
-          FB_NVIDIA_I2C = option no;
-          FB_OPENCORES = option no;
-          FB_PM2 = option no;
-          FB_PM3 = option no;
-          FB_RADEON = option no;
-          FB_RIVA = option no;
-          FB_RIVA_I2C = option no;
-          FB_S1D13XXX = option no;
-          FB_SAVAGE = option no;
-          FB_SAVAGE_ACCEL = option no;
-          FB_SAVAGE_I2C = option no;
-          FB_SIS = option no;
-          FB_SIS_300 = option no;
-          FB_SIS_315 = option no;
-          FB_SM501 = option no;
-          FB_SM712 = option no;
-          FB_SMSCUFX = option no;
-          FB_SSD1307 = option no;
-          FB_TRIDENT = option no;
-          FB_UVESA = option no;
-          FB_VGA16 = option no;
-          FB_VIA = option no;
-          FB_VOODOO1 = option no;
-          OF = no;
-        }
-        # Generated by kconfig/x86-devicetree-only.nu
-        // lib.genAttrs (import ./kconfig/x86-devicetree-only.nix) (_: option no)
+  answer =
+    value:
+    mkForce (
+      option (
+        if value == "y" then
+          yes
+        else if value == "n" then
+          no
+        else if value == "m" then
+          module
+        else
+          freeform value
       )
+    );
+  # a symbol only version tables that do not apply name still answers, since
+  # bunker names it to make common-config's request for it optional where this
+  # kernel lacks it
+  answered = lib.concatMapAttrs (
+    key: value:
+    if !builtins.isAttrs value then
+      { ${key} = value; }
+    else if lib.elem key cpuKeys then
+      optionalAttrs (key == cpuKey) (answered value)
+    else
+      answered value
+  );
+  lacked = lib.concatMapAttrs (
+    key: value:
+    if !builtins.isAttrs value then
+      { }
+    else if lib.elem key cpuKeys || applies key then
+      optionalAttrs (applies key) (lacked value)
+    else
+      answered value
+  );
+  group =
+    name:
+    let
+      table = builtins.fromTOML (builtins.readFile ./kconfig/${name}.toml);
+    in
+    mapAttrs (_: answer) (lacked table // flatten table);
+
+  baseConfig = group "base" // {
+    RUST = mkForce (if cfg.rust then option yes else option no);
+  };
+  interactiveConfig = optionalAttrs cfg.interactive (group "interactive");
+  hardenedConfig = optionalAttrs cfg.hardened (
+    group "hardened" // optionalAttrs (!cfg.debugInfo) (group "hardened-no-debug-info")
+  );
+  trimmedConfig = optionalAttrs cfg.trimmed (
+    group "trimmed"
+    # Generated by kconfig/x86-devicetree-only.nu
+    // optionalAttrs isX86 (
+      lib.genAttrs (import ./kconfig/x86-devicetree-only.nix) (_: mkForce (option no))
     )
   );
-
-  networkingConfig = optionalAttrs cfg.networking (
-    {
-      NET_SCH_DEFAULT = yes;
-      DEFAULT_FQ_CODEL = option yes;
-    }
-    // (
-      # 7.1+ exposes BBRv3 as "bbr3", while older patch sets expose it as "bbr".
-      # Built-in v1 next to v3 duplicates tcp_bbr_check_kfunc_ids and the static
-      # bbr_* kfuncs in vmlinux, which fails resolve_btfids without a message.
-      if lib.versionAtLeast kernelMajorMinor "7.1" then
-        {
-          TCP_CONG_BBR = option module;
-          TCP_CONG_BBR3 = option yes;
-          DEFAULT_BBR3 = option yes;
-        }
-      else
-        {
-          TCP_CONG_BBR = option yes;
-          DEFAULT_BBR = option yes;
-        }
-    )
-  );
-
-  driversConfig = optionalAttrs cfg.drivers {
-    # r8169 loses these IDs when the vendor driver patch is enabled.
-    R8125 = module;
-  };
-
-  openrgbSmbusConfig = optionalAttrs cfg.openrgbSmbus {
-    # bunker/0009 defines the symbol but gives it no Kconfig default.
-    I2C_NCT6775 = module;
-  };
-
-  rustLtoConfig = optionalAttrs (cfg.rust && cfg.lto != "none") (forceAll {
-    NOVA_CORE = option no;
-    MODVERSIONS = no;
-  });
-
-  # nixpkgs keeps DEBUG_INFO=yes for BTF and crashkernel, but hardened
-  # disables kdump and preFixup strips vmlinux and the modules anyway, so
-  # without BTF the DWARF info makes no sense to add.
-  debugInfoConfig = optionalAttrs (!cfg.debugInfo) (forceAll {
-    DEBUG_INFO = option no;
-    DEBUG_INFO_NONE = yes;
-    DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT = no;
-    DEBUG_INFO_BTF = option no;
-    NET_SCH_BPF = option no;
-    SCHED_CLASS_EXT = option no;
-    MODULE_ALLOW_BTF_MISMATCH = option no;
-  });
-
-  ltoConfig =
-    {
-      "full" = {
-        LTO_CLANG_FULL = yes;
-        LTO_CLANG_THIN = mkForce no;
-      };
-      "thin" = {
-        LTO_CLANG_THIN = yes;
-        LTO_CLANG_FULL = mkForce no;
-      };
-      "none" = { };
-    }
-    .${cfg.lto};
-
+  networkingConfig = optionalAttrs cfg.networking (group "networking");
+  driversConfig = optionalAttrs cfg.drivers (group "drivers");
+  openrgbSmbusConfig = optionalAttrs cfg.openrgbSmbus (group "openrgb-smbus");
+  rustLtoConfig = optionalAttrs (cfg.rust && cfg.lto != "none") (group "rust-lto");
+  debugInfoConfig = optionalAttrs (!cfg.debugInfo) (group "no-debug-info");
+  ltoConfig = optionalAttrs (cfg.lto != "none") (group "lto-${cfg.lto}");
   cpuArchConfig = optionalAttrs (cfg.cpuArch != null) {
     ${cfg.cpuArch} = yes;
   };
-
-  # ChromeOS EC base drivers for Framework laptops.
-  # Enables cros_ec and cros_ec_lpcs so the out-of-tree framework-laptop-kmod can bind.
-  # Off by default as most users do not have CrOS EC hardware.
-  frameworkConfig = optionalAttrs cfg.framework (forceAll {
-    CHROME_PLATFORMS = yes;
-    CROS_EC = module;
-    CROS_EC_LPC = module;
-  });
-
-  isBigEndian = pkgsKernel.stdenv.hostPlatform.isBigEndian;
-
-  # Options from nixpkgs common-config.nix that don't exist on arm64 big-endian
-  # (EFI is disabled, BPF_JIT unavailable, ACPI absent, x86-only options).
-  bigEndianConfig = optionalAttrs isBigEndian (forceAll {
-    EFI = option no;
-    EFI_STUB = option no;
-    EFI_ZBOOT = option no;
-    FB_EFI = option no;
-    SYSFB_SIMPLEFB = option no;
-    HOTPLUG_PCI_ACPI = option no;
-    DRM_AMD_ISP = option no;
-    PINCTRL_AMD = option no;
-    KERNEL_ZSTD = option no;
-    ACPI_DEBUG = option no;
-    NET_SCH_BPF = option no;
-    SCHED_CLASS_EXT = option no;
-    FUNCTION_GRAPH_RETVAL = option no;
-  });
-
-  octeonConfig = optionalAttrs cfg.octeon {
-    # Octeon III SoC and the PKO3/BGX ethernet driver. CVMSEG needs at least 3
-    # lines because PKO3 builds its TX command on scratch line 2 and a smaller
-    # scratchpad faults.
-    CAVIUM_OCTEON_CVMSEG_SIZE = mkForce (freeform "3");
-    NR_CPUS = mkForce (freeform "64");
-    OCTEON3_ETHERNET = yes;
-    OCTEON_FPA3 = yes;
-    OCTEON_BGX_PORT = yes;
-    OCTEON_BGX_NEXUS = yes;
-    OCTEON_COMMON_NEXUS = yes;
-    OCTEON_ETHERNET_COMMON = yes;
-
-    # The board uses BGX, so the legacy MIX and AGL ethernet drivers stay off.
-    OCTEON_MGMT_ETHERNET = option no;
-    OCTEON_ETHERNET = option no;
-
-    # eth8's RJ45 PHY is an Atheros AR8033, driven by at803x under the Qualcomm
-    # phylib. Built in so it binds at probe instead of the Generic PHY.
-    QCOM_NET_PHYLIB = yes;
-    AT803X_PHY = yes;
-
-    # CN63XXP1 is an errata workaround for an old chip revision. It is irrelevant
-    # on later chips, and emits a GNU assembler flag clang rejects.
-    CAVIUM_CN63XXP1 = no;
-
-    # bcachefs root dependency stack. 7.0 has no in-tree bcachefs to select these,
-    # so they are listed by hand, and they are built in rather than modules
-    # because the clang/LLD mips64 module loader mis-relocates 64-bit addresses
-    # and the initrd needs the crypto to unlock the root before any module loads.
-    # CRYPTO_POLY1305 is gone in 7.0, so the chacha20-poly1305 AEAD is what pulls
-    # the poly1305 library in.
-    CRYPTO_CHACHA20 = mkForce yes;
-    CRYPTO_CHACHA20POLY1305 = mkForce yes;
-    CRYPTO_LIB_CHACHA = mkForce yes;
-    CRYPTO_LIB_POLY1305 = mkForce yes;
-    LZ4_COMPRESS = mkForce yes;
-    LZ4HC_COMPRESS = mkForce yes;
-    XOR_BLOCKS = mkForce yes;
-    BLK_DEV_MD = mkForce module;
-    MD_RAID456 = mkForce module;
-    # raid6_select_algo calls through a function pointer the module loader leaves
-    # with garbage top bits, so build raid6 in and skip the boot-time benchmark.
-    RAID6_PQ = mkForce yes;
-    RAID6_PQ_BENCHMARK = mkForce no;
-
-    # The same module fault hits ftrace. recordmcount fails to NOP the -pg/_mcount
-    # hooks out of modules, so bcachefs.ko jumps into a stale _mcount. Keep ftrace
-    # off to keep -pg out of modules entirely.
-    FTRACE = mkForce no;
-    FUNCTION_TRACER = mkForce no;
-
-    # 16K pages by default. THP must be off because 16K pushes HPAGE_PMD_ORDER past
-    # MAX_PAGE_ORDER on MIPS and that is a build BUG.
-    PAGE_SIZE_4KB = mkForce no;
-    PAGE_SIZE_16KB = mkForce yes;
-    TRANSPARENT_HUGEPAGE = mkForce no;
-
-    # The DWC3 has no ID pin, so dual-role parks in OTG and never powers
-    # the port. Force host-only so the USB rootfs stick enumerates.
-    USB_DWC3_HOST = mkForce yes;
-    USB_DWC3_DUAL_ROLE = mkForce no;
-    USB_DWC3_GADGET = mkForce no;
-
-    # ttyS0 needs the OF platform binding and the DesignWare 8250 quirk for the
-    # right baud, otherwise the console is garbage.
-    SERIAL_OF_PLATFORM = mkForce yes;
-    SERIAL_8250_DW = mkForce yes;
-
-    # The cavium defconfig ships only the bare netfilter core, too little for the
-    # NixOS firewall or tailscale. Pull in nftables with the xtables compat the
-    # firewall uses, conntrack, NAT and masquerade for routing, and TUN for
-    # tailscale's device.
-    TUN = yes;
-    NF_CONNTRACK = yes;
-    NF_NAT = yes;
-    NETFILTER_XTABLES = yes;
-    NF_TABLES = yes;
-    NF_TABLES_INET = yes;
-    NFT_COMPAT = yes;
-    NFT_CT = yes;
-    NFT_NAT = yes;
-    NFT_MASQ = yes;
-    IP_NF_IPTABLES = yes;
-    IP_NF_FILTER = yes;
-    IP_NF_NAT = yes;
-    IP6_NF_IPTABLES = yes;
-  };
+  frameworkConfig = optionalAttrs cfg.framework (group "framework");
+  bigEndianConfig = optionalAttrs isBigEndian (group "big-endian");
+  octeonConfig = optionalAttrs cfg.octeon (group "octeon");
 
   bunkernel = pkgsKernel.linuxKernel.buildLinux (
     {

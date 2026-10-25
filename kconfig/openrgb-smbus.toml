@@ -1,0 +1,2 @@
+# bunker/0009 defines the symbol but gives it no Kconfig default.
+I2C_NCT6775 = "m"

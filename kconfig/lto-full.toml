@@ -1,0 +1,2 @@
+LTO_CLANG_FULL = "y"
+LTO_CLANG_THIN = "n"

@@ -1,0 +1,1 @@
+FUNCTION_TRACER = "n" # ftrace (stronger than sysctl disable)

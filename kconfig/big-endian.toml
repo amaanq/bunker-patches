@@ -1,0 +1,23 @@
+[powerpc64]
+EFI_ZBOOT             = "n"
+FB_EFI                = "n"
+SYSFB_SIMPLEFB        = "n"
+HOTPLUG_PCI_ACPI      = "n"
+DRM_AMD_ISP           = "n"
+PINCTRL_AMD           = "n"
+KERNEL_ZSTD           = "n"
+NET_SCH_BPF           = "n"
+SCHED_CLASS_EXT       = "n"
+FUNCTION_GRAPH_RETVAL = "n"
+
+[mips64]
+EFI_ZBOOT             = "n"
+FB_EFI                = "n"
+SYSFB_SIMPLEFB        = "n"
+HOTPLUG_PCI_ACPI      = "n"
+DRM_AMD_ISP           = "n"
+PINCTRL_AMD           = "n"
+KERNEL_ZSTD           = "n"
+NET_SCH_BPF           = "n"
+SCHED_CLASS_EXT       = "n"
+FUNCTION_GRAPH_RETVAL = "n"

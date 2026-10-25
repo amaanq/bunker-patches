@@ -1,0 +1,91 @@
+NR_CPUS = "64"
+
+# The board uses BGX, so the legacy MIX and AGL ethernet drivers stay off.
+OCTEON_MGMT_ETHERNET = "n"
+OCTEON_ETHERNET      = "n"
+
+# eth8's RJ45 PHY is an Atheros AR8033, driven by at803x under the Qualcomm
+# phylib. Built in so it binds at probe instead of the Generic PHY.
+QCOM_NET_PHYLIB = "y"
+AT803X_PHY      = "y"
+
+# bcachefs root dependency stack. 7.0 has no in-tree bcachefs to select these,
+# so they are listed by hand, and they are built in rather than modules
+# because the clang/LLD mips64 module loader mis-relocates 64-bit addresses
+# and the initrd needs the crypto to unlock the root before any module loads.
+# CRYPTO_POLY1305 is gone in 7.0, so the chacha20-poly1305 AEAD is what pulls
+# the poly1305 library in.
+CRYPTO_CHACHA20         = "y"
+CRYPTO_CHACHA20POLY1305 = "y"
+CRYPTO_LIB_CHACHA       = "y"
+CRYPTO_LIB_POLY1305     = "y"
+LZ4_COMPRESS            = "y"
+LZ4HC_COMPRESS          = "y"
+XOR_BLOCKS              = "y"
+BLK_DEV_MD              = "m"
+MD_RAID456              = "m"
+
+# raid6_select_algo calls through a function pointer the module loader leaves
+# with garbage top bits, so build raid6 in and skip the boot-time benchmark.
+RAID6_PQ           = "y"
+RAID6_PQ_BENCHMARK = "n"
+
+# The same module fault hits ftrace. recordmcount fails to NOP the -pg/_mcount
+# hooks out of modules, so bcachefs.ko jumps into a stale _mcount. Keep ftrace
+# off to keep -pg out of modules entirely.
+FTRACE          = "n"
+FUNCTION_TRACER = "n"
+
+# 16K pages by default. THP must be off because 16K pushes HPAGE_PMD_ORDER past
+# MAX_PAGE_ORDER on MIPS and that is a build BUG.
+PAGE_SIZE_4KB        = "n"
+PAGE_SIZE_16KB       = "y"
+TRANSPARENT_HUGEPAGE = "n"
+
+# The DWC3 has no ID pin, so dual-role parks in OTG and never powers
+# the port. Force host-only so the USB rootfs stick enumerates.
+USB_DWC3_HOST      = "y"
+USB_DWC3_DUAL_ROLE = "n"
+USB_DWC3_GADGET    = "n"
+
+# ttyS0 needs the OF platform binding and the DesignWare 8250 quirk for the
+# right baud, otherwise the console is garbage.
+SERIAL_OF_PLATFORM = "y"
+SERIAL_8250_DW     = "y"
+
+# The cavium defconfig ships only the bare netfilter core, too little for the
+# NixOS firewall or tailscale. Pull in nftables with the xtables compat the
+# firewall uses, conntrack, NAT and masquerade for routing, and TUN for
+# tailscale's device.
+TUN               = "y"
+NF_CONNTRACK      = "y"
+NF_NAT            = "y"
+NETFILTER_XTABLES = "y"
+NF_TABLES         = "y"
+NF_TABLES_INET    = "y"
+NFT_COMPAT        = "y"
+NFT_CT            = "y"
+NFT_NAT           = "y"
+NFT_MASQ          = "y"
+IP_NF_IPTABLES    = "y"
+IP_NF_FILTER      = "y"
+IP_NF_NAT         = "y"
+IP6_NF_IPTABLES   = "y"
+
+[">=7.0"]
+OCTEON3_ETHERNET       = "y"
+OCTEON_FPA3            = "y"
+OCTEON_BGX_PORT        = "y"
+OCTEON_BGX_NEXUS       = "y"
+OCTEON_COMMON_NEXUS    = "y"
+OCTEON_ETHERNET_COMMON = "y"
+
+[mips64]
+# Octeon III SoC and the PKO3/BGX ethernet driver. CVMSEG needs at least 3
+# lines because PKO3 builds its TX command on scratch line 2 and a smaller
+# scratchpad faults.
+CAVIUM_OCTEON_CVMSEG_SIZE = "3"
+
+# CN63XXP1 is an errata workaround for an old chip revision. It is irrelevant
+# on later chips, and emits a GNU assembler flag clang rejects.
+CAVIUM_CN63XXP1 = "n"

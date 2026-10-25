@@ -1,0 +1,16 @@
+NET_SCH_DEFAULT  = "y"
+DEFAULT_FQ_CODEL = "y"
+
+["<7.1"]
+TCP_CONG_BBR = "y"
+DEFAULT_BBR  = "y"
+
+# 7.0's patch set has BBRv3 too, but bunker picks it only from 7.1
+["7.0"]
+TCP_CONG_BBR3 = "m"
+DEFAULT_BBR3  = "n"
+
+[">=7.1"]
+TCP_CONG_BBR  = "m"
+TCP_CONG_BBR3 = "y"
+DEFAULT_BBR3  = "y"

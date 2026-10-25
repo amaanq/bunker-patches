@@ -1,0 +1,7 @@
+DEBUG_INFO                         = "n"
+DEBUG_INFO_NONE                    = "y"
+DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT = "n"
+DEBUG_INFO_BTF                     = "n"
+NET_SCH_BPF                        = "n"
+SCHED_CLASS_EXT                    = "n"
+MODULE_ALLOW_BTF_MISMATCH          = "n"

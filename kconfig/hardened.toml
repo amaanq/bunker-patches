@@ -1,0 +1,83 @@
+# CFI follows the pinned LLVM kernel stdenv, not the consumer stdenv.
+CFI                     = "y"
+CFI_PERMISSIVE          = "n"
+ZERO_CALL_USED_REGS     = "y"
+SLAB_BUCKETS            = "y" # dedicated slab buckets — prevents cross-cache attacks (KSPP)
+SECURITY_SAFESETID      = "y"
+BUG_ON_DATA_CORRUPTION  = "y" # panic on slab/list corruption
+SECURITY_DMESG_RESTRICT = "y" # restrict dmesg before sysctl runs
+USER_NS_UNPRIVILEGED    = "y" # upstream default n breaks bwrap/rootless
+
+# --- ASLR maximization ---
+RANDOMIZE_KSTACK_OFFSET_DEFAULT = "y" # randomize kernel stack per syscall
+
+# --- Integrity & verified boot ---
+TRUSTED_KEYS                  = "y" # TPM-sealed keys
+ENCRYPTED_KEYS                = "y" # kernel-managed encrypted keys (dm-crypt, IMA)
+FS_VERITY                     = "y" # file-level Merkle tree integrity
+FS_VERITY_BUILTIN_SIGNATURES  = "y" # verify fs-verity against built-in X.509
+DM_VERITY_VERIFY_ROOTHASH_SIG = "y" # signature check on dm-verity root hash
+FS_ENCRYPTION_INLINE_CRYPT    = "y" # hardware crypto offload for fscrypt
+
+# --- Disabled features — attack surface reduction, debug infra, etc. ---
+STRICT_DEVMEM    = "n"
+IO_STRICT_DEVMEM = "n"
+SYSFS_SYSCALL    = "n" # old sysfs() syscall
+KEXEC            = "n" # bypasses secure boot chain
+KEXEC_JUMP       = "n" # kexec hibernation variant
+BOOT_CONFIG      = "n" # extra kernel params via initrd bootconfig
+DEVPORT          = "n" # /dev/port I/O port access
+
+# Unused security modules
+SECURITY_SELINUX = "n" # SELinux (~20k LOC, NixOS uses AppArmor)
+SECURITY_TOMOYO  = "n" # TOMOYO (~10k LOC, unused on NixOS)
+
+# Obsolete crypto
+CRYPTO_USER_API_ENABLE_OBSOLETE = "n" # Gates ANUBIS/KHAZAD/SEED/TEA
+
+# Debug/testing infrastructure
+KCOV                     = "n" # Syzkaller fuzzing infra
+GCOV_KERNEL              = "n" # Kernel code coverage
+FAULT_INJECTION          = "n" # Debug fault injection framework
+KASAN                    = "n" # Kernel Address Sanitizer
+PROVE_LOCKING            = "n" # Lock dependency validator (lockdep)
+LOCK_STAT                = "n" # Lock contention statistics
+NOTIFIER_ERROR_INJECTION = "n" # Error injection for notifier chains
+DEBUG_PAGEALLOC          = "n" # Debug page allocation
+KUNIT                    = "n" # Kernel unit testing framework
+EXT4_DEBUG               = "n" # ext4 debug
+JBD2_DEBUG               = "n" # ext4 journaling debug
+SLUB_DEBUG               = "n" # SLUB allocator debug
+DYNAMIC_DEBUG            = "n" # Runtime pr_debug control
+FUNCTION_GRAPH_TRACER    = "n" # ftrace graph tracer
+STACK_TRACER             = "n" # nixpkgs enables it, and it selects FUNCTION_TRACER
+FUNCTION_PROFILER        = "n" # depends on FUNCTION_TRACER, nixpkgs sets it as a hard yes
+PM_DEBUG                 = "n" # Power management debug
+PM_ADVANCED_DEBUG        = "n" # Advanced PM debug
+PM_SLEEP_DEBUG           = "n" # PM sleep debug
+LATENCYTOP               = "n" # Latency measurement infrastructure
+DEBUG_PREEMPT            = "n" # Preemption debug
+DEBUG_MISC               = "n" # Miscellaneous debug
+GENERIC_IRQ_DEBUGFS      = "n" # IRQ debug filesystem
+HIBERNATION              = "n" # writes unencrypted memory to disk
+
+["<7.2"]
+CRYPTO_FCRYPT = "n" # fcrypt (only for dead AFS/RxRPC)
+
+[x86_64]
+X86_KERNEL_IBT            = "y" # Intel CET indirect branch tracking — hardware CFI complement
+ARCH_MMAP_RND_BITS        = "32" # max ASLR entropy for mmap (default 28)
+ARCH_MMAP_RND_COMPAT_BITS = "16" # max ASLR for 32-bit compat
+X86_IOPL_IOPERM           = "n" # IOPL/IOPERM syscalls
+X86_VSYSCALL_EMULATION    = "n" # legacy vsyscall page
+X86_X32_ABI               = "n" # x32 ABI (exotic, deprecated)
+X86_SGX                   = "n" # Intel SGX enclaves
+ACPI_DEBUG                = "n" # ACPI debug
+X86_MCE_INJECT            = "n" # MCE injection for testing
+
+# Child options of disabled security parents
+X86_SGX_KVM = "n"
+
+[aarch64]
+ARM64_BTI_KERNEL = "y" # branch target identification for kernel code
+ACPI_DEBUG       = "n" # ACPI debug

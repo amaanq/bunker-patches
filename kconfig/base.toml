@@ -1,0 +1,36 @@
+BUNKER                  = "y"
+LOCALVERSION            = "-bunker"
+MODULE_DECOMPRESS       = "y" # in-kernel module decompression
+FW_LOADER_COMPRESS_ZSTD = "y" # zstd firmware compression
+BPF_SYSCALL             = "y"
+BPF_JIT                 = "y"
+PSI                     = "y" # Pressure Stall Information (systemd-oomd)
+MODULE_COMPRESS_ZSTD    = "y"
+MODULE_COMPRESS_XZ      = "n"
+
+["!next"]
+# linux-next renamed it COREBOOT_FIRMWARE and left the old name transitional
+GOOGLE_FIRMWARE = "y"
+
+# linux-next made KVM MMIO unconditional and deleted the symbol
+KVM_MMIO = "y"
+
+["<7.2"]
+# nixpkgs forces all three but 7.2 removed or de-prompted them
+CRYPTO_DRBG_HASH      = "y"
+CRYPTO_DRBG_CTR       = "y"
+RANDOM_KMALLOC_CACHES = "y"
+
+[next]
+COREBOOT_FIRMWARE = "y"
+
+[x86_64]
+MICROCODE = "y"
+
+[aarch64]
+ARM64_64K_PAGES = "y" # 64K pages — 10-15% compilation speedup from TLB coverage
+ARM64_4K_PAGES  = "n"
+
+[powerpc64]
+PPC_64K_PAGES = "y" # 64K pages — native PPC64 page size
+PPC_4K_PAGES  = "n"
