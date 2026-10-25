@@ -329,6 +329,15 @@ let
   # TILE-Gx bypasses the bunkernel machinery.
   tilegxKernelPackage = pkgs.linuxKernel.packagesFor pkgs.linux-tilegx;
 
+  # ddcci and zenpower skip modules_install, so nothing signs them. postFixup runs after the strip
+  # that would drop the signature
+  signInstalledModules = old: {
+    postFixup = (old.postFixup or "") + ''
+      find "$out/lib/modules" -name '*.ko' \
+        -exec ${lib.getExe pkgsKernel.buildPackages.kmodigest} {} \;
+    '';
+  };
+
   # Out-of-tree kernel modules embed KBUILD_OUTPUT (kernel.dev store path)
   # in DWARF debug info.  zstd may store these paths verbatim in literal
   # blocks.  NixOS's modules-closure.sh runs nuke-refs on the compressed
@@ -344,6 +353,9 @@ let
     _: prev:
     {
       kernelModuleMakeFlags = prev.kernelModuleMakeFlags ++ [ "INSTALL_MOD_STRIP=1" ];
+    }
+    // lib.optionalAttrs (prev ? ddcci-driver) {
+      ddcci-driver = prev.ddcci-driver.overrideAttrs signInstalledModules;
     }
     // lib.optionalAttrs (prev ? bcachefs-tools) {
       # bch_bindgen sets `.layout_tests(true)`, which emits static assertions
@@ -381,9 +393,13 @@ let
     # failure.  Decompress, strip debug sections + nuke refs, then
     # recompress — keeps checksums intact for depmod/modprobe.
     // lib.optionalAttrs (prev ? zenpower) {
-      zenpower = prev.zenpower.overrideAttrs (old: {
-        makeFlags = prev.kernelModuleMakeFlags ++ (old.makeFlags or [ ]);
-      });
+      zenpower = prev.zenpower.overrideAttrs (
+        old:
+        {
+          makeFlags = prev.kernelModuleMakeFlags ++ (old.makeFlags or [ ]);
+        }
+        // signInstalledModules old
+      );
     }
     // lib.optionalAttrs (prev ? bcachefs) {
       bcachefs =
