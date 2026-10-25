@@ -1,0 +1,18 @@
+bcachefs: use the kernel crate's system_dfl workqueue like linux-next
+
+linux-next renamed the Rust binding workqueue::system_unbound() to
+system_dfl() to match the C system_dfl_wq, and bcachefs 1.39.7 still
+calls the old name from its in-kernel executor.
+
+diff -ruN a/src/fs/bcachefs/util/async_exec.rs b/src/fs/bcachefs/util/async_exec.rs
+--- a/src/fs/bcachefs/util/async_exec.rs	2026-10-25 16:09:41.478565641 -0400
++++ b/src/fs/bcachefs/util/async_exec.rs	2026-10-25 16:09:41.479621856 -0400
+@@ -185,7 +185,7 @@
+ 
+ #[cfg(kernel)]
+ pub fn system_unbound() -> &'static Queue {
+-    kernel::workqueue::system_unbound()
++    kernel::workqueue::system_dfl()
+ }
+ 
+ // ---- WaitGroup: an async fork-join barrier ----

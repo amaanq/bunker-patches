@@ -392,9 +392,21 @@ let
             patches =
               (old.patches or [ ])
               ++ [ (patchFile ./patches/userspace/bcachefs-btree-cache-dirty-throttle-half.patch) ]
-              ++ lib.optional (cfg.version == "next") (
-                patchFile ./patches/userspace/bcachefs-const-mnt-idmap.patch
-              );
+              ++ lib.optionals (cfg.version == "next") [
+                (patchFile ./patches/userspace/bcachefs-const-mnt-idmap.patch)
+                (patchFile ./patches/userspace/bcachefs-rust-system-dfl.patch)
+              ];
+            # bcachefs links its Rust CUs first under LTO, and pahole 1.32 drops the whole merged
+            # CU when --lang_exclude=rust matches the first one, leaving the module with no BTF
+            makeFlags = old.makeFlags ++ [
+              "PAHOLE=${
+                pkgsKernel.buildPackages.pahole.overrideAttrs (pahole: {
+                  patches = (pahole.patches or [ ]) ++ [
+                    (patchFile ./patches/userspace/pahole-merged-cu-language.patch)
+                  ];
+                })
+              }/bin/pahole"
+            ];
           });
         in
         pkgsKernel.runCommand "${bcachefs.name}-stripped"

@@ -1,0 +1,29 @@
+dwarf_loader: take a merged CU's language from its first kept CU
+
+With LTO every CU merges into one, which took the language of the first
+CU even when --lang_exclude dropped it. pahole_stealer then filters the
+whole merged CU, so a module whose first CU is Rust gets no BTF at all.
+
+--- a/dwarf_loader.c	2026-10-25 16:23:47.161758313 -0400
++++ b/dwarf_loader.c	2026-10-25 16:23:47.171833499 -0400
+@@ -4991,6 +4991,7 @@
+ 	struct dwarf_cu *dcu = NULL;
+ 	Dwarf_Off off = 0, noff;
+ 	struct cu *cu = NULL;
++	bool language_set = false;
+ 	size_t cuhl;
+ 
+ 	while (dwarf_nextcu(dw, off, &noff, &cuhl, NULL, &pointer_size,
+@@ -5116,6 +5117,12 @@
+ 				filtered = conf->early_cu_filter(&unmerged_cu) == NULL;
+ 			}
+ 
++			if (!filtered && !language_set) {
++				cu->language = attr_numeric(cu_die, DW_AT_language);
++				cu->producer_clang = attr_producer_clang(cu_die);
++				language_set = true;
++			}
++
+ 			if (!filtered && die__process_unit(&child, cu, conf, 0) != 0)
+ 				goto out_abort;
+ 		}
