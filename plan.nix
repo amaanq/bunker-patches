@@ -189,6 +189,7 @@ let
           "bunker/0002"
           "bunker/0010" # rust: backlight device abstraction
           "clear/0011" # PCI PME interval
+          "bunker/0024" # panel orientation quirks for GPD Pocket 3 and 4, pending on dri-devel
         ];
         rustBtf = [
           "bunker/0021" # rust: allow BTF with LTO

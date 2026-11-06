@@ -1,0 +1,54 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: David Santamaría Rogado <howl.nsp@gmail.com>
+Date: Fri, 27 Mar 2026 20:50:23 +0100
+Subject: [PATCH] drm: panel-orientation-quirks: Add quirks for BNCF NewBook
+ 11, GPD Pocket 3 and 4
+
+The BNCF NewBook 11 and GPD Pocket 3 both use a 1200x1920 portrait LCD
+panel. The GPD Pocket 4 uses a 1600x2560 portrait LCD panel.
+
+Add DMI matches to correctly rotate these panels.
+
+Closes: https://bugzilla.redhat.com/show_bug.cgi?id=2448915
+Signed-off-by: David Santamaría Rogado <howl.nsp@gmail.com>
+Signed-off-by: Hans de Goede <johannes.goede@oss.qualcomm.com>
+---
+ drivers/gpu/drm/drm_panel_orientation_quirks.c | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/drivers/gpu/drm/drm_panel_orientation_quirks.c b/drivers/gpu/drm/drm_panel_orientation_quirks.c
+index 3a218fb592ce..693de83ee211 100644
+--- a/drivers/gpu/drm/drm_panel_orientation_quirks.c
++++ b/drivers/gpu/drm/drm_panel_orientation_quirks.c
+@@ -269,6 +269,12 @@ static const struct dmi_system_id orientation_data[] = {
+ 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Loki Zero"),
+ 		},
+ 		.driver_data = (void *)&lcd1080x1920_leftside_up,
++	}, {	/* BNCF NewBook 11 */
++		.matches = {
++		  DMI_EXACT_MATCH(DMI_SYS_VENDOR, "BNCF"),
++		  DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "NewBook11"),
++		},
++		.driver_data = (void *)&lcd1200x1920_rightside_up,
+ 	}, {	/* Chuwi HiBook (CWI514) */
+ 		.matches = {
+ 			DMI_MATCH(DMI_BOARD_VENDOR, "Hampoo"),
+@@ -330,6 +336,18 @@ static const struct dmi_system_id orientation_data[] = {
+ 		  DMI_EXACT_MATCH(DMI_BOARD_NAME, "Default string"),
+ 		},
+ 		.driver_data = (void *)&gpd_pocket2,
++	}, {	/* GPD Pocket 3 */
++		.matches = {
++		  DMI_EXACT_MATCH(DMI_SYS_VENDOR, "GPD"),
++		  DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "G1621-02"),
++		},
++		.driver_data = (void *)&lcd1200x1920_rightside_up,
++	}, {	/* GPD Pocket 4 */
++		.matches = {
++		  DMI_EXACT_MATCH(DMI_SYS_VENDOR, "GPD"),
++		  DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "G1628-04"),
++		},
++		.driver_data = (void *)&lcd1600x2560_rightside_up,
+ 	}, {	/* GPD Win (same note on DMI match as GPD Pocket) */
+ 		.matches = {
+ 		  DMI_EXACT_MATCH(DMI_BOARD_VENDOR, "AMI Corporation"),
