@@ -6,6 +6,7 @@ FW_LOADER_COMPRESS_ZSTD = "y" # zstd firmware compression
 BPF_SYSCALL             = "y"
 BPF_JIT                 = "y"
 PSI                     = "y" # Pressure Stall Information (systemd-oomd)
+ANON_VMA_NAME           = "y" # prctl names for anonymous mappings in /proc/pid/maps
 MODULE_COMPRESS_ZSTD    = "y"
 MODULE_COMPRESS_XZ      = "n"
 
