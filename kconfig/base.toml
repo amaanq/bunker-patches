@@ -9,11 +9,11 @@ PSI                     = "y" # Pressure Stall Information (systemd-oomd)
 MODULE_COMPRESS_ZSTD    = "y"
 MODULE_COMPRESS_XZ      = "n"
 
-["!next"]
-# linux-next renamed it COREBOOT_FIRMWARE and left the old name transitional
+["<7.4"]
+# 7.4 renamed it COREBOOT_FIRMWARE and left the old name transitional
 GOOGLE_FIRMWARE = "y"
 
-# linux-next made KVM MMIO unconditional and deleted the symbol
+# 7.4 made KVM MMIO unconditional and deleted the symbol
 KVM_MMIO = "y"
 
 ["<7.2"]
@@ -22,7 +22,7 @@ CRYPTO_DRBG_HASH      = "y"
 CRYPTO_DRBG_CTR       = "y"
 RANDOM_KMALLOC_CACHES = "y"
 
-[next]
+[">=7.4"]
 COREBOOT_FIRMWARE = "y"
 
 [x86_64]

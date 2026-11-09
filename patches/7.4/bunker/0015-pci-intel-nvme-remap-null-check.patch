@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Sat, 26 Apr 2026 00:00:00 +0000
+Subject: [PATCH] PCI: intel-nvme-remap: NULL-check devm_kzalloc
+
+zen/0002 imports the Intel remapped-NVMe controller driver. Its probe
+calls devm_kzalloc and immediately dereferences the result through
+nrdev->sysdata.domain etc. without checking for an OOM failure. With
+GFP_KERNEL the allocation is rarely going to fail in practice, but a
+NULL-deref under memory pressure is a stupid way to lose the boot path
+on a system whose only block device is the remapped NVMe behind this
+controller.
+
+---
+ drivers/pci/controller/intel-nvme-remap.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/pci/controller/intel-nvme-remap.c b/drivers/pci/controller/intel-nvme-remap.c
+--- a/drivers/pci/controller/intel-nvme-remap.c
++++ b/drivers/pci/controller/intel-nvme-remap.c
+@@ -524,6 +524,8 @@ static int nvme_remap_probe(struct pci_dev *dev,
+ 	struct pci_dev *child;
+
+ 	nrdev = devm_kzalloc(&dev->dev, sizeof(*nrdev), GFP_KERNEL);
++	if (!nrdev)
++		return -ENOMEM;
+ 	nrdev->sysdata.domain = find_free_domain();
+ 	nrdev->sysdata.nvme_remap_dev = dev;
+ 	nrdev->dev = dev;
+--
+2.52.0

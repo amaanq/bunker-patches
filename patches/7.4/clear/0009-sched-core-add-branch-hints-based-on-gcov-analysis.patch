@@ -1,0 +1,32 @@
+From eae943f2b22979ae1b378d72f9b94085577f5800 Mon Sep 17 00:00:00 2001
+From: Colin Ian King <colin.i.king@intel.com>
+Date: Mon, 17 Mar 2025 12:03:19 +0000
+Subject: [PATCH 177/190] sched/core: add branch hints based on gcov analysis
+
+Add likely/unlikely branch hints to hot paths in the scheduler core
+based on gcov coverage analysis. These annotations help the compiler
+generate better branch prediction code.
+
+Signed-off-by: Colin Ian King <colin.i.king@intel.com>
+---
+ kernel/sched/core.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/kernel/sched/core.c b/kernel/sched/core.c
+--- a/kernel/sched/core.c
++++ b/kernel/sched/core.c
+@@ -676 +676 @@ void raw_spin_rq_lock_nested(struct rq *
+-	if (sched_core_disabled()) {
++	if (likely(sched_core_disabled())) {
+@@ -888 +888 @@ void update_rq_clock(struct rq *rq)
+-	if (delta < 0)
++	if (unlikely(delta < 0))
+@@ -6307 +6307 @@ pick_next_task(struct rq *rq, struct rq_
+-	if (!sched_core_enabled(rq))
++	if (likely(!sched_core_enabled(rq)))
+@@ -7861 +7861 @@ int __sched __cond_resched(void)
+-	if (should_resched(0) && !irqs_disabled()) {
++	if (unlikely(should_resched(0) && !irqs_disabled())) {
+-- 
+2.47.1
+

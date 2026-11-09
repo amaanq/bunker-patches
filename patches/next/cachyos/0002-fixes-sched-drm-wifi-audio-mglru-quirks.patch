@@ -6,9 +6,10 @@ Subject: [PATCH] fixes
 Signed-off-by: Peter Jung <admin@ptr1337.dev>
 ---
 diff --git a/arch/arm/include/asm/mmu_context.h b/arch/arm/include/asm/mmu_context.h
+index db2cb06aa8cf5e..bebde469f81ae6 100644
 --- a/arch/arm/include/asm/mmu_context.h
 +++ b/arch/arm/include/asm/mmu_context.h
-@@ -80,7 +80,7 @@
+@@ -80,7 +80,7 @@ static inline void check_and_switch_context(struct mm_struct *mm,
  #ifndef MODULE
  #define finish_arch_post_lock_switch \
  	finish_arch_post_lock_switch
@@ -18,6 +19,7 @@ diff --git a/arch/arm/include/asm/mmu_context.h b/arch/arm/include/asm/mmu_conte
  	struct mm_struct *mm = current->mm;
  
 diff --git a/arch/riscv/include/asm/sync_core.h b/arch/riscv/include/asm/sync_core.h
+index 9153016da8f14b..2fe6b7fe6b12d0 100644
 --- a/arch/riscv/include/asm/sync_core.h
 +++ b/arch/riscv/include/asm/sync_core.h
 @@ -6,7 +6,7 @@
@@ -30,9 +32,10 @@ diff --git a/arch/riscv/include/asm/sync_core.h b/arch/riscv/include/asm/sync_co
  	asm volatile ("fence.i" ::: "memory");
  }
 diff --git a/arch/s390/include/asm/mmu_context.h b/arch/s390/include/asm/mmu_context.h
+index bd1ef5e2d2ebf8..95d03be2ce4561 100644
 --- a/arch/s390/include/asm/mmu_context.h
 +++ b/arch/s390/include/asm/mmu_context.h
-@@ -93,7 +93,7 @@
+@@ -93,7 +93,7 @@ static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
  }
  
  #define finish_arch_post_lock_switch finish_arch_post_lock_switch
@@ -42,9 +45,10 @@ diff --git a/arch/s390/include/asm/mmu_context.h b/arch/s390/include/asm/mmu_con
  	struct task_struct *tsk = current;
  	struct mm_struct *mm = tsk->mm;
 diff --git a/arch/sparc/include/asm/mmu_context_64.h b/arch/sparc/include/asm/mmu_context_64.h
+index 78bbacc14d2d9b..d1967214ef25f9 100644
 --- a/arch/sparc/include/asm/mmu_context_64.h
 +++ b/arch/sparc/include/asm/mmu_context_64.h
-@@ -160,7 +160,7 @@
+@@ -160,7 +160,7 @@ static inline void arch_start_context_switch(struct task_struct *prev)
  }
  
  #define finish_arch_post_lock_switch	finish_arch_post_lock_switch
@@ -54,9 +58,10 @@ diff --git a/arch/sparc/include/asm/mmu_context_64.h b/arch/sparc/include/asm/mm
  	/* Restore the state of MCDPER register for the new process
  	 * just switched to.
 diff --git a/arch/x86/include/asm/sync_core.h b/arch/x86/include/asm/sync_core.h
+index df22113db9cd79..3b0ed46dfc233d 100644
 --- a/arch/x86/include/asm/sync_core.h
 +++ b/arch/x86/include/asm/sync_core.h
-@@ -93,7 +93,7 @@
+@@ -93,7 +93,7 @@ static __always_inline void sync_core(void)
   * to user-mode. x86 implements return to user-space through sysexit,
   * sysrel, and sysretq, which are not core serializing.
   */
@@ -65,10 +70,33 @@ diff --git a/arch/x86/include/asm/sync_core.h b/arch/x86/include/asm/sync_core.h
  {
  	/* With PTI, we unconditionally serialize before running user code. */
  	if (cpu_feature_enabled(X86_FEATURE_PTI))
+diff --git a/drivers/bluetooth/btusb_main.c b/drivers/bluetooth/btusb_main.c
+index 92a78a7e603967..4a554af7a8c903 100644
+--- a/drivers/bluetooth/btusb_main.c
++++ b/drivers/bluetooth/btusb_main.c
+@@ -603,6 +603,8 @@ static const struct usb_device_id quirks_table[] = {
+ 						     BTUSB_WIDEBAND_SPEECH },
+ 	{ USB_DEVICE(0x13d3, 0x3612), .driver_info = BTUSB_REALTEK |
+ 						     BTUSB_WIDEBAND_SPEECH },
++	{ USB_DEVICE(0x0489, 0xe112), .driver_info = BTUSB_REALTEK |
++						     BTUSB_WIDEBAND_SPEECH },
+ 	{ USB_DEVICE(0x0489, 0xe122), .driver_info = BTUSB_REALTEK |
+ 						     BTUSB_WIDEBAND_SPEECH },
+ 
+@@ -729,6 +731,8 @@ static const struct usb_device_id quirks_table[] = {
+ 	{ USB_DEVICE(0x13d3, 0x3596), .driver_info = BTUSB_MEDIATEK |
+ 						     BTUSB_WIDEBAND_SPEECH },
+ 	/* MediaTek MT7922 Bluetooth devices */
++	{ USB_DEVICE(0x13d3, 0x3625), .driver_info = BTUSB_MEDIATEK |
++						     BTUSB_WIDEBAND_SPEECH },
+ 	{ USB_DEVICE(0x13d3, 0x3585), .driver_info = BTUSB_MEDIATEK |
+ 						     BTUSB_WIDEBAND_SPEECH },
+ 	{ USB_DEVICE(0x13d3, 0x3610), .driver_info = BTUSB_MEDIATEK |
 diff --git a/drivers/gpu/drm/gud/gud_connector.c b/drivers/gpu/drm/gud/gud_connector.c
+index 8141c3a1e30ad9..5c0065c876a77f 100644
 --- a/drivers/gpu/drm/gud/gud_connector.c
 +++ b/drivers/gpu/drm/gud/gud_connector.c
-@@ -399,11 +399,8 @@
+@@ -399,11 +399,8 @@ static int gud_connector_add_tv_mode(struct gud_device *gdrm, struct drm_connect
  	for (i = 0; i < num_modes; i++) {
  		char *mode = &buf[i * GUD_CONNECTOR_TV_MODE_NAME_LEN];
  
@@ -83,6 +111,7 @@ diff --git a/drivers/gpu/drm/gud/gud_connector.c b/drivers/gpu/drm/gud/gud_conne
  	}
  
 diff --git a/drivers/gpu/drm/i915/gt/intel_rc6.c b/drivers/gpu/drm/i915/gt/intel_rc6.c
+index e91e5cdca26ca6..a0361f82361027 100644
 --- a/drivers/gpu/drm/i915/gt/intel_rc6.c
 +++ b/drivers/gpu/drm/i915/gt/intel_rc6.c
 @@ -2,9 +2,9 @@
@@ -96,7 +125,7 @@ diff --git a/drivers/gpu/drm/i915/gt/intel_rc6.c b/drivers/gpu/drm/i915/gt/intel
  
  #include <drm/drm_print.h>
  #include <drm/intel/intel_pcode_regs.h>
-@@ -499,6 +499,17 @@
+@@ -499,6 +499,17 @@ static bool rc6_supported(struct intel_rc6 *rc6)
  	if (!HAS_RC6(i915))
  		return false;
  
@@ -114,10 +143,76 @@ diff --git a/drivers/gpu/drm/i915/gt/intel_rc6.c b/drivers/gpu/drm/i915/gt/intel
  	if (intel_vgpu_active(i915))
  		return false;
  
+diff --git a/drivers/hid/hid-logitech-hidpp.c b/drivers/hid/hid-logitech-hidpp.c
+index 27d83b8bbaaf31..7ff9217cecf0c6 100644
+--- a/drivers/hid/hid-logitech-hidpp.c
++++ b/drivers/hid/hid-logitech-hidpp.c
+@@ -214,6 +214,8 @@ struct hidpp_device {
+ 	int hires_wheel_multiplier;
+ 	u8 hires_wheel_feature_index;
+ 
++	struct hidpp_ff_private_data *ff_config;
++
+ 	bool connected_once;
+ };
+ 
+@@ -4093,19 +4095,16 @@ static int hidpp_input_configured(struct hid_device *hdev, struct hid_input *hid
+ 		return 0;
+ 
+ 	if (hidpp->quirks & HIDPP_QUIRK_CLASS_G920) {
+-		struct hidpp_ff_private_data data;
+-
+ 		if (!list_is_first(&hidinput->list, &hdev->inputs))
+ 			return 0;
+ 
+-		ret = g920_get_config(hidpp, &data);
+-		if (!ret)
+-			ret = hidpp_ff_init(hidpp, &data);
+-
+-		if (ret) {
+-			hid_warn(hidpp->hid_dev,
+-				 "Unable to initialize force feedback support, errno %d\n",
+-				 ret);
++		/* The config was read in probe(), IO is stopped here */
++		if (hidpp->ff_config) {
++			ret = hidpp_ff_init(hidpp, hidpp->ff_config);
++			if (ret)
++				hid_warn(hidpp->hid_dev,
++					 "Unable to initialize force feedback support, errno %d\n",
++					 ret);
+ 		}
+ 	}
+ 
+@@ -4764,6 +4763,24 @@ static int hidpp_probe(struct hid_device *hdev, const struct hid_device_id *id)
+ 	if (hidpp->quirks & HIDPP_QUIRK_DELAYED_INIT)
+ 		connect_mask &= ~HID_CONNECT_HIDINPUT;
+ 
++	/*
++	 * Force feedback is set up from .input_configured(), which runs from
++	 * hid_connect() with IO stopped, so the device's replies cannot be
++	 * received there. Read the config while IO is still enabled.
++	 */
++	if (hidpp->quirks & HIDPP_QUIRK_CLASS_G920) {
++		struct hidpp_ff_private_data *data;
++
++		data = devm_kzalloc(&hdev->dev, sizeof(*data), GFP_KERNEL);
++		ret = data ? g920_get_config(hidpp, data) : -ENOMEM;
++		if (ret)
++			hid_warn(hdev,
++				 "Unable to initialize force feedback support, errno %d\n",
++				 ret);
++		else
++			hidpp->ff_config = data;
++	}
++
+ 	/* Now export the actual inputs and hidraw nodes to the world */
+ 	hid_device_io_stop(hdev);
+ 	ret = hid_connect(hdev, connect_mask);
 diff --git a/drivers/net/wireless/intel/iwlwifi/mld/mac80211.c b/drivers/net/wireless/intel/iwlwifi/mld/mac80211.c
+index e05bdbd3e1a9a6..1742cab4743a3f 100644
 --- a/drivers/net/wireless/intel/iwlwifi/mld/mac80211.c
 +++ b/drivers/net/wireless/intel/iwlwifi/mld/mac80211.c
-@@ -520,6 +520,10 @@
+@@ -520,6 +520,10 @@ iwl_mld_mac80211_tx(struct ieee80211_hw *hw,
  	u32 link_id = u32_get_bits(info->control.flags,
  				   IEEE80211_TX_CTRL_MLO_LINK);
  
@@ -129,9 +224,10 @@ diff --git a/drivers/net/wireless/intel/iwlwifi/mld/mac80211.c b/drivers/net/wir
  	 * so the FW can't translate the MLD addr to the link addr. Do it here
  	 */
 diff --git a/drivers/net/wireless/intel/iwlwifi/mld/tx.c b/drivers/net/wireless/intel/iwlwifi/mld/tx.c
+index 44aa317b8e7d3c..d1efcafe75178b 100644
 --- a/drivers/net/wireless/intel/iwlwifi/mld/tx.c
 +++ b/drivers/net/wireless/intel/iwlwifi/mld/tx.c
-@@ -987,6 +987,9 @@
+@@ -1118,6 +1118,9 @@ void iwl_mld_tx_from_txq(struct iwl_mld *mld, struct ieee80211_txq *txq)
  	struct sk_buff *skb = NULL;
  	u8 zero_addr[ETH_ALEN] = {};
  
@@ -142,9 +238,10 @@ diff --git a/drivers/net/wireless/intel/iwlwifi/mld/tx.c b/drivers/net/wireless/
  	 * Don't transmit during firmware restart. The firmware is dead,
  	 * so iwl_trans_tx() would return -EIO for each frame. Avoid the
 diff --git a/drivers/usb/core/message.c b/drivers/usb/core/message.c
+index a738d03c23eacc..5134573ac88951 100644
 --- a/drivers/usb/core/message.c
 +++ b/drivers/usb/core/message.c
-@@ -1052,6 +1052,25 @@
+@@ -1052,6 +1052,25 @@ int usb_string(struct usb_device *dev, int index, char *buf, size_t size)
  			UTF16_LITTLE_ENDIAN, buf, size);
  	buf[err] = 0;
  
@@ -171,9 +268,10 @@ diff --git a/drivers/usb/core/message.c b/drivers/usb/core/message.c
  		dev_dbg(&dev->dev,
  			"wrong descriptor type %02x for string %d (\"%s\")\n",
 diff --git a/include/linux/perf_event.h b/include/linux/perf_event.h
+index eb3f7bab498ca9..64c29a90034bba 100644
 --- a/include/linux/perf_event.h
 +++ b/include/linux/perf_event.h
-@@ -1638,7 +1638,7 @@
+@@ -1639,7 +1639,7 @@ static inline void perf_event_task_migrate(struct task_struct *task)
  		task->sched_migrated = 1;
  }
  
@@ -183,9 +281,10 @@ diff --git a/include/linux/perf_event.h b/include/linux/perf_event.h
  {
  	if (static_branch_unlikely(&perf_sched_events))
 diff --git a/include/linux/sched/mm.h b/include/linux/sched/mm.h
+index d7c6a942aa7e02..99d555f26b614d 100644
 --- a/include/linux/sched/mm.h
 +++ b/include/linux/sched/mm.h
-@@ -32,7 +32,7 @@
+@@ -32,7 +32,7 @@ extern struct mm_struct *mm_alloc(void);
   * See also <Documentation/mm/active_mm.rst> for an in-depth explanation
   * of &mm_struct.mm_count vs &mm_struct.mm_users.
   */
@@ -194,7 +293,7 @@ diff --git a/include/linux/sched/mm.h b/include/linux/sched/mm.h
  {
  	atomic_inc(&mm->mm_count);
  }
-@@ -44,7 +44,7 @@
+@@ -44,7 +44,7 @@ static inline void smp_mb__after_mmgrab(void)
  
  extern void __mmdrop(struct mm_struct *mm);
  
@@ -203,7 +302,7 @@ diff --git a/include/linux/sched/mm.h b/include/linux/sched/mm.h
  {
  	/*
  	 * The implicit full barrier implied by atomic_dec_and_test() is
-@@ -71,27 +71,27 @@
+@@ -71,27 +71,27 @@ static inline void __mmdrop_delayed(struct rcu_head *rhp)
   * Invoked from finish_task_switch(). Delegates the heavy lifting on RT
   * kernels via RCU.
   */
@@ -235,7 +334,7 @@ diff --git a/include/linux/sched/mm.h b/include/linux/sched/mm.h
  {
  	if (IS_ENABLED(CONFIG_MMU_LAZY_TLB_REFCOUNT)) {
  		mmdrop(mm);
-@@ -104,7 +104,7 @@
+@@ -104,7 +104,7 @@ static inline void mmdrop_lazy_tlb(struct mm_struct *mm)
  	}
  }
  
@@ -244,7 +343,7 @@ diff --git a/include/linux/sched/mm.h b/include/linux/sched/mm.h
  {
  	if (IS_ENABLED(CONFIG_MMU_LAZY_TLB_REFCOUNT))
  		mmdrop_sched(mm);
-@@ -128,12 +128,12 @@
+@@ -128,12 +128,12 @@ static inline void mmdrop_lazy_tlb_sched(struct mm_struct *mm)
   * See also <Documentation/mm/active_mm.rst> for an in-depth explanation
   * of &mm_struct.mm_count vs &mm_struct.mm_users.
   */
@@ -259,7 +358,7 @@ diff --git a/include/linux/sched/mm.h b/include/linux/sched/mm.h
  {
  	return atomic_inc_not_zero(&mm->mm_users);
  }
-@@ -531,7 +531,7 @@
+@@ -531,7 +531,7 @@ enum {
  #include <asm/membarrier.h>
  #endif
  
@@ -269,9 +368,10 @@ diff --git a/include/linux/sched/mm.h b/include/linux/sched/mm.h
  	/*
  	 * The atomic_read() below prevents CSE. The following should
 diff --git a/include/linux/tick.h b/include/linux/tick.h
+index b121c5d53e308c..ea7002ad7d02e3 100644
 --- a/include/linux/tick.h
 +++ b/include/linux/tick.h
-@@ -172,7 +172,7 @@
+@@ -172,7 +172,7 @@ extern cpumask_var_t tick_nohz_full_mask;
  #ifdef CONFIG_NO_HZ_FULL
  extern bool tick_nohz_full_running;
  
@@ -280,7 +380,7 @@ diff --git a/include/linux/tick.h b/include/linux/tick.h
  {
  	if (!context_tracking_enabled())
  		return false;
-@@ -296,7 +296,7 @@
+@@ -296,7 +296,7 @@ static inline void __tick_nohz_task_switch(void) { }
  static inline void tick_nohz_full_setup(cpumask_var_t cpumask) { }
  #endif
  
@@ -290,9 +390,10 @@ diff --git a/include/linux/tick.h b/include/linux/tick.h
  	if (tick_nohz_full_enabled())
  		__tick_nohz_task_switch();
 diff --git a/include/linux/vtime.h b/include/linux/vtime.h
+index 82825e7754993f..ce83fc74387d11 100644
 --- a/include/linux/vtime.h
 +++ b/include/linux/vtime.h
-@@ -89,24 +89,24 @@
+@@ -89,24 +89,24 @@ static __always_inline void vtime_account_guest_exit(void)
   * For now vtime state is tied to context tracking. We might want to decouple
   * those later if necessary.
   */
@@ -322,9 +423,10 @@ diff --git a/include/linux/vtime.h b/include/linux/vtime.h
  	if (vtime_accounting_enabled_this_cpu())
  		vtime_task_switch_generic(prev);
 diff --git a/kernel/sched/core.c b/kernel/sched/core.c
+index 04b62c16fa8ca0..85589dd35e7bbc 100644
 --- a/kernel/sched/core.c
 +++ b/kernel/sched/core.c
-@@ -5145,7 +5145,7 @@
+@@ -5147,7 +5147,7 @@ static inline void prepare_task(struct task_struct *next)
  	WRITE_ONCE(next->on_cpu, 1);
  }
  
@@ -333,7 +435,7 @@ diff --git a/kernel/sched/core.c b/kernel/sched/core.c
  {
  	/*
  	 * This must be the very last reference to @prev from this CPU. After
-@@ -5189,7 +5189,7 @@
+@@ -5191,7 +5191,7 @@ static void zap_balance_callbacks(struct rq *rq)
  	rq->balance_callback = found ? &balance_push_callback : NULL;
  }
  
@@ -342,7 +444,7 @@ diff --git a/kernel/sched/core.c b/kernel/sched/core.c
  {
  	void (*func)(struct rq *rq);
  	struct balance_callback *next;
-@@ -5224,7 +5224,7 @@
+@@ -5226,7 +5226,7 @@ struct balance_callback balance_push_callback = {
  	.func = balance_push,
  };
  
@@ -351,7 +453,7 @@ diff --git a/kernel/sched/core.c b/kernel/sched/core.c
  __splice_balance_callbacks(struct rq *rq, bool split)
  {
  	struct balance_callback *head = rq->balance_callback;
-@@ -5298,7 +5298,7 @@
+@@ -5300,7 +5300,7 @@ prepare_lock_switch(struct rq *rq, struct task_struct *next, struct rq_flags *rf
  	__acquire(__rq_lockp(this_rq()));
  }
  
@@ -360,7 +462,7 @@ diff --git a/kernel/sched/core.c b/kernel/sched/core.c
  	__releases(__rq_lockp(rq))
  {
  	/*
-@@ -5332,7 +5332,7 @@
+@@ -5334,7 +5334,7 @@ static inline void kmap_local_sched_out(void)
  #endif
  }
  
@@ -369,7 +471,7 @@ diff --git a/kernel/sched/core.c b/kernel/sched/core.c
  {
  #ifdef CONFIG_KMAP_LOCAL
  	if (unlikely(current->kmap_ctrl.idx))
-@@ -5386,7 +5386,7 @@
+@@ -5388,7 +5388,7 @@ prepare_task_switch(struct rq *rq, struct task_struct *prev,
   * past. 'prev == current' is still correct but we need to recalculate this_rq
   * because prev may have moved to another CPU.
   */
@@ -379,9 +481,10 @@ diff --git a/kernel/sched/core.c b/kernel/sched/core.c
  {
  	struct rq *rq = this_rq();
 diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
+index cfc982205b98c6..71d69c200fe9ce 100644
 --- a/kernel/sched/fair.c
 +++ b/kernel/sched/fair.c
-@@ -13785,12 +13785,15 @@
+@@ -13806,12 +13806,15 @@ static int sched_balance_rq(int this_cpu, struct rq *this_rq,
  		 * still unbalanced. ld_moved simply stays zero, so it is
  		 * correctly treated as an imbalance.
  		 */
@@ -400,9 +503,10 @@ diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
  		 * cur_ld_moved - load moved in current iteration
  		 * ld_moved     - cumulative load moved across iterations
 diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
+index 6c7c5633524a3b..6a9a29615c46d6 100644
 --- a/kernel/sched/sched.h
 +++ b/kernel/sched/sched.h
-@@ -1489,12 +1489,12 @@
+@@ -1503,12 +1503,12 @@ static inline struct cpumask *sched_group_span(struct sched_group *sg);
  
  DECLARE_STATIC_KEY_FALSE(__sched_core_enabled);
  
@@ -417,7 +521,7 @@ diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
  {
  	return !static_branch_unlikely(&__sched_core_enabled);
  }
-@@ -1503,7 +1503,7 @@
+@@ -1517,7 +1517,7 @@ static inline bool sched_core_disabled(void)
   * Be careful with this function; not for general use. The return value isn't
   * stable unless you actually hold a relevant rq->__lock.
   */
@@ -426,7 +530,7 @@ diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
  {
  	if (sched_core_enabled(rq))
  		return &rq->core->__lock;
-@@ -1511,7 +1511,7 @@
+@@ -1525,7 +1525,7 @@ static inline raw_spinlock_t *rq_lockp(struct rq *rq)
  	return &rq->__lock;
  }
  
@@ -435,7 +539,7 @@ diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
  	__returns_ctx_lock(rq_lockp(rq)) /* alias them */
  {
  	if (rq->core_enabled)
-@@ -1614,12 +1614,12 @@
+@@ -1628,12 +1628,12 @@ static inline bool sched_core_disabled(void)
  	return true;
  }
  
@@ -450,7 +554,7 @@ diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
  	__returns_ctx_lock(rq_lockp(rq)) /* alias them */
  {
  	return &rq->__lock;
-@@ -1679,33 +1679,33 @@
+@@ -1693,33 +1693,33 @@ extern void raw_spin_rq_lock_nested(struct rq *rq, int subclass)
  extern bool raw_spin_rq_trylock(struct rq *rq)
  	__cond_acquires(true, __rq_lockp(rq));
  
@@ -489,7 +593,7 @@ diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
  	__acquires(__rq_lockp(rq))
  {
  	unsigned long flags;
-@@ -1716,7 +1716,7 @@
+@@ -1730,7 +1730,7 @@ static inline unsigned long _raw_spin_rq_lock_irqsave(struct rq *rq)
  	return flags;
  }
  
@@ -499,9 +603,10 @@ diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
  {
  	raw_spin_rq_unlock(rq);
 diff --git a/sound/soc/intel/boards/sof_sdw.c b/sound/soc/intel/boards/sof_sdw.c
+index 72fe013fffe868..60b4d868a00afe 100644
 --- a/sound/soc/intel/boards/sof_sdw.c
 +++ b/sound/soc/intel/boards/sof_sdw.c
-@@ -845,6 +845,15 @@
+@@ -845,6 +845,15 @@ static const struct dmi_system_id sof_sdw_quirk_table[] = {
  		},
  		.driver_data = (void *)(SOC_SDW_PCH_DMIC),
  	},

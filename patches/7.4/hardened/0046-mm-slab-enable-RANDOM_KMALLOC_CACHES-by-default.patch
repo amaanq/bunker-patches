@@ -1,0 +1,23 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Levente Polyak <levente@leventepolyak.net>
+Date: Tue, 12 Dec 2023 18:35:05 +0100
+Subject: [PATCH 046/101] mm/slab: enable RANDOM_KMALLOC_CACHES by default
+
+---
+ mm/Kconfig | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/mm/Kconfig b/mm/Kconfig
+index 71863bf0554ea..708a20205499d 100644
+--- a/mm/Kconfig
++++ b/mm/Kconfig
+@@ -248,7 +248,7 @@ config SLUB_STATS
+ config KMALLOC_PARTITION_CACHES
+ 	depends on !SLUB_TINY
+ 	bool "Partitioned slab caches for normal kmalloc"
+-	default RANDOM_KMALLOC_CACHES
++	default y
+ 	help
+ 	  A hardening feature that creates multiple isolated copies of slab
+ 	  caches for normal kmalloc allocations. This makes it more difficult
+

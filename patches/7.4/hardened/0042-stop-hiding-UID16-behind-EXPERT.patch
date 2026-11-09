@@ -1,0 +1,23 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Levente Polyak <levente@leventepolyak.net>
+Date: Tue, 22 Dec 2020 23:40:09 +0100
+Subject: [PATCH 042/101] stop hiding UID16 behind EXPERT
+
+---
+ init/Kconfig | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/init/Kconfig b/init/Kconfig
+index 7198a85f5b980..4155132a358f1 100644
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -1757,7 +1757,7 @@ menuconfig EXPERT
+ 	  Only use this if you really know what you are doing.
+ 
+ config UID16
+-	bool "Enable 16-bit UID system calls" if EXPERT
++	bool "Enable 16-bit UID system calls"
+ 	depends on HAVE_UID16 && MULTIUSER
+ 	default y
+ 	help
+

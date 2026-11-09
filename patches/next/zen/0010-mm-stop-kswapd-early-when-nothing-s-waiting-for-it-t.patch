@@ -39,7 +39,7 @@ Contains:
 diff --git a/mm/internal.h b/mm/internal.h
 --- a/mm/internal.h
 +++ b/mm/internal.h
-@@ -725,6 +725,7 @@ extern char * const zone_names[MAX_NR_ZO
+@@ -755,6 +755,7 @@
  
  extern int min_free_kbytes;
  extern int defrag_mode;
@@ -50,7 +50,7 @@ diff --git a/mm/internal.h b/mm/internal.h
 diff --git a/mm/page_alloc.c b/mm/page_alloc.c
 --- a/mm/page_alloc.c
 +++ b/mm/page_alloc.c
-@@ -96,6 +96,8 @@ typedef int __bitwise fpi_t;
+@@ -97,6 +97,8 @@
  /* free_pages_prepare() has already been called for page(s) being freed. */
  #define FPI_PREPARED		((__force fpi_t)BIT(3))
  
@@ -59,15 +59,15 @@ diff --git a/mm/page_alloc.c b/mm/page_alloc.c
  /* prevent >1 _updater_ of zone percpu pageset ->high and ->batch fields */
  static DEFINE_MUTEX(pcp_batch_high_lock);
  #define MIN_PERCPU_PAGELIST_HIGH_FRACTION (8)
-@@ -4785,6 +4787,7 @@ __alloc_pages_slowpath(gfp_t gfp_mask, u
+@@ -4817,6 +4819,7 @@
  	bool compact_first = false;
- 	bool can_retry_reserves = true;
+ 	bool can_retry_reserves;
  	unsigned long alloc_start_time = jiffies;
 +	bool woke_kswapd = false;
  
  	/*
  	 * Costly __GFP_NORETRY callers have a cheap fallback, so don't stall
-@@ -4870,8 +4873,13 @@ restart:
+@@ -4903,8 +4906,13 @@
  
  retry:
  	/* Ensure kswapd doesn't accidentally go to sleep as long as we loop */
@@ -82,13 +82,19 @@ diff --git a/mm/page_alloc.c b/mm/page_alloc.c
  
  	/*
  	 * The adjusted alloc_flags might result in immediate success, so try
-@@ -5102,9 +5110,12 @@ nopage:
+@@ -5135,8 +5143,6 @@
  		goto retry;
  	}
  fail:
 -	warn_alloc(gfp_mask, ac->nodemask,
 -			"page allocation failure: order:%u", order);
  got_pg:
+ 	/* A rebuild during the walk may have handed out an ineligible zone. */
+ 	if (page && check_retry_zonelist(zonelist_iter_cookie)) {
+@@ -5144,6 +5150,11 @@
+ 		page = NULL;
+ 		goto restart;
+ 	}
 +	if (woke_kswapd)
 +		atomic_long_dec(&kswapd_waiters);
 +	if (!page)
@@ -100,7 +106,7 @@ diff --git a/mm/page_alloc.c b/mm/page_alloc.c
 diff --git a/mm/vmscan.c b/mm/vmscan.c
 --- a/mm/vmscan.c
 +++ b/mm/vmscan.c
-@@ -6839,7 +6839,7 @@ retry:
+@@ -6674,7 +6674,7 @@
  	return 0;
  }
  
@@ -109,7 +115,7 @@ diff --git a/mm/vmscan.c b/mm/vmscan.c
  {
  	struct zone *zone;
  	unsigned long pfmemalloc_reserve = 0;
-@@ -6864,6 +6864,10 @@ static bool allow_direct_reclaim(pg_data
+@@ -6699,6 +6699,10 @@
  
  	wmark_ok = free_pages > pfmemalloc_reserve / 2;
  
@@ -120,7 +126,7 @@ diff --git a/mm/vmscan.c b/mm/vmscan.c
  	/* kswapd must be awake if processes are being throttled */
  	if (!wmark_ok && waitqueue_active(&pgdat->kswapd_wait)) {
  		if (READ_ONCE(pgdat->kswapd_highest_zoneidx) > ZONE_NORMAL)
-@@ -6929,7 +6933,7 @@ static bool throttle_direct_reclaim(gfp_
+@@ -6764,7 +6768,7 @@
  
  		/* Throttle based on the first usable node */
  		pgdat = zone->zone_pgdat;
@@ -129,7 +135,7 @@ diff --git a/mm/vmscan.c b/mm/vmscan.c
  			goto out;
  		break;
  	}
-@@ -6951,11 +6955,14 @@ static bool throttle_direct_reclaim(gfp_
+@@ -6786,11 +6790,14 @@
  	 */
  	if (!(gfp_mask & __GFP_FS))
  		wait_event_interruptible_timeout(pgdat->pfmemalloc_wait,
@@ -146,7 +152,7 @@ diff --git a/mm/vmscan.c b/mm/vmscan.c
  
  	if (fatal_signal_pending(current))
  		return true;
-@@ -7435,14 +7442,14 @@ restart:
+@@ -7270,14 +7277,14 @@
  		 * able to safely make forward progress. Wake them
  		 */
  		if (waitqueue_active(&pgdat->pfmemalloc_wait) &&

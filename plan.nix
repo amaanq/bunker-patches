@@ -37,7 +37,8 @@ let
     "7.1" = "7.1.5";
     "7.2" = "7.2.8";
     "7.3" = "7.3";
-    next = "7.3-next-20261022";
+    "7.4" = "7.4-rc2";
+    next = "7.4-rc2-next-20261109";
   };
 
   sourceHash = {
@@ -46,7 +47,8 @@ let
     "7.1.5" = "sha256-IqAZazy83zTcJ7d1YfTQQFhf00R+3JqzUxoax54wQec=";
     "7.2.8" = "sha256-EujVqXPRrXxaXGmILkAisTHtcV23AD/c12Dd+MPlGUE=";
     "7.3" = "sha256-hzY8JPEOBjIes2J2VSEJTpRHH2v/i84taz5A858ASVM=";
-    "7.3-next-20261022" = "sha256-VAmgNjyRNGx2LQPsIQNbU804F1u5R2MyfFMbgDsRRfs=";
+    "7.4-rc2" = "sha256-AQBj1fx7s6Xx+xFs/0Wr5Jd+ioIFt4QXc1BWgMegFLs=";
+    "7.4-rc2-next-20261109" = "sha256-wDvcG3iufA7M3yFllUWB4T4cOqAmqBUnNEVZLr9CL+A=";
   };
 
   optional = cond: x: if cond then [ x ] else [ ];
@@ -153,6 +155,7 @@ let
               "7.1" = 101;
               "7.2" = 100;
               "7.3" = 101;
+              "7.4" = 101;
               next = 101;
             }
             .${majorMinor}
@@ -322,6 +325,12 @@ let
             "xanmod/0011" # C binder, deleted in linux-next
             "cachyos/0020"
           ];
+        };
+        "7.4" = {
+          base = [ "bunker/0023" ]; # libbpf use-after-free in resolve_btfids --inline
+          interactive = [ "zen/0020" ];
+          drivers = [ "bunker/0025" ]; # amdgpu IPS2 with an eDP panel turned off
+          extras = [ "cachyos/0020" ];
         };
         next = {
           base = [ "bunker/0023" ]; # libbpf use-after-free in resolve_btfids --inline

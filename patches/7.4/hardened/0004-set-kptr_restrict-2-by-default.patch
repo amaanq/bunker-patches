@@ -1,0 +1,19 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Daniel Micay <danielmicay@gmail.com>
+Date: Wed, 3 May 2017 12:06:14 -0400
+Subject: [PATCH 004/101] set kptr_restrict=2 by default
+
+Signed-off-by: Daniel Micay <danielmicay@gmail.com>
+---
+diff --git a/lib/vsprintf.c b/lib/vsprintf.c
+--- a/lib/vsprintf.c
++++ b/lib/vsprintf.c
+@@ -848,7 +848,7 @@
+ 	return ptr_to_id(buf, end, ptr, spec);
+ }
+ 
+-int kptr_restrict __read_mostly;
++int kptr_restrict __read_mostly = 2;
+ EXPORT_SYMBOL_IF_KUNIT(kptr_restrict);
+ 
+ static noinline_for_stack

@@ -1,0 +1,26 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Fri, 12 Jun 2026 00:00:00 -0400
+Subject: [PATCH 7/14] octeon-bgx-port: call phy_start
+
+Use phy_start so the PHY state machine runs and the link comes up.
+
+Signed-off-by: Amaan Qureshi <git@amaanq.com>
+---
+ drivers/net/ethernet/cavium/octeon/octeon-bgx-port.c |     2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/cavium/octeon/octeon-bgx-port.c b/drivers/net/ethernet/cavium/octeon/octeon-bgx-port.c
+--- a/drivers/net/ethernet/cavium/octeon/octeon-bgx-port.c
++++ b/drivers/net/ethernet/cavium/octeon/octeon-bgx-port.c
+@@ -592,7 +592,7 @@
+ 	netif_carrier_off(netdev);
+ 
+ 	if (priv->phydev)
+-		phy_start_aneg(priv->phydev);
++		phy_start(priv->phydev);
+ 
+ 	return 0;
+ }
+-- 
+2.54.0

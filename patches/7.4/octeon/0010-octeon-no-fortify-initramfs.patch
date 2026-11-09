@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Sat, 14 Jun 2026 00:00:00 -0400
+Subject: [PATCH 10/14] octeon: build the cpio extractor at -O0 with fortify off
+
+Clang miscompiles the cpio extractor in init/initramfs.c under optimization on
+mips64 BE, so the embedded initramfs unpacks empty and the kernel panics. Build
+this one file at -O0 with fortify off.
+
+Signed-off-by: Amaan Qureshi <git@amaanq.com>
+---
+diff --git a/init/Makefile b/init/Makefile
+--- a/init/Makefile
++++ b/init/Makefile
+@@ -4,6 +4,10 @@
+ #
+ 
+ ccflags-y := -fno-function-sections -fno-data-sections
++
++# Clang drops regular files from the cpio extractor at -O on mips64 BE, so the
++# initramfs unpacks empty. Build it at -O0 with fortify off.
++CFLAGS_initramfs.o += -D__NO_FORTIFY -O0
+ 
+ obj-y                          := main.o version.o mounts.o
+ ifneq ($(CONFIG_BLK_DEV_INITRD),y)

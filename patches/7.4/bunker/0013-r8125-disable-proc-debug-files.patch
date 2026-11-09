@@ -1,0 +1,36 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Sat, 26 Apr 2026 00:00:00 +0000
+Subject: [PATCH] r8125: disable vendor /proc debug files
+
+cachyos/0018 imports the Realtek out-of-tree r8125 driver, which
+unconditionally creates world-readable (S_IRUGO) entries under
+/proc/net/r8125/<iface>/debug and .../test that dump device registers,
+descriptor rings, and EEPROM contents. The procfs define is gated on
+LINUX_VERSION_CODE >= 2.4.37, which is always true on modern kernels,
+so every build ships those debug files.
+
+There is no upside to keeping them on a hardened kernel: they are
+vendor-internal debug aids, not part of any userspace ABI, and exposing
+them widens the attack surface for any process able to read /proc/net.
+Disable the feature outright; all call sites in the driver are already
+#ifdef ENABLE_R8125_PROCFS so this leaves the proc-creation paths as
+dead code.
+
+---
+ drivers/net/ethernet/realtek/r8125.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/net/ethernet/realtek/r8125.h b/drivers/net/ethernet/realtek/r8125.h
+--- a/drivers/net/ethernet/realtek/r8125.h
++++ b/drivers/net/ethernet/realtek/r8125.h
+@@ -468,6 +468,7 @@
+ #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,37)
+ #define ENABLE_R8125_PROCFS
+ #endif
++#undef ENABLE_R8125_PROCFS
+
+ #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,11,0)
+ #define ENABLE_R8125_SYSFS
+--
+2.52.0

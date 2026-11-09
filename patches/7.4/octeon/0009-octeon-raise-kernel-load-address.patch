@@ -1,0 +1,19 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Sat, 14 Jun 2026 00:00:00 -0400
+Subject: [PATCH 9/14] octeon: raise the kernel load address above the cvmx_bootmem carve region
+
+At the default load address U-Boot's cvmx_bootmem allocator scribbles through
+the image tail and zeroes the embedded initramfs, so it unpacks empty and the
+kernel panics. Load at phys 0x4000000 (64 MB), clear of that region.
+
+Signed-off-by: Amaan Qureshi <git@amaanq.com>
+---
+diff --git a/arch/mips/cavium-octeon/Platform b/arch/mips/cavium-octeon/Platform
+--- a/arch/mips/cavium-octeon/Platform
++++ b/arch/mips/cavium-octeon/Platform
+@@ -4,3 +4,3 @@
+ cflags-$(CONFIG_CAVIUM_OCTEON_SOC)	+=				\
+ 		-I$(srctree)/arch/mips/include/asm/mach-cavium-octeon
+-load-$(CONFIG_CAVIUM_OCTEON_SOC)	+= 0xffffffff81100000
++load-$(CONFIG_CAVIUM_OCTEON_SOC)	+= 0xffffffff84000000

@@ -1,0 +1,312 @@
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
+@@ -1108,6 +1108,7 @@
+ 	uint8_t underscan_hborder;
+ 	bool underscan_enable;
+ 	bool freesync_capable;
++	bool freesync_on_desktop_capable;
+ 	bool update_hdcp;
+ 	bool abm_sysfs_forbidden;
+ 	uint8_t abm_level;
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
+@@ -1991,6 +1991,7 @@
+ 	__drm_atomic_helper_connector_duplicate_state(connector, &new_state->base);
+ 
+ 	new_state->freesync_capable = state->freesync_capable;
++	new_state->freesync_on_desktop_capable = state->freesync_on_desktop_capable;
+ 	new_state->abm_level = state->abm_level;
+ 	new_state->scaling = state->scaling;
+ 	new_state->underscan_enable = state->underscan_enable;
+@@ -3308,6 +3309,7 @@
+ 
+ 		if (!aconnector->mst_root) {
+ 			drm_connector_attach_vrr_capable_property(&aconnector->base);
++			drm_connector_attach_passive_vrr_capable_property(&aconnector->base);
+ 			drm_connector_attach_color_format_property(&aconnector->base,
+ 								   supported_colorformats);
+ 		}
+@@ -3885,7 +3887,8 @@
+ 	if (do_mccs) {
+ 		dm_helpers_read_mccs_caps(adev->dm.dc->ctx, amdgpu_dm_connector->dc_link, sink);
+ 
+-		if (sink->edid_caps.freesync_vcp_code && !sink->mccs_caps.freesync_supported)
++		if (!connector->display_info.hdmi.vrr_cap.supported &&
++		    sink->edid_caps.freesync_vcp_code && !sink->mccs_caps.freesync_supported)
+ 			freesync_capable = false;
+ 
+ 		if (sink->mccs_caps.freesync_supported && freesync_capable)
+@@ -3893,8 +3896,10 @@
+ 	}
+ 
+ update:
+-	if (dm_con_state)
++	if (dm_con_state) {
+ 		dm_con_state->freesync_capable = freesync_capable;
++		dm_con_state->freesync_on_desktop_capable = freesync_capable;
++	}
+ 
+ 	drm_dbg_driver(adev_to_drm(adev),
+ 		       "VRR: caps result: freesync_capable=%d min_vfreq=%d max_vfreq=%d\n",
+@@ -3910,5 +3915,8 @@
+ 	if (connector->vrr_capable_property)
+ 		drm_connector_set_vrr_capable_property(connector,
+ 						       freesync_capable);
++
++	if (connector->passive_vrr_capable_property)
++		drm_connector_set_passive_vrr_capable_property(connector, freesync_capable);
+ }
+ EXPORT_IF_KUNIT(amdgpu_dm_update_freesync_caps);
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_freesync.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_freesync.c
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_freesync.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_freesync.c
+@@ -138,6 +138,12 @@
+ 		config.vsif_supported = true;
+ 		config.btr = true;
+ 
++		if (new_con_state->freesync_on_desktop_capable)
++			new_crtc_state->stream->freesync_on_desktop =
++				!new_crtc_state->base.passive_vrr_disabled;
++		else
++			new_crtc_state->stream->freesync_on_desktop = false;
++
+ 		if (fs_vid_mode) {
+ 			config.state = VRR_STATE_ACTIVE_FIXED;
+ 			config.fixed_refresh_in_uhz = new_crtc_state->freesync_config.fixed_refresh_in_uhz;
+@@ -149,6 +155,7 @@
+ 		}
+ 	} else {
+ 		config.state = VRR_STATE_UNSUPPORTED;
++		new_crtc_state->stream->freesync_on_desktop = false;
+ 	}
+ out:
+ 	new_crtc_state->freesync_config = config;
+diff --git a/drivers/gpu/drm/drm_atomic_uapi.c b/drivers/gpu/drm/drm_atomic_uapi.c
+--- a/drivers/gpu/drm/drm_atomic_uapi.c
++++ b/drivers/gpu/drm/drm_atomic_uapi.c
+@@ -420,6 +420,8 @@
+ 		return ret;
+ 	} else if (property == config->prop_vrr_enabled) {
+ 		state->vrr_enabled = val;
++	} else if (property == config->prop_passive_vrr_disabled) {
++		state->passive_vrr_disabled = val;
+ 	} else if (property == config->degamma_lut_property) {
+ 		const size_t elem_size = sizeof(struct drm_color_lut);
+ 		u64 lut_size;
+@@ -505,6 +507,8 @@
+ 		*val = (state->mode_blob) ? state->mode_blob->base.id : 0;
+ 	else if (property == config->prop_vrr_enabled)
+ 		*val = state->vrr_enabled;
++	else if (property == config->prop_passive_vrr_disabled)
++		*val = state->passive_vrr_disabled;
+ 	else if (property == config->degamma_lut_property)
+ 		*val = (state->degamma_lut) ? state->degamma_lut->base.id : 0;
+ 	else if (property == config->ctm_property)
+diff --git a/drivers/gpu/drm/drm_connector.c b/drivers/gpu/drm/drm_connector.c
+--- a/drivers/gpu/drm/drm_connector.c
++++ b/drivers/gpu/drm/drm_connector.c
+@@ -2542,6 +2542,16 @@
+  *
+  *	Absence of the property should indicate absence of support.
+  *
++ * "passive_vrr_capable":
++ *	Optional &drm_connector boolean property that drivers should attach
++ *	with drm_connector_attach_passive_vrr_capable_property() on
++ *	connectors that could support keeping variable refresh rate signalling
++ *	in fixed-refresh rate scenarios like desktop work. Drivers should update
++ *	the property value by calling
++ *	drm_connector_set_passive_vrr_capable_property().
++ *
++ *	Absence of the property should indicate absence of support.
++ *
+  * "VRR_ENABLED":
+  *	Default &drm_crtc boolean property that notifies the driver that the
+  *	content on the CRTC is suitable for variable refresh rate presentation.
+@@ -2560,6 +2570,17 @@
+  *
+  *	The driver may place further restrictions within these minimum
+  *	and maximum bounds.
++ *
++ * "PASSIVE_VRR_DISABLED":
++ *	Default &drm_crtc boolean property that notifies the driver that the
++ *	VRR singalling should be disabled in fixed refresh rate scenarios.
++ *	Functionally, psssive vrr works the same as VRR_ENABLED == false
++ *	but works around displays blanking (mainly HDMI) that do not support
++ *	seamless VRR transitions. Also helps with brightness flickering during
++ *	VRR transitions.
++ *
++ *	Passive VRR mode is not that useful for DP/eDP sinks where seamless VRR
++ *	transitions are enforced by the standard.
+  */
+ 
+ /**
+@@ -2594,6 +2615,37 @@
+ EXPORT_SYMBOL(drm_connector_attach_vrr_capable_property);
+ 
+ /**
++ * drm_connector_attach_passive_vrr_capable_property - creates the
++ * passive_vrr_capable property
++ * @connector: connector to create the passive_vrr_capable property on.
++ *
++ * This is used by atomic drivers to add support for querying
++ * variable refresh rate on desktop capability for a connector.
++ *
++ * Returns:
++ * Zero on success, negative errno on failure.
++ */
++int drm_connector_attach_passive_vrr_capable_property(
++	struct drm_connector *connector)
++{
++	struct drm_device *dev = connector->dev;
++	struct drm_property *prop;
++
++	if (!connector->passive_vrr_capable_property) {
++		prop = drm_property_create_bool(dev, DRM_MODE_PROP_IMMUTABLE,
++			"passive_vrr_capable");
++		if (!prop)
++			return -ENOMEM;
++
++		connector->passive_vrr_capable_property = prop;
++		drm_object_attach_property(&connector->base, prop, 0);
++	}
++
++	return 0;
++}
++EXPORT_SYMBOL(drm_connector_attach_passive_vrr_capable_property);
++
++/**
+  * drm_connector_attach_scaling_mode_property - attach atomic scaling mode property
+  * @connector: connector to attach scaling mode property on.
+  * @scaling_mode_mask: or'ed mask of BIT(%DRM_MODE_SCALE_\*).
+@@ -3304,6 +3356,27 @@
+ EXPORT_SYMBOL(drm_connector_set_vrr_capable_property);
+ 
+ /**
++ * drm_connector_set_passive_vrr_capable_property - sets the variable refresh
++ * rate on desktop capable property for a connector
++ * @connector: drm connector
++ * @capable: True if the connector is variable refresh rate on desktop capable
++ *
++ * Should be used by atomic drivers to update the indicated support for
++ * variable refresh rate on desktop over a connector.
++ */
++void drm_connector_set_passive_vrr_capable_property(
++		struct drm_connector *connector, bool capable)
++{
++	if (!connector->passive_vrr_capable_property)
++		return;
++
++	drm_object_property_set_value(&connector->base,
++				      connector->passive_vrr_capable_property,
++				      capable);
++}
++EXPORT_SYMBOL(drm_connector_set_passive_vrr_capable_property);
++
++/**
+  * drm_connector_set_panel_orientation - sets the connector's panel_orientation
+  * @connector: connector for which to set the panel-orientation property.
+  * @panel_orientation: drm_panel_orientation value to set
+diff --git a/drivers/gpu/drm/drm_crtc.c b/drivers/gpu/drm/drm_crtc.c
+--- a/drivers/gpu/drm/drm_crtc.c
++++ b/drivers/gpu/drm/drm_crtc.c
+@@ -322,6 +322,8 @@
+ 					   config->prop_out_fence_ptr, 0);
+ 		drm_object_attach_property(&crtc->base,
+ 					   config->prop_vrr_enabled, 0);
++		drm_object_attach_property(&crtc->base,
++					   config->prop_passive_vrr_disabled, 0);
+ 	}
+ 
+ 	return 0;
+diff --git a/drivers/gpu/drm/drm_mode_config.c b/drivers/gpu/drm/drm_mode_config.c
+--- a/drivers/gpu/drm/drm_mode_config.c
++++ b/drivers/gpu/drm/drm_mode_config.c
+@@ -535,6 +535,12 @@
+ 		return -ENOMEM;
+ 	dev->mode_config.prop_vrr_enabled = prop;
+ 
++	prop = drm_property_create_bool(dev, 0,
++			"PASSIVE_VRR_DISABLED");
++	if (!prop)
++		return -ENOMEM;
++	dev->mode_config.prop_passive_vrr_disabled = prop;
++
+ 	prop = drm_property_create(dev,
+ 			DRM_MODE_PROP_BLOB,
+ 			"DEGAMMA_LUT", 0);
+diff --git a/include/drm/drm_connector.h b/include/drm/drm_connector.h
+--- a/include/drm/drm_connector.h
++++ b/include/drm/drm_connector.h
+@@ -2455,6 +2455,17 @@
+ 	struct drm_property *vrr_capable_property;
+ 
+ 	/**
++	 * @passive_vrr_capable_property: Optional property to help userspace
++	 * query hardware support for passive variable refresh rate on a
++	 * connector. Drivers can add the property to a connector by
++	 * calling drm_connector_attach_passive_vrr_capable_property().
++	 *
++	 * This should be updated only by calling
++	 * drm_connector_set_passive_vrr_capable_property().
++	 */
++	struct drm_property *passive_vrr_capable_property;
++
++	/**
+ 	 * @colorspace_property: Connector property to set the suitable
+ 	 * colorspace supported by the sink.
+ 	 */
+@@ -2883,6 +2894,8 @@
+ 					       u32 scaling_mode_mask);
+ int drm_connector_attach_vrr_capable_property(
+ 		struct drm_connector *connector);
++int drm_connector_attach_passive_vrr_capable_property(
++		struct drm_connector *connector);
+ void drm_connector_attach_panel_type_property(struct drm_connector *connector);
+ int drm_connector_attach_broadcast_rgb_property(struct drm_connector *connector);
+ int drm_connector_attach_colorspace_property(struct drm_connector *connector);
+@@ -2906,6 +2919,8 @@
+ 					    uint64_t link_status);
+ void drm_connector_set_vrr_capable_property(
+ 		struct drm_connector *connector, bool capable);
++void drm_connector_set_passive_vrr_capable_property(
++		struct drm_connector *connector, bool capable);
+ int drm_connector_set_panel_orientation(
+ 	struct drm_connector *connector,
+ 	enum drm_panel_orientation panel_orientation);
+diff --git a/include/drm/drm_crtc.h b/include/drm/drm_crtc.h
+--- a/include/drm/drm_crtc.h
++++ b/include/drm/drm_crtc.h
+@@ -312,6 +312,15 @@
+ 	bool vrr_enabled;
+ 
+ 	/**
++	 * @passive_vrr_disabled:
++	 *
++	 * Indicates if variable refresh rate on desktop should be enabled for
++	 * the CRTC. Support for the requested state will depend on driver and
++	 * hardware capabiltiy - lacking support is not treated as failure.
++	 */
++	bool passive_vrr_disabled;
++
++	/**
+ 	 * @self_refresh_active:
+ 	 *
+ 	 * Used by the self refresh helpers to denote when a self refresh
+diff --git a/include/drm/drm_mode_config.h b/include/drm/drm_mode_config.h
+--- a/include/drm/drm_mode_config.h
++++ b/include/drm/drm_mode_config.h
+@@ -701,6 +701,12 @@
+ 	 * whether variable refresh rate should be enabled on the CRTC.
+ 	 */
+ 	struct drm_property *prop_vrr_enabled;
++	/**
++	 * @prop_passive_vrr_disabled: Default atomic CRTC property to indicate
++	 * whether passive variable refresh rate should be disabled
++	 * on the CRTC.
++	 */
++	struct drm_property *prop_passive_vrr_disabled;
+ 
+ 	/**
+ 	 * @dvi_i_subconnector_property: Optional DVI-I property to

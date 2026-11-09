@@ -497,7 +497,7 @@ JOYSTICK_XPAD_LEDS              = "n"
 SCSI_DC395x                     = "n"
 UBIFS_FS_ADVANCED_COMPR         = "n"
 
-["!next"]
+["<7.4"]
 BFS_FS        = "n"
 SATA_INIC162X = "n"
 

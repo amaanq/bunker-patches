@@ -1,0 +1,69 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Fri, 12 Jun 2026 00:00:00 -0400
+Subject: [PATCH 3/14] octeon: wire the cvmx executive into the mips build
+
+Define CVMX_BUILD_FOR_LINUX_KERNEL so the shared cvmx headers compile their
+kernel arm rather than the bare-metal one, and pull the BGX, PKI, PKO3, FPA3,
+SSO and QLM helper objects into the executive obj-y so the driver can link them.
+
+Signed-off-by: Amaan Qureshi <git@amaanq.com>
+---
+ arch/mips/Makefile                         |     6 ++++++
+ arch/mips/cavium-octeon/Makefile           |     1 +
+ arch/mips/cavium-octeon/executive/Makefile |    16 +++++++++++++++-
+ 3 files changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/arch/mips/Makefile b/arch/mips/Makefile
+--- a/arch/mips/Makefile
++++ b/arch/mips/Makefile
+@@ -176,6 +176,12 @@
+ cflags-$(CONFIG_CAVIUM_CN63XXP1) += -Wa,-mfix-cn63xxp1
+ cflags-$(CONFIG_CPU_BMIPS)	+= -march=mips32 -Wa,--trap
+ 
++# Do NOT add USE_RUNTIME_MODEL_CHECKS, its feature bitmap bus-errors octeon_init_cvmcount.
++cflags-$(CONFIG_CAVIUM_OCTEON_SOC) += -DCVMX_BUILD_FOR_LINUX_KERNEL=1 -DCVMX_ENABLE_PARAMETER_CHECKING=0
++
++# Clang's IAS assembles the cvmx saa atomics only at octeon+, not -march=octeon.
++cflags-$(CONFIG_CAVIUM_OCTEON_SOC) += -march=octeon+
++
+ cflags-$(CONFIG_CPU_LOONGSON2E) += \
+ 			$(call cc-option,-march=loongson2e,-march=mips3) -Wa,--trap
+ cflags-$(CONFIG_CPU_LOONGSON2F) += \
+diff --git a/arch/mips/cavium-octeon/Makefile b/arch/mips/cavium-octeon/Makefile
+--- a/arch/mips/cavium-octeon/Makefile
++++ b/arch/mips/cavium-octeon/Makefile
+@@ -18,3 +18,4 @@
+ obj-$(CONFIG_MTD)		      += flash_setup.o
+ obj-$(CONFIG_SMP)		      += smp.o
+ obj-$(CONFIG_OCTEON_ILM)	      += oct_ilm.o
++obj-$(CONFIG_OCTEON_FPA3)	      += octeon-fpa3.o
+diff --git a/arch/mips/cavium-octeon/executive/Makefile b/arch/mips/cavium-octeon/executive/Makefile
+--- a/arch/mips/cavium-octeon/executive/Makefile
++++ b/arch/mips/cavium-octeon/executive/Makefile
+@@ -10,10 +10,22 @@
+ #
+ 
+ obj-y += cvmx-bootmem.o cvmx-l2c.o cvmx-sysinfo.o octeon-model.o
+-obj-y += cvmx-pko.o cvmx-spi.o cvmx-cmd-queue.o \
++obj-y += octeon-feature.o
++obj-y += cvmx-pko.o cvmx-spi.o cvmx-cmd-queue.o cvmx-helper-cfg.o \
+ 	cvmx-helper-board.o cvmx-helper.o cvmx-helper-xaui.o \
+ 	cvmx-helper-rgmii.o cvmx-helper-sgmii.o cvmx-helper-npi.o \
+ 	cvmx-helper-loop.o cvmx-helper-spi.o cvmx-helper-util.o \
+ 	cvmx-interrupt-decodes.o cvmx-interrupt-rsl.o
+ 
+ obj-y += cvmx-helper-errata.o cvmx-helper-jtag.o cvmx-boot-vector.o
++obj-y += cvmx-twsi.o cvmx-spi4000.o cvmx-appcfg-transport.o
++
++obj-y += cvmx-bgx.o cvmx-helper-bgx.o
++obj-y += cvmx-pki.o cvmx-pki-resources.o cvmx-helper-pki.o cvmx-helper-ipd.o
++obj-y += cvmx-pko3.o cvmx-pko3-queue.o cvmx-pko3-resources.o cvmx-helper-pko3.o cvmx-helper-pko.o
++obj-y += cvmx-fpa-resource.o cvmx-sso-resources.o
++obj-y += cvmx-global-resources.o cvmx-range.o cvmx-pko-internal-ports-range.o
++obj-y += cvmx-qlm.o cvmx-qlm-tables.o
++obj-y += cvmx-helper-agl.o cvmx-agl.o cvmx-ipd.o
++# Linked only to satisfy iface_ops symbol references in cvmx-helper.c.
++obj-y += cvmx-helper-ilk.o cvmx-ilk.o cvmx-helper-srio.o cvmx-srio.o
+-- 
+2.54.0

@@ -408,7 +408,7 @@ let
             patches =
               (old.patches or [ ])
               ++ [ (patchFile ./patches/userspace/bcachefs-btree-cache-dirty-throttle-half.patch) ]
-              ++ lib.optionals (cfg.version == "next") [
+              ++ lib.optionals (lib.versionAtLeast kernelMajorMinor "7.4") [
                 (patchFile ./patches/userspace/bcachefs-const-mnt-idmap.patch)
                 (patchFile ./patches/userspace/bcachefs-rust-system-dfl.patch)
               ];
@@ -462,6 +462,7 @@ in
         "7.1"
         "7.2"
         "7.3"
+        "7.4"
         "next"
       ];
       default = planLib.defaults.version;

@@ -1,0 +1,15 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Sun, 12 Oct 2026 00:00:00 -0400
+Subject: [PATCH] rust: allow BTF with LTO when Rust stays out of the LTO link
+
+The !LTO guard is for cross-language LTO, where Rust code inlined into
+a C CU hides from --lang_exclude=rust. Rust objects here are built
+with -Cembed-bitcode=n -Clto=n, so every Rust CU keeps its language.
+---
+diff --git a/init/Kconfig b/init/Kconfig
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -2072 +2072 @@
+-	depends on !DEBUG_INFO_BTF || (PAHOLE_HAS_LANG_EXCLUDE && !LTO)
++	depends on !DEBUG_INFO_BTF || PAHOLE_HAS_LANG_EXCLUDE

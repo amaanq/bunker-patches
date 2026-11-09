@@ -1,0 +1,128 @@
+From 94d41df11014ccb702443fb02bb7df7bf79334e4 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Sun, 25 Oct 2026 04:52:47 -0400
+Subject: [PATCH bpf-next] libbpf: Keep caller string pointers valid across BTF
+ string lookups
+To: bpf@vger.kernel.org
+Cc: Alan Maguire <alan.maguire@oracle.com>,
+    Andrii Nakryiko <andrii@kernel.org>,
+    Eduard Zingerman <eddyz87@gmail.com>
+
+`btf__find_str()` and `btf__add_str()` can free or realloc the string data
+a `btf__str_by_offset()` pointer refers to before reading it. Since
+commit cf91a7db92c6 ("resolve_btfids: Build separate main and inline
+BTF objects"), this crashes `resolve_btfids` on some modules.
+
+Fixes: 919d2b1dbb07 ("libbpf: Allow modification of BTF and add btf__add_str API")
+---
+ tools/lib/bpf/btf.c | 54 ++++++++++++++++++++++++++++++++++-----------
+ 1 file changed, 41 insertions(+), 13 deletions(-)
+
+diff --git a/tools/lib/bpf/btf.c b/tools/lib/bpf/btf.c
+index d2ff6f5d6d5b..38589aade6df 100644
+--- a/tools/lib/bpf/btf.c
++++ b/tools/lib/bpf/btf.c
+@@ -2111,59 +2111,87 @@ static int btf_ensure_modifiable(struct btf *btf)
+ 	free(types);
+ 	free(layout);
+ 	return err;
+ }
+ 
+-/* Find an offset in BTF string section that corresponds to a given string *s*.
+- * Returns:
+- *   - >0 offset into string section, if string is found;
+- *   - -ENOENT, if string is not in the string section;
+- *   - <0, on any other error.
+- */
+-int btf__find_str(struct btf *btf, const char *s)
++/* Offset of s within btf's own string data, or -1 if it points elsewhere. */
++static long btf_own_str_off(const struct btf *btf, const char *s)
+ {
++	const void *strs = btf_strs_data(btf);
++	uintptr_t data = (uintptr_t)strs;
++
++	if ((uintptr_t)s < data || (uintptr_t)s >= data + btf->hdr.str_len)
++		return -1;
++	return (uintptr_t)s - data;
++}
++
++static int btf_find_str(struct btf *btf, const char **s)
++{
++	long own_off;
+ 	int off;
+ 	int err;
+ 
+ 	if (btf->base_btf) {
+-		off = btf__find_str(btf->base_btf, s);
++		off = btf_find_str(btf->base_btf, s);
+ 		if (off != -ENOENT)
+ 			return off;
+ 	}
+ 
++	own_off = btf_own_str_off(btf, *s);
++
+ 	/* BTF needs to be in a modifiable state to build string lookup index */
+ 	err = btf_ensure_modifiable(btf);
+ 	if (err)
+-		return libbpf_err(err);
++		return err;
+ 
+-	off = strset__find_str(btf->strs_set, s);
++	if (own_off >= 0)
++		*s = strset__data(btf->strs_set) + own_off;
++	off = strset__find_str(btf->strs_set, *s);
++	if (own_off >= 0)
++		*s = strset__data(btf->strs_set) + own_off;
+ 	if (off < 0)
+-		return libbpf_err(off);
++		return off;
+ 
+ 	return btf->start_str_off + off;
+ }
+ 
++/* Find an offset in BTF string section that corresponds to a given string *s*.
++ * Returns:
++ *   - >0 offset into string section, if string is found;
++ *   - -ENOENT, if string is not in the string section;
++ *   - <0, on any other error.
++ */
++int btf__find_str(struct btf *btf, const char *s)
++{
++	return libbpf_err(btf_find_str(btf, &s));
++}
++
+ /* Add a string s to the BTF string section.
+  * Returns:
+  *   - > 0 offset into string section, on success;
+  *   - < 0, on error.
+  */
+ int btf__add_str(struct btf *btf, const char *s)
+ {
++	long own_off;
+ 	int off;
+ 	int err;
+ 
+ 	if (btf->base_btf) {
+-		off = btf__find_str(btf->base_btf, s);
++		off = btf_find_str(btf->base_btf, &s);
+ 		if (off != -ENOENT)
+-			return off;
++			return libbpf_err(off);
+ 	}
+ 
++	own_off = btf_own_str_off(btf, s);
++
+ 	err = btf_ensure_modifiable(btf);
+ 	if (err)
+ 		return libbpf_err(err);
+ 
++	if (own_off >= 0)
++		s = strset__data(btf->strs_set) + own_off;
+ 	off = strset__add_str(btf->strs_set, s);
+ 	if (off < 0)
+ 		return libbpf_err(off);
+ 
+ 	btf->hdr.str_len = strset__data_size(btf->strs_set);
+-- 
+2.55.0
+

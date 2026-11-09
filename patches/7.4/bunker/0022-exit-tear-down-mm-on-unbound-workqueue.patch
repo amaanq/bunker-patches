@@ -1,0 +1,34 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Thu, 15 Oct 2026 00:00:00 -0400
+Subject: [PATCH] exit: tear down the mm on the unbound workqueue
+
+Exit hands its mm to mmput_async so the exiting task returns sooner,
+and the unbound workqueue spreads exit_mmap across every CPU, which
+keeps up with heavy process churn where a single CPU's queue falls
+behind.
+---
+diff --git a/kernel/exit.c b/kernel/exit.c
+--- a/kernel/exit.c
++++ b/kernel/exit.c
+@@ -578,7 +578,7 @@
+ 	task_unlock(current);
+ 	mmap_read_unlock(mm);
+ 	mm_update_next_owner(mm);
+-	mmput(mm);
++	mmput_async(mm);
+ 	if (test_thread_flag(TIF_MEMDIE))
+ 		exit_oom_victim();
+ }
+diff --git a/kernel/fork.c b/kernel/fork.c
+--- a/kernel/fork.c
++++ b/kernel/fork.c
+@@ -1210,7 +1210,7 @@
+ {
+ 	if (atomic_dec_and_test(&mm->mm_users)) {
+ 		INIT_WORK(&mm->async_put_work, mmput_async_fn);
+-		schedule_work(&mm->async_put_work);
++		queue_work(system_unbound_wq, &mm->async_put_work);
+ 	}
+ }
+ EXPORT_SYMBOL_GPL(mmput_async);

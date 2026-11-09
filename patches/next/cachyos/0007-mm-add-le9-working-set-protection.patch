@@ -87,7 +87,7 @@ diff --git a/Documentation/admin-guide/sysctl/vm.rst b/Documentation/admin-guide
  compact_memory
  ==============
  
-@@ -1083,6 +1147,14 @@
+@@ -1090,6 +1154,14 @@
  At 0, the kernel will not initiate swap until the amount of free and
  file-backed pages is less than the high watermark in a zone.
  
@@ -187,7 +187,7 @@ diff --git a/mm/Kconfig b/mm/Kconfig
 diff --git a/mm/util.c b/mm/util.c
 --- a/mm/util.c
 +++ b/mm/util.c
-@@ -888,6 +888,40 @@
+@@ -901,6 +901,40 @@
  		.mode		= 0644,
  		.proc_handler	= proc_doulongvec_minmax,
  	},
@@ -231,23 +231,7 @@ diff --git a/mm/util.c b/mm/util.c
 diff --git a/mm/vmscan.c b/mm/vmscan.c
 --- a/mm/vmscan.c
 +++ b/mm/vmscan.c
-@@ -148,6 +148,15 @@
- 	/* The file folios on the current node are dangerously low */
- 	unsigned int file_is_tiny:1;
- 
-+	/* The anonymous pages on the current node are below vm.anon_min_ratio */
-+	unsigned int anon_below_min:1;
-+
-+	/* The clean file pages on the current node are below vm.clean_low_ratio */
-+	unsigned int clean_below_low:1;
-+
-+	/* The clean file pages on the current node are below vm.clean_min_ratio */
-+	unsigned int clean_below_min:1;
-+
- 	/* Always discard instead of demoting to lower tier memory */
- 	unsigned int no_demotion:1;
- 
-@@ -215,10 +224,23 @@
+@@ -108,10 +108,23 @@
  }
  #endif
  
@@ -271,7 +255,7 @@ diff --git a/mm/vmscan.c b/mm/vmscan.c
  
  static int sc_swappiness(struct scan_control *sc, struct mem_cgroup *memcg)
  {
-@@ -1220,6 +1242,10 @@
+@@ -1113,6 +1126,10 @@
  		if (!sc->may_unmap && folio_mapped(folio))
  			goto keep_locked;
  
@@ -282,7 +266,7 @@ diff --git a/mm/vmscan.c b/mm/vmscan.c
  		/*
  		 * The number of dirty pages determines if a node is marked
  		 * reclaim_congested. kswapd will stall and start writing
-@@ -2732,6 +2758,15 @@
+@@ -2626,6 +2643,15 @@
  	}
  
  	/*
@@ -298,7 +282,7 @@ diff --git a/mm/vmscan.c b/mm/vmscan.c
  	 * If there is enough inactive page cache, we do not reclaim
  	 * anything from the anonymous working right now to make sure
           * a streaming file access pattern doesn't cause swapping.
-@@ -2789,6 +2824,14 @@
+@@ -2670,6 +2696,14 @@
  			BUG();
  		}
  
@@ -313,7 +297,7 @@ diff --git a/mm/vmscan.c b/mm/vmscan.c
  		nr[lru] = scan;
  	}
  }
-@@ -2809,6 +2852,87 @@
+@@ -2690,6 +2724,87 @@
  			  lruvec_memcg(lruvec));
  }
  
@@ -401,7 +385,7 @@ diff --git a/mm/vmscan.c b/mm/vmscan.c
  #ifdef CONFIG_LRU_GEN
  
  DEFINE_STATIC_KEY_FALSE(lru_switch);
-@@ -4986,11 +5110,21 @@
+@@ -4826,11 +4941,21 @@
  	return tier - 1;
  }
  
@@ -425,7 +409,7 @@ diff --git a/mm/vmscan.c b/mm/vmscan.c
  		return LRU_GEN_FILE;
  
  	if (swappiness >= MAX_SWAPPINESS)
-@@ -5019,7 +5153,7 @@
+@@ -4859,7 +4984,7 @@
  			  int *isolate_type, int *isolate_scanned)
  {
  	bool type_fallback_allowed = !is_single_type_reclaim(swappiness);
@@ -434,7 +418,7 @@ diff --git a/mm/vmscan.c b/mm/vmscan.c
  	int total_scanned = 0, scanned, tier;
  	bool tried = false;
  
-@@ -5293,6 +5427,12 @@
+@@ -5135,6 +5260,12 @@
  	struct mem_cgroup *memcg = lruvec_memcg(lruvec);
  	struct pglist_data *pgdat = lruvec_pgdat(lruvec);
  
@@ -447,7 +431,7 @@ diff --git a/mm/vmscan.c b/mm/vmscan.c
  	/*
  	 * For kswapd, mem_cgroup_calculate_protection() has already
  	 * been called during the top-down cgroup traversal.
-@@ -6475,6 +6615,8 @@
+@@ -6314,6 +6445,8 @@
  
  	prepare_scan_control(pgdat, sc);
  
@@ -456,3 +440,22 @@ diff --git a/mm/vmscan.c b/mm/vmscan.c
  	shrink_node_memcgs(pgdat, sc);
  
  	flush_reclaim_state(sc);
+diff --git a/mm/vmscan.h b/mm/vmscan.h
+--- a/mm/vmscan.h
++++ b/mm/vmscan.h
+@@ -83,6 +83,15 @@
+ 	/* The file folios on the current node are dangerously low */
+ 	unsigned int file_is_tiny:1;
+ 
++	/* The anonymous pages on the current node are below vm.anon_min_ratio */
++	unsigned int anon_below_min:1;
++
++	/* The clean file pages on the current node are below vm.clean_low_ratio */
++	unsigned int clean_below_low:1;
++
++	/* The clean file pages on the current node are below vm.clean_min_ratio */
++	unsigned int clean_below_min:1;
++
+ 	/* Always discard instead of demoting to lower tier memory */
+ 	unsigned int no_demotion:1;
+ 
