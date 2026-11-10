@@ -412,6 +412,9 @@ let
                 (patchFile ./patches/userspace/bcachefs-const-mnt-idmap.patch)
                 (patchFile ./patches/userspace/bcachefs-rust-system-dfl.patch)
               ];
+            meta = old.meta // {
+              broken = false;
+            };
             # bcachefs links its Rust CUs first under LTO, and pahole 1.32 drops the whole merged
             # CU when --lang_exclude=rust matches the first one, leaving the module with no BTF
             makeFlags = old.makeFlags ++ [
