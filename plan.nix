@@ -19,7 +19,7 @@ let
     ;
 
   defaults = {
-    version = "7.2";
+    version = "7.3";
     interactive = true;
     hardened = true;
     networking = true;
@@ -36,7 +36,7 @@ let
     "7.0" = "7.0.13";
     "7.1" = "7.1.5";
     "7.2" = "7.2.8";
-    "7.3" = "7.3";
+    "7.3" = "7.3.4";
     "7.4" = "7.4-rc2";
     next = "7.4-rc2-next-20261109";
   };
@@ -46,7 +46,7 @@ let
     "7.0.13" = "sha256-PIHt0PcWrKPdSN/2kWgYJ1gMxT01qO7DvkfTRtH4mRM=";
     "7.1.5" = "sha256-IqAZazy83zTcJ7d1YfTQQFhf00R+3JqzUxoax54wQec=";
     "7.2.8" = "sha256-EujVqXPRrXxaXGmILkAisTHtcV23AD/c12Dd+MPlGUE=";
-    "7.3" = "sha256-hzY8JPEOBjIes2J2VSEJTpRHH2v/i84taz5A858ASVM=";
+    "7.3.4" = "sha256-sRtt+Clejpkf8EC3GqpJlKi1XKojtrCSkH8ZW1hA/R8=";
     "7.4-rc2" = "sha256-AQBj1fx7s6Xx+xFs/0Wr5Jd+ioIFt4QXc1BWgMegFLs=";
     "7.4-rc2-next-20261109" = "sha256-wDvcG3iufA7M3yFllUWB4T4cOqAmqBUnNEVZLr9CL+A=";
   };
