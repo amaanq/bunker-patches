@@ -1,0 +1,86 @@
+bcachefs: call sort and sort_r now that linux-next dropped the nonatomic variants
+
+linux-next removed sort_nonatomic() and sort_r_nonatomic(), and
+bcachefs 1.39.7 still calls them.
+
+diff -ruN a/src/fs/bcachefs/btree/journal_overlay.c b/src/fs/bcachefs/btree/journal_overlay.c
+--- a/src/fs/bcachefs/btree/journal_overlay.c	2026-11-10 17:23:22.947415576 -0500
++++ b/src/fs/bcachefs/btree/journal_overlay.c	2026-11-10 17:23:22.952336009 -0500
+@@ -792,7 +792,7 @@
+ {
+ 	struct bch_fs *c = container_of(keys, struct bch_fs, journal_keys);
+ 
+-	sort_r_nonatomic(keys->data, keys->nr, sizeof(keys->data[0]),
++	sort_r(keys->data, keys->nr, sizeof(keys->data[0]),
+ 			 journal_sort_key_cmp, NULL, c);
+ 
+ 	cond_resched();
+diff -ruN a/src/fs/bcachefs/btree/node_scan.c b/src/fs/bcachefs/btree/node_scan.c
+--- a/src/fs/bcachefs/btree/node_scan.c	2026-11-10 17:23:22.957893062 -0500
++++ b/src/fs/bcachefs/btree/node_scan.c	2026-11-10 17:23:22.962977432 -0500
+@@ -396,7 +396,7 @@
+ 		bch2_print_str(c, KERN_INFO, buf.buf);
+ 	}
+ 
+-	sort_nonatomic(f->nodes.data, f->nodes.nr, sizeof(f->nodes.data[0]), found_btree_node_cmp_cookie, NULL);
++	sort(f->nodes.data, f->nodes.nr, sizeof(f->nodes.data[0]), found_btree_node_cmp_cookie, NULL);
+ 
+ 	dst = 0;
+ 	darray_for_each(f->nodes, i) {
+@@ -415,7 +415,7 @@
+ 	}
+ 	f->nodes.nr = dst;
+ 
+-	sort_nonatomic(f->nodes.data, f->nodes.nr, sizeof(f->nodes.data[0]), found_btree_node_cmp_pos, NULL);
++	sort(f->nodes.data, f->nodes.nr, sizeof(f->nodes.data[0]), found_btree_node_cmp_pos, NULL);
+ 
+ 	if (0 && c->opts.verbose) {
+ 		printbuf_reset(&buf);
+diff -ruN a/src/fs/bcachefs/btree/write_buffer.c b/src/fs/bcachefs/btree/write_buffer.c
+--- a/src/fs/bcachefs/btree/write_buffer.c	2026-11-10 17:23:22.970296108 -0500
++++ b/src/fs/bcachefs/btree/write_buffer.c	2026-11-10 17:23:22.974374281 -0500
+@@ -766,7 +766,7 @@
+ 		event_inc_trace(c, write_buffer_flush_slowpath, buf,
+ 				prt_printf(&buf, "%zu/%zu", cnt.slowpath, wb->flushing.keys.nr));
+ 
+-		sort_r_nonatomic(wb->sorted.data,
++		sort_r(wb->sorted.data,
+ 				 wb->sorted.nr,
+ 				 sizeof(wb->sorted.data[0]),
+ 				 wb_key_seq_cmp, NULL,
+diff -ruN a/src/fs/bcachefs/init/error.c b/src/fs/bcachefs/init/error.c
+--- a/src/fs/bcachefs/init/error.c	2026-11-10 17:23:22.998317753 -0500
++++ b/src/fs/bcachefs/init/error.c	2026-11-10 17:23:23.002380066 -0500
+@@ -334,7 +334,7 @@
+ {
+ 	guard(mutex)(&c->errors.msgs_lock);
+ 
+-	sort_nonatomic(c->errors.msgs.data, c->errors.msgs.nr,
++	sort(c->errors.msgs.data, c->errors.msgs.nr,
+ 		       sizeof(c->errors.msgs.data[0]), fsck_err_nr_cmp, NULL);
+ 
+ 	darray_for_each(c->errors.msgs, i) {
+diff -ruN a/src/fs/bcachefs/init/recovery.c b/src/fs/bcachefs/init/recovery.c
+--- a/src/fs/bcachefs/init/recovery.c	2026-11-10 17:23:22.989520627 -0500
++++ b/src/fs/bcachefs/init/recovery.c	2026-11-10 17:23:22.992430855 -0500
+@@ -587,7 +587,7 @@
+ 	 * Now, replay any remaining keys in the order in which they appear in
+ 	 * the journal, unpinning those journal entries as we go:
+ 	 */
+-	sort_nonatomic(keys_sorted.data, keys_sorted.nr,
++	sort(keys_sorted.data, keys_sorted.nr,
+ 		       sizeof(keys_sorted.data[0]),
+ 		       journal_sort_seq_cmp, NULL);
+ 
+diff -ruN a/src/fs/bcachefs/util/darray.h b/src/fs/bcachefs/util/darray.h
+--- a/src/fs/bcachefs/util/darray.h	2026-11-10 17:23:22.981407994 -0500
++++ b/src/fs/bcachefs/util/darray.h	2026-11-10 17:23:22.985100568 -0500
+@@ -178,7 +178,7 @@
+ #define darray_find(_d, _item)	darray_find_p(_d, _i, *_i == _item)
+ 
+ #define darray_sort(_d, _cmp)						\
+-	sort_nonatomic((_d).data, (_d).nr, sizeof((_d).data[0]), _cmp, NULL)
++	sort((_d).data, (_d).nr, sizeof((_d).data[0]), _cmp, NULL)
+ 
+ #define darray_eytzinger1_sort(_d, _cmp)				\
+ 	eytzinger1_sort((_d).data, (_d).nr - 1, sizeof((_d).data[0]), _cmp, NULL)

@@ -411,6 +411,9 @@ let
               ++ lib.optionals (lib.versionAtLeast kernelMajorMinor "7.4") [
                 (patchFile ./patches/userspace/bcachefs-const-mnt-idmap.patch)
                 (patchFile ./patches/userspace/bcachefs-rust-system-dfl.patch)
+              ]
+              ++ lib.optionals (cfg.version == "next") [
+                (patchFile ./patches/userspace/bcachefs-sort-nonatomic.patch)
               ];
             meta = old.meta // {
               broken = false;
