@@ -1,0 +1,20 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Tue, 10 Nov 2026 00:00:00 +0000
+Subject: [PATCH] leds: asus-aura-scsi: depend on SCSI_DH
+
+The driver registers a SCSI device handler, and
+scsi_register_device_handler() is only built with CONFIG_SCSI_DH.
+
+---
+--- a/drivers/leds/rgb/Kconfig
++++ b/drivers/leds/rgb/Kconfig
+@@ -4,7 +4,7 @@
+ 
+ config LEDS_ASUS_AURA_SCSI
+ 	tristate "ASUS Aura RGB LEDs on ROG external NVMe enclosures"
+-	depends on SCSI
++	depends on SCSI_DH && SCSI
+ 	help
+ 	  Say Y here if you want to control the RGB LEDs of ASUS ROG
+ 	  external NVMe enclosures such as the ROG STRIX Arion. The LEDs

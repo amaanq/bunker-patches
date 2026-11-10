@@ -335,7 +335,10 @@ let
         next = {
           base = [ "bunker/0023" ]; # libbpf use-after-free in resolve_btfids --inline
           interactive = [ "zen/0020" ];
-          drivers = [ "bunker/0025" ]; # amdgpu IPS2 with an eDP panel turned off
+          drivers = [
+            "bunker/0025" # amdgpu IPS2 with an eDP panel turned off
+            "bunker/0026" # asus-aura-scsi needs SCSI_DH
+          ];
           extras = [ "cachyos/0020" ];
         };
       };

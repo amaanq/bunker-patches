@@ -182,3 +182,4 @@ next/xanmod/0008-wait-allow-__wake_up_pollfree-from-GPL-modules.patch
 next/xanmod/0009-file-export-file_close_fd-for-GPL-modules.patch
 next/cachyos/0020-media-v4l2loopback-update-to-0.15.4.patch
 next/bunker/0021-rust-allow-BTF-with-LTO-when-Rust-stays-out-of-the-LTO-link.patch
+next/bunker/0026-leds-asus-aura-scsi-depend-on-SCSI_DH.patch
