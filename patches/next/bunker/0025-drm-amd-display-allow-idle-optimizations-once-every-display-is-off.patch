@@ -10,9 +10,10 @@ off, so IPS2 never ran with the screen off. Counting a state with no
 streams as display off also lets the idle worker poll HPD there, as it
 already does when headless.
 ---
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
-@@ -4593,6 +4593,12 @@
+@@ -4586,6 +4586,12 @@ STATIC_IFN_KUNIT void amdgpu_dm_mod_powe
  }
  EXPORT_IF_KUNIT(amdgpu_dm_mod_power_setup_streams);
  
@@ -25,7 +26,7 @@ already does when headless.
  static void amdgpu_dm_commit_streams(struct drm_atomic_commit *state,
  					struct dc_state *dc_state)
  {
-@@ -4780,7 +4786,7 @@
+@@ -4771,7 +4777,7 @@ static void amdgpu_dm_commit_streams(str
  			drm_dbg_kms(dev, "200ms frl status polling stops ...\n");
  	}
  	/* Allow idle optimization when vblank count is 0 for display off */
@@ -34,19 +35,21 @@ already does when headless.
  		dc_allow_idle_optimizations(dm->dc, true);
  	mutex_unlock(&dm->dc_lock);
  
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
-@@ -1174,6 +1174,7 @@
+@@ -1186,6 +1186,7 @@ void dm_free_gpu_mem(struct amdgpu_devic
  						  void *addr);
  
  bool amdgpu_dm_is_headless(struct amdgpu_device *adev);
 +bool amdgpu_dm_is_display_off(struct amdgpu_device *adev);
  
- bool amdgpu_dm_crtc_complete_writeback(struct amdgpu_crtc *acrtc);
- 
+ #if defined(CONFIG_DRM_AMD_DC)
+ void amdgpu_dm_update_memclk_states(struct amdgpu_device *adev);
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_crtc.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_crtc.c
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_crtc.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_crtc.c
-@@ -190,7 +190,7 @@
+@@ -190,7 +190,7 @@ STATIC_IFN_KUNIT void amdgpu_dm_idle_wor
  		fsleep(HPD_DETECTION_TIME_uS);
  		mutex_lock(&idle_work->dm->dc_lock);
  
@@ -55,9 +58,10 @@ already does when headless.
  		    !amdgpu_dm_psr_is_active_allowed(idle_work->dm)) {
  			mutex_unlock(&idle_work->dm->dc_lock);
  			break;
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_helpers.c
-@@ -1664,7 +1664,7 @@
+@@ -1692,7 +1692,7 @@ void dm_helpers_enable_periodic_detectio
  
  	if (adev->dm.idle_workqueue) {
  		adev->dm.idle_workqueue->enable = enable;

@@ -16,7 +16,6 @@ Signed-off-by: Levente Polyak <levente@leventepolyak.net>
  2 files changed, 20 insertions(+)
 
 diff --git a/fs/overlayfs/Kconfig b/fs/overlayfs/Kconfig
-index 2ac67e04a6fbe..3340e13c959c8 100644
 --- a/fs/overlayfs/Kconfig
 +++ b/fs/overlayfs/Kconfig
 @@ -134,3 +134,19 @@ config OVERLAY_FS_DEBUG
@@ -40,10 +39,9 @@ index 2ac67e04a6fbe..3340e13c959c8 100644
 +
 +	  If unsure, say N.
 diff --git a/fs/overlayfs/super.c b/fs/overlayfs/super.c
-index bd0a3f9039d25..126f1b93c7777 100644
 --- a/fs/overlayfs/super.c
 +++ b/fs/overlayfs/super.c
-@@ -1574,7 +1574,11 @@ struct file_system_type ovl_fs_type = {
+@@ -1637,7 +1637,11 @@ struct file_system_type ovl_fs_type = {
  	.name			= "overlay",
  	.init_fs_context	= ovl_init_fs_context,
  	.parameters		= ovl_parameter_spec,
@@ -52,7 +50,6 @@ index bd0a3f9039d25..126f1b93c7777 100644
 +#else
 +	.fs_flags		= FS_ALLOW_IDMAP,
 +#endif
- 	.kill_sb		= kill_anon_super,
+ 	.kill_sb		= ovl_kill_sb,
  };
  MODULE_ALIAS_FS("overlay");
-

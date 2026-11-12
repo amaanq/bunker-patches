@@ -12,7 +12,6 @@ when unwanted in some configurations.
  1 file changed, 2 deletions(-)
 
 diff --git a/drivers/cpufreq/Kconfig.x86 b/drivers/cpufreq/Kconfig.x86
-index d6190b8dde4b99..9d10fde562c71f 100644
 --- a/drivers/cpufreq/Kconfig.x86
 +++ b/drivers/cpufreq/Kconfig.x86
 @@ -8,7 +8,6 @@ config X86_INTEL_PSTATE
@@ -28,7 +27,6 @@ index d6190b8dde4b99..9d10fde562c71f 100644
  	select ACPI_PROCESSOR
  	select ACPI_CPPC_LIB if X86_64
 -	select CPU_FREQ_GOV_SCHEDUTIL if SMP
- 	select ACPI_PLATFORM_PROFILE
+ 	select PLATFORM_PROFILE
  	select POWER_SUPPLY
  	help
-

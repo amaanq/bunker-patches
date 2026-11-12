@@ -1,7 +1,7 @@
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h
-@@ -1108,6 +1108,7 @@
+@@ -1120,6 +1120,7 @@ struct dm_connector_state {
  	uint8_t underscan_hborder;
  	bool underscan_enable;
  	bool freesync_capable;
@@ -12,7 +12,7 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.h b/drivers/gpu/drm
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c
-@@ -1991,6 +1991,7 @@
+@@ -2084,6 +2084,7 @@ amdgpu_dm_connector_atomic_duplicate_sta
  	__drm_atomic_helper_connector_duplicate_state(connector, &new_state->base);
  
  	new_state->freesync_capable = state->freesync_capable;
@@ -20,7 +20,7 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c b/drive
  	new_state->abm_level = state->abm_level;
  	new_state->scaling = state->scaling;
  	new_state->underscan_enable = state->underscan_enable;
-@@ -3308,6 +3309,7 @@
+@@ -3406,6 +3407,7 @@ void amdgpu_dm_connector_init_helper(str
  
  		if (!aconnector->mst_root) {
  			drm_connector_attach_vrr_capable_property(&aconnector->base);
@@ -28,7 +28,7 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c b/drive
  			drm_connector_attach_color_format_property(&aconnector->base,
  								   supported_colorformats);
  		}
-@@ -3885,7 +3887,8 @@
+@@ -4033,7 +4035,8 @@ void amdgpu_dm_update_freesync_caps(stru
  	if (do_mccs) {
  		dm_helpers_read_mccs_caps(adev->dm.dc->ctx, amdgpu_dm_connector->dc_link, sink);
  
@@ -38,7 +38,7 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c b/drive
  			freesync_capable = false;
  
  		if (sink->mccs_caps.freesync_supported && freesync_capable)
-@@ -3893,8 +3896,10 @@
+@@ -4041,8 +4044,10 @@ void amdgpu_dm_update_freesync_caps(stru
  	}
  
  update:
@@ -49,8 +49,8 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c b/drive
 +	}
  
  	drm_dbg_driver(adev_to_drm(adev),
- 		       "VRR: caps result: freesync_capable=%d min_vfreq=%d max_vfreq=%d\n",
-@@ -3910,5 +3915,8 @@
+ 		       "VRR: caps result: vrr_capable=%d min_vfreq=%d max_vfreq=%d\n",
+@@ -4058,5 +4063,8 @@ update:
  	if (connector->vrr_capable_property)
  		drm_connector_set_vrr_capable_property(connector,
  						       freesync_capable);
@@ -62,7 +62,7 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c b/drive
 diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_freesync.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_freesync.c
 --- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_freesync.c
 +++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_freesync.c
-@@ -138,6 +138,12 @@
+@@ -187,6 +187,12 @@ void amdgpu_dm_get_freesync_config_for_c
  		config.vsif_supported = true;
  		config.btr = true;
  
@@ -75,7 +75,7 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_freesync.c b/driver
  		if (fs_vid_mode) {
  			config.state = VRR_STATE_ACTIVE_FIXED;
  			config.fixed_refresh_in_uhz = new_crtc_state->freesync_config.fixed_refresh_in_uhz;
-@@ -149,6 +155,7 @@
+@@ -198,6 +204,7 @@ void amdgpu_dm_get_freesync_config_for_c
  		}
  	} else {
  		config.state = VRR_STATE_UNSUPPORTED;
@@ -86,7 +86,7 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_freesync.c b/driver
 diff --git a/drivers/gpu/drm/drm_atomic_uapi.c b/drivers/gpu/drm/drm_atomic_uapi.c
 --- a/drivers/gpu/drm/drm_atomic_uapi.c
 +++ b/drivers/gpu/drm/drm_atomic_uapi.c
-@@ -420,6 +420,8 @@
+@@ -420,6 +420,8 @@ static int drm_atomic_crtc_set_property(
  		return ret;
  	} else if (property == config->prop_vrr_enabled) {
  		state->vrr_enabled = val;
@@ -95,7 +95,7 @@ diff --git a/drivers/gpu/drm/drm_atomic_uapi.c b/drivers/gpu/drm/drm_atomic_uapi
  	} else if (property == config->degamma_lut_property) {
  		const size_t elem_size = sizeof(struct drm_color_lut);
  		u64 lut_size;
-@@ -505,6 +507,8 @@
+@@ -505,6 +507,8 @@ drm_atomic_crtc_get_property(struct drm_
  		*val = (state->mode_blob) ? state->mode_blob->base.id : 0;
  	else if (property == config->prop_vrr_enabled)
  		*val = state->vrr_enabled;
@@ -107,7 +107,7 @@ diff --git a/drivers/gpu/drm/drm_atomic_uapi.c b/drivers/gpu/drm/drm_atomic_uapi
 diff --git a/drivers/gpu/drm/drm_connector.c b/drivers/gpu/drm/drm_connector.c
 --- a/drivers/gpu/drm/drm_connector.c
 +++ b/drivers/gpu/drm/drm_connector.c
-@@ -2542,6 +2542,16 @@
+@@ -2534,6 +2534,16 @@ EXPORT_SYMBOL(drm_mode_create_scaling_mo
   *
   *	Absence of the property should indicate absence of support.
   *
@@ -124,7 +124,7 @@ diff --git a/drivers/gpu/drm/drm_connector.c b/drivers/gpu/drm/drm_connector.c
   * "VRR_ENABLED":
   *	Default &drm_crtc boolean property that notifies the driver that the
   *	content on the CRTC is suitable for variable refresh rate presentation.
-@@ -2560,6 +2570,17 @@
+@@ -2552,6 +2562,17 @@ EXPORT_SYMBOL(drm_mode_create_scaling_mo
   *
   *	The driver may place further restrictions within these minimum
   *	and maximum bounds.
@@ -142,7 +142,7 @@ diff --git a/drivers/gpu/drm/drm_connector.c b/drivers/gpu/drm/drm_connector.c
   */
  
  /**
-@@ -2594,6 +2615,37 @@
+@@ -2586,6 +2607,37 @@ int drm_connector_attach_vrr_capable_pro
  EXPORT_SYMBOL(drm_connector_attach_vrr_capable_property);
  
  /**
@@ -180,7 +180,7 @@ diff --git a/drivers/gpu/drm/drm_connector.c b/drivers/gpu/drm/drm_connector.c
   * drm_connector_attach_scaling_mode_property - attach atomic scaling mode property
   * @connector: connector to attach scaling mode property on.
   * @scaling_mode_mask: or'ed mask of BIT(%DRM_MODE_SCALE_\*).
-@@ -3304,6 +3356,27 @@
+@@ -3296,6 +3348,27 @@ void drm_connector_set_vrr_capable_prope
  EXPORT_SYMBOL(drm_connector_set_vrr_capable_property);
  
  /**
@@ -211,7 +211,7 @@ diff --git a/drivers/gpu/drm/drm_connector.c b/drivers/gpu/drm/drm_connector.c
 diff --git a/drivers/gpu/drm/drm_crtc.c b/drivers/gpu/drm/drm_crtc.c
 --- a/drivers/gpu/drm/drm_crtc.c
 +++ b/drivers/gpu/drm/drm_crtc.c
-@@ -322,6 +322,8 @@
+@@ -319,6 +319,8 @@ static int __drm_crtc_init_with_planes(s
  					   config->prop_out_fence_ptr, 0);
  		drm_object_attach_property(&crtc->base,
  					   config->prop_vrr_enabled, 0);
@@ -223,7 +223,7 @@ diff --git a/drivers/gpu/drm/drm_crtc.c b/drivers/gpu/drm/drm_crtc.c
 diff --git a/drivers/gpu/drm/drm_mode_config.c b/drivers/gpu/drm/drm_mode_config.c
 --- a/drivers/gpu/drm/drm_mode_config.c
 +++ b/drivers/gpu/drm/drm_mode_config.c
-@@ -535,6 +535,12 @@
+@@ -533,6 +533,12 @@ static int drm_mode_create_standard_prop
  		return -ENOMEM;
  	dev->mode_config.prop_vrr_enabled = prop;
  
@@ -239,7 +239,7 @@ diff --git a/drivers/gpu/drm/drm_mode_config.c b/drivers/gpu/drm/drm_mode_config
 diff --git a/include/drm/drm_connector.h b/include/drm/drm_connector.h
 --- a/include/drm/drm_connector.h
 +++ b/include/drm/drm_connector.h
-@@ -2455,6 +2455,17 @@
+@@ -2443,6 +2443,17 @@ struct drm_connector {
  	struct drm_property *vrr_capable_property;
  
  	/**
@@ -257,7 +257,7 @@ diff --git a/include/drm/drm_connector.h b/include/drm/drm_connector.h
  	 * @colorspace_property: Connector property to set the suitable
  	 * colorspace supported by the sink.
  	 */
-@@ -2883,6 +2894,8 @@
+@@ -2871,6 +2882,8 @@ int drm_connector_attach_scaling_mode_pr
  					       u32 scaling_mode_mask);
  int drm_connector_attach_vrr_capable_property(
  		struct drm_connector *connector);
@@ -266,7 +266,7 @@ diff --git a/include/drm/drm_connector.h b/include/drm/drm_connector.h
  void drm_connector_attach_panel_type_property(struct drm_connector *connector);
  int drm_connector_attach_broadcast_rgb_property(struct drm_connector *connector);
  int drm_connector_attach_colorspace_property(struct drm_connector *connector);
-@@ -2906,6 +2919,8 @@
+@@ -2894,6 +2907,8 @@ void drm_connector_set_link_status_prope
  					    uint64_t link_status);
  void drm_connector_set_vrr_capable_property(
  		struct drm_connector *connector, bool capable);
@@ -278,7 +278,7 @@ diff --git a/include/drm/drm_connector.h b/include/drm/drm_connector.h
 diff --git a/include/drm/drm_crtc.h b/include/drm/drm_crtc.h
 --- a/include/drm/drm_crtc.h
 +++ b/include/drm/drm_crtc.h
-@@ -312,6 +312,15 @@
+@@ -312,6 +312,15 @@ struct drm_crtc_state {
  	bool vrr_enabled;
  
  	/**
@@ -297,7 +297,7 @@ diff --git a/include/drm/drm_crtc.h b/include/drm/drm_crtc.h
 diff --git a/include/drm/drm_mode_config.h b/include/drm/drm_mode_config.h
 --- a/include/drm/drm_mode_config.h
 +++ b/include/drm/drm_mode_config.h
-@@ -701,6 +701,12 @@
+@@ -701,6 +701,12 @@ struct drm_mode_config {
  	 * whether variable refresh rate should be enabled on the CRTC.
  	 */
  	struct drm_property *prop_vrr_enabled;

@@ -38,7 +38,7 @@ let
     "7.2" = "7.2.8";
     "7.3" = "7.3.4";
     "7.4" = "7.4-rc2";
-    next = "7.4-rc2-next-20261109";
+    next = "7.4-rc2-next-20261112";
   };
 
   sourceHash = {
@@ -48,7 +48,7 @@ let
     "7.2.8" = "sha256-EujVqXPRrXxaXGmILkAisTHtcV23AD/c12Dd+MPlGUE=";
     "7.3.4" = "sha256-sRtt+Clejpkf8EC3GqpJlKi1XKojtrCSkH8ZW1hA/R8=";
     "7.4-rc2" = "sha256-AQBj1fx7s6Xx+xFs/0Wr5Jd+ioIFt4QXc1BWgMegFLs=";
-    "7.4-rc2-next-20261109" = "sha256-wDvcG3iufA7M3yFllUWB4T4cOqAmqBUnNEVZLr9CL+A=";
+    "7.4-rc2-next-20261112" = "sha256-F8Oeo7GO8yo7M9yPFV6pUE7M+8uThTKezJbLmRaZJUY=";
   };
 
   optional = cond: x: if cond then [ x ] else [ ];
@@ -333,7 +333,6 @@ let
           extras = [ "cachyos/0020" ];
         };
         next = {
-          base = [ "bunker/0023" ]; # libbpf use-after-free in resolve_btfids --inline
           interactive = [ "zen/0020" ];
           drivers = [
             "bunker/0025" # amdgpu IPS2 with an eDP panel turned off
