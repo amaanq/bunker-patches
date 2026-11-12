@@ -1,0 +1,13 @@
+toml-version = "v1.0.0"
+
+[format.rules]
+array-bracket-space-width       = 1
+key-value-equals-sign-alignment = true
+line-width                      = 100
+trailing-comment-alignment      = true
+
+[schema]
+enabled = false
+
+[files]
+exclude = [ ".tack/**" ]

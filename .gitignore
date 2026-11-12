@@ -1,6 +1,7 @@
 *
 
 !.gitignore
+!.tombi.toml
 !flake.nix
 !module.nix
 !plan.nix
