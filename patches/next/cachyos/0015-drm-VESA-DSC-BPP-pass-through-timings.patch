@@ -13,14 +13,14 @@ diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_connector.c b/drive
  }
  EXPORT_IF_KUNIT(fill_stream_properties_from_drm_display_mode);
  
-@@ -1471,6 +1476,7 @@ void amdgpu_dm_update_stream_scaling_set
- 	drm_dbg_kms(dev, "Destination Rectangle x:%d  y:%d  width:%d  height:%d\n",
- 		    dst.x, dst.y, dst.width, dst.height);
- 
+@@ -1492,6 +1497,7 @@ create_stream_for_sink(struct drm_connector *connector,
+ 	struct drm_display_mode mode;
+ 	struct drm_display_mode saved_mode;
+ 	struct drm_display_mode *freesync_mode = NULL;
 +	struct drm_display_mode *dsc_passthru_mode = NULL;
- }
- EXPORT_IF_KUNIT(amdgpu_dm_update_stream_scaling_settings);
- 
+ 	bool recalculate_timing = false;
+ 	bool unadvertised_mode = false;
+ 	bool scale = dm_state->scaling != RMX_OFF;
 @@ -1635,6 +1641,16 @@ create_stream_for_sink(struct drm_connec
  		}
  	}
