@@ -1,1 +1,2 @@
 FUNCTION_TRACER = "n"  # ftrace (stronger than sysctl disable)
+TASKS_RUDE_RCU  = "n"  # only FUNCTION_TRACER selects it

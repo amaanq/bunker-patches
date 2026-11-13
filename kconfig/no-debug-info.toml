@@ -5,3 +5,6 @@ DEBUG_INFO_BTF                     = "n"
 NET_SCH_BPF                        = "n"
 SCHED_CLASS_EXT                    = "n"
 MODULE_ALLOW_BTF_MISMATCH          = "n"
+
+[next]
+BINFMT_MISC_BPF = "n"

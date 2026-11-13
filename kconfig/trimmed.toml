@@ -496,8 +496,7 @@ SCSI_DC395x                     = "n"
 UBIFS_FS_ADVANCED_COMPR         = "n"
 
 ["<7.4"]
-BFS_FS        = "n"
-SATA_INIC162X = "n"
+BFS_FS = "n"
 
 ["<7.5,!next"]
 OMFS_FS = "n"
@@ -531,8 +530,9 @@ APPLICOM         = "n"  # Industrial fieldbus cards
 DMABUF_SELFTESTS = "n"
 
 ["<7.3"]
-EFS_FS  = "n"
-VXFS_FS = "n"  # freevxfs
+EFS_FS        = "n"
+SATA_INIC162X = "n"
+VXFS_FS       = "n"  # freevxfs
 
 [">=7.1"]
 NTFS_FS_POSIX_ACL = "n"  # child of NTFS_FS; nixpkgs forces =y on 7.1+, but parent is off
