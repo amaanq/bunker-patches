@@ -73,7 +73,7 @@ let
     if bunkerPlan.source ? rev then
       pkgsKernel.fetchgit bunkerPlan.source
     else
-      pkgsKernel.fetchurl bunkerPlan.source;
+      pkgsKernel.fetchzip bunkerPlan.source;
 
   isBigEndian = pkgsKernel.stdenv.hostPlatform.isBigEndian;
 

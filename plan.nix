@@ -42,12 +42,12 @@ let
   };
 
   sourceHash = {
-    "6.19.12" = "sha256-zlxPEgX5cpKGtWmwN2SVkVVfMcoeA8xQS9O3C45YqNU=";
-    "7.0.13" = "sha256-PIHt0PcWrKPdSN/2kWgYJ1gMxT01qO7DvkfTRtH4mRM=";
-    "7.1.5" = "sha256-IqAZazy83zTcJ7d1YfTQQFhf00R+3JqzUxoax54wQec=";
-    "7.2.8" = "sha256-EujVqXPRrXxaXGmILkAisTHtcV23AD/c12Dd+MPlGUE=";
-    "7.3.4" = "sha256-sRtt+Clejpkf8EC3GqpJlKi1XKojtrCSkH8ZW1hA/R8=";
-    "7.4-rc2" = "sha256-AQBj1fx7s6Xx+xFs/0Wr5Jd+ioIFt4QXc1BWgMegFLs=";
+    "6.19.12" = "sha256-lUEOsQicSdncm+FuzGQWUQBICn9yOb4OGufNxja9qXY=";
+    "7.0.13" = "sha256-TVLtH6fIsBtpPQZ9F44mjwg1LE0ZzAqNC7eYgNdUhnE=";
+    "7.1.5" = "sha256-pPS5d2AyKF+ommPUXb5NW1p5dkjnnQtx5a5JqhgpcsM=";
+    "7.2.8" = "sha256-IYH5mrRe1iJDuZizbVUU8wP2lPWJYvIb+IUCMaQVBV4=";
+    "7.3.4" = "sha256-2q+CPRxgupua+EC7Smr0EUQCS2AFyZWGBd7oDM/vjmM=";
+    "7.4-rc2" = "sha256-r90P0eCeOUeN9zC/tj2xmY1U0f5/BHPuWHcAc2BqorA=";
     "7.4-rc2-next-20261112" = "sha256-F8Oeo7GO8yo7M9yPFV6pUE7M+8uThTKezJbLmRaZJUY=";
   };
 
@@ -77,25 +77,32 @@ let
         in
         (if length (filter isString (split "\\." base)) >= 3 then base else "${base}.0") + elemAt parts 1;
 
+      nextTag = "next-${elemAt (match ".*-next-(.*)" resolvedVersion) 0}";
+
+      # The release's tarball and its unpacked tree's hash, the hash fetchzip and
+      # repkgs check alike. A linux-next snapshot unpacks to the tag's tree.
+      tarball = {
+        url =
+          if majorMinor == "next" then
+            "https://git.kernel.org/pub/scm/linux/kernel/git/next/linux-next.git/snapshot/linux-next-${nextTag}.tar.gz"
+          else if match ".*-rc.*" resolvedVersion != null then
+            "https://git.kernel.org/torvalds/t/linux-${resolvedVersion}.tar.gz"
+          else
+            "https://cdn.kernel.org/pub/linux/kernel/v${versionPart resolvedVersion 0}.x/linux-${resolvedVersion}.tar.xz";
+        hash = sourceHash.${resolvedVersion};
+      };
+
       # cgit drops the connection generating linux-next snapshot tarballs, so
       # next is cloned instead.
       source =
         if majorMinor == "next" then
           {
             url = "https://git.kernel.org/pub/scm/linux/kernel/git/next/linux-next.git";
-            rev = "refs/tags/next-${elemAt (match ".*-next-(.*)" resolvedVersion) 0}";
-            hash = sourceHash.${resolvedVersion};
-          }
-        else if match ".*-rc.*" resolvedVersion != null then
-          {
-            url = "https://git.kernel.org/torvalds/t/linux-${resolvedVersion}.tar.gz";
-            hash = sourceHash.${resolvedVersion};
+            rev = "refs/tags/${nextTag}";
+            inherit (tarball) hash;
           }
         else
-          {
-            url = "https://cdn.kernel.org/pub/linux/kernel/v${versionPart resolvedVersion 0}.x/linux-${resolvedVersion}.tar.xz";
-            hash = sourceHash.${resolvedVersion};
-          };
+          tarball;
 
       # Shared keys are stable; upstream/ numbering is version-specific.
       sharedGroups = {
@@ -384,6 +391,7 @@ let
         kernelMajorMinor
         fullVersion
         source
+        tarball
         ;
       version = resolvedVersion;
       patches =
