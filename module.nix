@@ -182,8 +182,7 @@ let
     group "hardened" // optionalAttrs (!cfg.debugInfo) (group "hardened-no-debug-info")
   );
   trimmedConfig = optionalAttrs cfg.trimmed (
-    group "trimmed"
-    // optionalAttrs isX86 (lib.genAttrs cfg.devicetreeOnly (_: mkForce (option no)))
+    group "trimmed" // optionalAttrs isX86 (lib.genAttrs cfg.devicetreeOnly (_: mkForce (option no)))
   );
   networkingConfig = optionalAttrs cfg.networking (group "networking");
   driversConfig = optionalAttrs cfg.drivers (group "drivers");

@@ -63,6 +63,7 @@ def main [flavor: string, --dotfiles: path = ~/dotfiles] {
    | prepend '{'
    | append '}'
    | str join "\n"
+   | $in + "\n"
 }
 
 # Modular symbols in one tree whose drivers are all Devicetree-only.
