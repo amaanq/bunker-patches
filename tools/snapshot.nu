@@ -1,6 +1,5 @@
-# Snapshots a host's bunker kernel for builders outside NixOS. The series lists
-# lib.plan's patches in apply order, and the config is the .config nixpkgs'
-# buildLinux resolves for that host.
+# Snapshots the .config nixpkgs' buildLinux resolves for a host, which
+# compare.nu diffs a kernel built outside NixOS against.
 #
 #   nu tools/snapshot.nu derecho
 #
@@ -20,12 +19,8 @@ def main [flavor: string, --dotfiles: path = ~/dotfiles] {
 
    if not $options.enable { error make { msg: $"($flavor) does not enable bunker.kernel" } }
 
-   let plan = $"\(import ($root)/plan.nix\).plan \(builtins.fromJSON ''($options | to json --raw)''\)"
-   let patches = ^nix eval --impure --json --expr $"\(($plan)\).patches" | from json
    let config = ^nix build --impure --no-link --print-out-paths $"($host).boot.kernelPackages.kernel.configfile"
 
-   mkdir ($root | path join series)
-   $patches | str join "\n" | $in + "\n" | save --force ($root | path join series $flavor)
    open --raw $config | save --force ($root | path join kconfig $"($flavor).config")
    rm --recursive $dots | ignore
 }

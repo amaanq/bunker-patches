@@ -10,8 +10,6 @@
 !kconfig/*.nu
 !kconfig/*.config
 !kconfig/*.toml
-!series/
-!series/*
 !tools/
 !tools/*.nu
 
