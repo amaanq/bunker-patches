@@ -42,3 +42,6 @@ BPF_JIT_ALWAYS_ON = "y"
 [powerpc64]
 PPC_64K_PAGES = "y"  # 64K pages — native PPC64 page size
 PPC_4K_PAGES  = "n"
+
+[riscv64]
+SOPHGO_SG2042_MSI = "y"  # SG2042 PCIe MSI controller, no Kconfig default

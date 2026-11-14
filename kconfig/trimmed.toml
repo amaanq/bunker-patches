@@ -638,6 +638,11 @@ ACPI_APEI_ERST_DEBUG = "n"
 RPMSG        = "n"  # Remote Processor Messaging (ARM)
 SCSI_FDOMAIN = "n"  # Future Domain SCSI - Ancient SCSI card (forced to 'm' by deps in some kernels)
 
+[riscv64]
+ACPI_NFIT    = "n"  # NVDIMM firmware table (selects LIBNVDIMM)
+RPMSG        = "n"  # Remote Processor Messaging (ARM)
+SCSI_FDOMAIN = "n"  # Future Domain SCSI - Ancient SCSI card (forced to 'm' by deps in some kernels)
+
 [mips64]
 RPMSG        = "n"  # Remote Processor Messaging (ARM)
 SCSI_FDOMAIN = "n"  # Future Domain SCSI - Ancient SCSI card (forced to 'm' by deps in some kernels)

@@ -43,6 +43,7 @@ let
   isAarch64 = pkgsKernel.stdenv.hostPlatform.isAarch64;
   isPpc64 = pkgsKernel.stdenv.hostPlatform.isPower64;
   isMips = pkgsKernel.stdenv.hostPlatform.isMips;
+  isRiscV64 = pkgsKernel.stdenv.hostPlatform.isRiscV64;
 
   planLib = import ./plan.nix;
   bunkerPlan = planLib.plan cfg;
@@ -99,6 +100,8 @@ let
       "powerpc64"
     else if isMips then
       "mips64"
+    else if isRiscV64 then
+      "riscv64"
     else
       null;
   # next keeps the Makefile version of the release it forked from, as the
