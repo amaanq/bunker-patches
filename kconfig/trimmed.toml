@@ -617,8 +617,12 @@ XEN_SYS_HYPERVISOR         = "n"
 [x86_64."<7.2"]
 FB_HGA = "n"
 
+[x86_64."<7.3"]
+XEN_PVHVM = "n"
+
 [x86_64.">=7.3"]
 PCIE_CADENCE_DEBUGFS = "n"
+XEN_PVHVM_GUEST      = "n"
 
 [aarch64]
 ACPI_NFIT    = "n"  # NVDIMM firmware table (selects LIBNVDIMM)
