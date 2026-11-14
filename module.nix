@@ -174,26 +174,19 @@ let
     in
     mapAttrs (_: answer) (lacked table // flatten table);
 
-  baseConfig = group "base" // {
-    RUST = mkForce (if cfg.rust then option yes else option no);
+  # Merged right after the group they extend, so later groups still override them.
+  groupExtras = {
+    base.RUST = mkForce (if cfg.rust then option yes else option no);
+    trimmed = optionalAttrs isX86 (lib.genAttrs cfg.devicetreeOnly (_: mkForce (option no)));
   };
-  interactiveConfig = optionalAttrs cfg.interactive (group "interactive");
-  hardenedConfig = optionalAttrs cfg.hardened (
-    group "hardened" // optionalAttrs (!cfg.debugInfo) (group "hardened-no-debug-info")
-  );
-  trimmedConfig = optionalAttrs cfg.trimmed (
-    group "trimmed" // optionalAttrs isX86 (lib.genAttrs cfg.devicetreeOnly (_: mkForce (option no)))
-  );
-  networkingConfig = optionalAttrs cfg.networking (group "networking");
-  driversConfig = optionalAttrs cfg.drivers (group "drivers");
-  openrgbSmbusConfig = optionalAttrs cfg.openrgbSmbus (group "openrgb-smbus");
-  rustLtoConfig = optionalAttrs (cfg.rust && cfg.lto != "none") (group "rust-lto");
-  debugInfoConfig = optionalAttrs (!cfg.debugInfo) (group "no-debug-info");
-  ltoConfig = optionalAttrs (cfg.lto != "none") (group "lto-${cfg.lto}");
+
+  planConfig = lib.foldl' (
+    merged: name: merged // group name // (groupExtras.${name} or { })
+  ) { } bunkerPlan.kconfigGroups;
+
   cpuArchConfig = optionalAttrs (cfg.cpuArch != null) {
     ${cfg.cpuArch} = yes;
   };
-  frameworkConfig = optionalAttrs cfg.framework (group "framework");
   bigEndianConfig = optionalAttrs isBigEndian (group "big-endian");
   octeonConfig = optionalAttrs cfg.octeon (group "octeon");
 
@@ -207,21 +200,7 @@ let
       inherit kernelPatches;
       autoModules = !isMips;
 
-      structuredExtraConfig =
-        baseConfig
-        // interactiveConfig
-        // hardenedConfig
-        // trimmedConfig
-        // frameworkConfig
-        // networkingConfig
-        // driversConfig
-        // openrgbSmbusConfig
-        // rustLtoConfig
-        // debugInfoConfig
-        // ltoConfig
-        // cpuArchConfig
-        // bigEndianConfig
-        // octeonConfig;
+      structuredExtraConfig = planConfig // cpuArchConfig // bigEndianConfig // octeonConfig;
 
       extraMeta = {
         branch = majorMinor;

@@ -29,6 +29,9 @@ let
     openrgbSmbus = false;
     rust = true;
     debugInfo = false;
+    trimmed = true;
+    framework = false;
+    lto = "thin";
   };
 
   release = {
@@ -363,6 +366,24 @@ let
       ++ optional cfg.octeon "octeon"
       ++ optional (cfg.rust && cfg.debugInfo) "rustBtf";
 
+      lto = cfg.lto != "none";
+
+      # Later groups override earlier ones.
+      kconfigGroups = [
+        "base"
+      ]
+      ++ optional cfg.interactive "interactive"
+      ++ optional cfg.hardened "hardened"
+      ++ optional (cfg.hardened && !cfg.debugInfo) "hardened-no-debug-info"
+      ++ optional cfg.trimmed "trimmed"
+      ++ optional cfg.framework "framework"
+      ++ optional cfg.networking "networking"
+      ++ optional cfg.drivers "drivers"
+      ++ optional cfg.openrgbSmbus "openrgb-smbus"
+      ++ optional (cfg.rust && lto) "rust-lto"
+      ++ optional (!cfg.debugInfo) "no-debug-info"
+      ++ optional lto "lto-${cfg.lto}";
+
       enabledKeys = concatMap (g: sharedGroups.${g} ++ (vg.${g} or [ ])) enabledGroups;
 
       # Patch keys are "subdir/NNNN", derived from the filename prefix.
@@ -392,6 +413,7 @@ let
         fullVersion
         source
         tarball
+        kconfigGroups
         ;
       version = resolvedVersion;
       patches =
