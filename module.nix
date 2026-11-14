@@ -710,8 +710,15 @@ in
         # Hide kptrs even for processes with CAP_SYSLOG.
         "kernel.kptr_restrict" = 2;
         # Disable bpf() JIT (eliminates spray attacks). fentry trampolines and
-        # bpf_loop callbacks refuse to load without it.
-        "net.core.bpf_jit_enable" = cfg.debugInfo;
+        # bpf_loop callbacks refuse to load without it. base.toml forces BPF_JIT_ALWAYS_ON
+        # on next, which rejects 0 with EINVAL.
+        "net.core.bpf_jit_enable" =
+          if cfg.debugInfo then
+            true
+          else if cfg.version == "next" && (isX86 || isAarch64) then
+            null
+          else
+            false;
         # Disable ftrace debugging. 7.3 deprecated the knob and rejects 0 with EOPNOTSUPP.
         "kernel.ftrace_enabled" =
           if cfg.debugInfo || !lib.versionOlder kernelMajorMinor "7.3" then null else false;
