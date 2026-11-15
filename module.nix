@@ -173,7 +173,7 @@ let
   group =
     name:
     let
-      table = builtins.fromTOML (builtins.readFile ./kconfig/${name}.toml);
+      table = fromTOML (builtins.readFile ./kconfig/${name}.toml);
     in
     mapAttrs (_: answer) (lacked table // flatten table);
 
@@ -203,7 +203,8 @@ let
       inherit kernelPatches;
       autoModules = !isMips;
 
-      structuredExtraConfig = planConfig // cpuArchConfig // bigEndianConfig // octeonConfig;
+      structuredExtraConfig =
+        planConfig // cpuArchConfig // bigEndianConfig // octeonConfig // mapAttrs (_: answer) cfg.kconfig;
 
       extraMeta = {
         branch = majorMinor;
@@ -656,6 +657,18 @@ in
         DWARF only slows the build down. Enable it for BPF LSM, fentry and
         CO-RE tooling, which under `hardened` also keeps the function tracer
         and the BPF JIT.
+      '';
+    };
+
+    kconfig = mkOption {
+      type = types.attrsOf types.str;
+      default = { };
+      example = {
+        OVERLAY_FS_UNPRIVILEGED = "y";
+      };
+      description = ''
+        Kconfig symbols this host sets, as y, n, m or a freeform value. They
+        apply after every group.
       '';
     };
   };
