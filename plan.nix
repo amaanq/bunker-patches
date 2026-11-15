@@ -112,6 +112,7 @@ let
         base = [
           "bunker/0001"
           "bunker/0016"
+          "bunker/0027"
         ];
         interactive = [
           # zen: mm tuning, preempt, BFQ/Kyber, EEVDF, swap/watermark/compaction

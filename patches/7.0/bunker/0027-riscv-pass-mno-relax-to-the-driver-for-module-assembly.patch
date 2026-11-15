@@ -1,0 +1,24 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Sun, 15 Nov 2026 00:00:00 -0500
+Subject: [PATCH] riscv: pass -mno-relax to the compiler driver for module
+ assembly
+
+Clang's integrated assembler rejects -Wa,-mno-relax, so the
+as-option probe drops it and module assembly keeps linker
+relaxation. lib/raid/xor/riscv/xor.S then emits R_RISCV_ALIGN,
+which apply_r_riscv_align_rela refuses, and xor.ko fails to load.
+GCC and Clang both forward a bare -mno-relax to the assembler.
+---
+diff --git a/arch/riscv/Makefile b/arch/riscv/Makefile
+--- a/arch/riscv/Makefile
++++ b/arch/riscv/Makefile
+@@ -107,7 +107,7 @@ KBUILD_CFLAGS += $(call as-option,-Wa$(comma)-mno-arch-attr)
+ KBUILD_AFLAGS += $(call as-option,-Wa$(comma)-mno-arch-attr)
+ 
+ KBUILD_CFLAGS_MODULE += $(call cc-option,-mno-relax)
+-KBUILD_AFLAGS_MODULE += $(call as-option,-Wa$(comma)-mno-relax)
++KBUILD_AFLAGS_MODULE += $(call as-option,-mno-relax)
+ 
+ # GCC versions that support the "-mstrict-align" option default to allowing
+ # unaligned accesses.  While unaligned accesses are explicitly allowed in the
