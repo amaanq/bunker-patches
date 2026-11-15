@@ -1,0 +1,67 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Amaan Qureshi <git@amaanq.com>
+Date: Sun, 15 Nov 2026 00:00:00 -0500
+Subject: [PATCH] PCI: insert host bridge windows so firmware ranges nest
+ under them
+
+sysfb registers the EFI GOP framebuffer as BOOTFB at device_initcall.
+On devicetree platforms the host bridge is a platform driver that
+probes later, so devm_request_resource() finds BOOTFB inside the
+window and the whole bridge fails with -EBUSY. The ACPI host bridge
+path uses insert_resource_conflict() and adopts such ranges as
+children. Do the same here, and release with remove_resource() so the
+children are handed back to the parent.
+---
+diff --git a/drivers/pci/bus.c b/drivers/pci/bus.c
+--- a/drivers/pci/bus.c
++++ b/drivers/pci/bus.c
+@@ -124,12 +124,16 @@
+ 	}
+ }
+ 
++static void devm_pci_bus_resource_release(struct device *dev, void *ptr)
++{
++	remove_resource(*(struct resource **)ptr);
++}
++
+ int devm_request_pci_bus_resources(struct device *dev,
+ 				   struct list_head *resources)
+ {
+ 	struct resource_entry *win;
+-	struct resource *parent, *res;
+-	int err;
++	struct resource *parent, *res, *conflict, **ptr;
+ 
+ 	resource_list_for_each_entry(win, resources) {
+ 		res = win->res;
+@@ -144,9 +148,27 @@
+ 			continue;
+ 		}
+ 
+-		err = devm_request_resource(dev, parent, res);
+-		if (err)
+-			return err;
++		ptr = devres_alloc(devm_pci_bus_resource_release, sizeof(*ptr),
++				   GFP_KERNEL);
++		if (!ptr)
++			return -ENOMEM;
++
++		/*
++		 * Firmware may have registered ranges inside the window
++		 * before the host bridge probed, such as a boot framebuffer
++		 * in a BAR. Insert the window so they become its children,
++		 * as the ACPI host bridge path does.
++		 */
++		conflict = insert_resource_conflict(parent, res);
++		if (conflict) {
++			dev_err(dev, "resource collision: %pR conflicts with %s %pR\n",
++				res, conflict->name, conflict);
++			devres_free(ptr);
++			return -EBUSY;
++		}
++
++		*ptr = res;
++		devres_add(dev, ptr);
+ 	}
+ 
+ 	return 0;

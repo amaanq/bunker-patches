@@ -113,6 +113,7 @@ let
           "bunker/0001"
           "bunker/0016"
           "bunker/0027"
+          "bunker/0028"
         ];
         interactive = [
           # zen: mm tuning, preempt, BFQ/Kyber, EEVDF, swap/watermark/compaction
