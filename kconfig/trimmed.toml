@@ -639,6 +639,7 @@ RPMSG        = "n"  # Remote Processor Messaging (ARM)
 SCSI_FDOMAIN = "n"  # Future Domain SCSI - Ancient SCSI card (forced to 'm' by deps in some kernels)
 
 [riscv64]
+DRM_RADEON   = "m"  # Milk-V Pioneer kits ship a Radeon R5 230, which only radeon drives
 ACPI_NFIT    = "n"  # NVDIMM firmware table (selects LIBNVDIMM)
 RPMSG        = "n"  # Remote Processor Messaging (ARM)
 SCSI_FDOMAIN = "n"  # Future Domain SCSI - Ancient SCSI card (forced to 'm' by deps in some kernels)
